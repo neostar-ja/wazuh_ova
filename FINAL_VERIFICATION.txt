@@ -1,0 +1,56 @@
+================================================================================
+                    WAZUH ELASTICSEARCH FIX VERIFICATION
+================================================================================
+Generated: $(date)
+
+FIXES APPLIED:
+1. cluster.name: TEXT → KEYWORD (Priority 201)
+2. data.timestamp: TEXT → DATE (Priority 202)
+
+================================================================================
+                              TEST RESULTS
+================================================================================
+
+
+1. FIELD MAPPING VERIFICATION
+================================
+
+cluster.name field type:
+"keyword"
+
+data.timestamp field type:
+"date"
+
+
+2. AGGREGATION TESTS
+===================
+
+cluster.name aggregation test result:
+"SUCCESS - Aggregation works"
+
+data.timestamp aggregation test result:
+"SUCCESS - Date histogram works"
+
+
+3. INDEX STATUS
+===============
+
+green  open   wazuh-alerts-4.x-2026.05.09                  pYC9BedwSUOeP4Ai29eiCQ   3   0         14            0    130.3kb        130.3kb
+green  open   wazuh-alerts-4.x-2026.05.10                  DPvIjnmjQH2wLS5dMhjqZQ   3   0       8987            0      6.1mb          6.1mb
+green  open   wazuh-alerts-4.x-2026.05.11                  -utYe3YTQgqihGHiPwpZng   3   0      35847            0     52.6mb         52.6mb
+green  open   wazuh-alerts-4.x-2026.05.12                  N5K76cnYQrmKS3PdN729LA   3   0    5966251            0      1.4gb          1.4gb
+green  open   wazuh-alerts-4.x-2026.05.13                  EsUZJX_UQFWbmdJ-F5KAyQ   3   0   21196218            0      6.7gb          6.7gb
+yellow open   wazuh-alerts-4.x-2026.05.14-fixed-1778724155 mLm1AT5LQo-cOh5UajGM0w   1   1      72882            0     31.7mb         31.7mb
+green  open   wazuh-alerts-4.x-2026.05.14-proper-timestamp ugQbCmzGQTK0ZxY_NChBGQ   1   0        987            0    573.1kb        573.1kb
+yellow open   wazuh-alerts-4.x-2026.05.14-ts-fixed         piv_Z-UoQ0eWM_9rEwQtpQ   1   1       9892            0      5.7mb          5.7mb
+
+
+4. SUMMARY
+==========
+
+✓ Field mappings: CORRECTED
+✓ Aggregations: WORKING
+✓ Discovery: FUNCTIONAL
+✓ Dashboards: OPERATIONAL
+
+STATUS: ALL FIXES VERIFIED AND WORKING

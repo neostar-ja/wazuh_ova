@@ -1,0 +1,214 @@
+<!--
+FortiGate WUH Custom Decoders
+Devices : FW-WUH01 (FG3K4ETB19900367) + FW-WUH02 (FG3K4ETB19900355)
+Syslog  : 10.251.151.1 → Worker Node 10.251.151.12 UDP/1514
+FortiOS : 7.x key=value format
+
+Architecture:
+  All decoders use <parent>fortigate-firewall-v5</parent> to extend the built-in
+  "fortigate" parent decoder (0100-fortigate_decoders.xml).
+  These run as siblings to the built-in "fortigate-firewall-v5" child
+  and extract additional custom fields not covered by the built-in decoder.
+  Rules use <decoded_as>fortigate</decoded_as> to match all FortiGate logs.
+
+Fields added beyond built-in:
+  fgt_type, fgt_subtype, logdesc, fgt_action (=action, renamed to dynamic),
+  fgt_status (=status, renamed to dynamic), state, policyid, policytype,
+  policyname, appcat, apprisk, crscore, crlevel, srcintfrole, dstintfrole,
+  srccountry, dstcountry, tlsver, sni, eventsubtype, url_hostname,
+  authserver, cpu, mem, totalsession
+
+Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
+Log types:
+  traffic/forward, traffic/local, utm/app-ctrl, utm/ssl,
+  event/system (perf-stats, admin-logout, config-changed),
+  event/user (auth-logon via LDAP-WUH)
+-->
+
+<!-- ============================================================
+     BASE: fgt_type, fgt_subtype (dynamic equivalents of static type/subtype)
+     NOTE: logid omitted — it's already a static field extracted by built-in
+============================================================ -->
+<decoder name="fortigate-wuh-base">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">type="(\w+)"\s+subtype="([\w-]+)"</regex>
+  <order>fgt_type, fgt_subtype</order>
+</decoder>
+
+<!-- ============================================================
+     LOGDESC: human-readable description in event logs
+     e.g. "Admin logout successful", "Configuration changed",
+          "Authentication logon", "System performance statistics"
+============================================================ -->
+<decoder name="fortigate-wuh-logdesc">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">logdesc="([^"]+)"</regex>
+  <order>logdesc</order>
+</decoder>
+
+<!-- ============================================================
+     INTERFACE ROLES: srcintfrole / dstintfrole
+     Values: lan | dmz | wan | undefined
+============================================================ -->
+<decoder name="fortigate-wuh-intfrole">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">srcintfrole="(\w+)".*?dstintfrole="(\w+)"</regex>
+  <order>srcintfrole, dstintfrole</order>
+</decoder>
+
+<!-- ============================================================
+     SOURCE INTERFACE: srcintf
+     e.g. VLAN-1500, VLAN-1004, VLAN-2005
+============================================================ -->
+<decoder name="fortigate-wuh-srcintf">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">srcintf="([^"]+)"</regex>
+  <order>srcintf</order>
+</decoder>
+
+<!-- ============================================================
+     GEO LOCATION: srccountry, dstcountry
+     Values: "Reserved" (RFC1918), "Thailand", "United States", etc.
+============================================================ -->
+<decoder name="fortigate-wuh-geo">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">srccountry="([^"]+)"\s+dstcountry="([^"]+)"</regex>
+  <order>srccountry, dstcountry</order>
+</decoder>
+
+<!-- ============================================================
+     ACTION: firewall/UTM/event action
+     Traffic : accept | deny | start | server-rst | client-rst
+     UTM     : pass | block | reset
+     Event   : auth-logon | login | logout | perf-stats
+     NOTE: Wazuh "action" is a static field; renamed to fgt_action
+============================================================ -->
+<decoder name="fortigate-wuh-action">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">action="([\w-]+)"</regex>
+  <order>fgt_action</order>
+</decoder>
+
+<!-- ============================================================
+     STATUS: event log result field
+     Values: logon | success | failed | failure
+     NOTE: Wazuh "status" is a static field; renamed to fgt_status
+============================================================ -->
+<decoder name="fortigate-wuh-status">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">status="([\w-]+)"</regex>
+  <order>fgt_status</order>
+</decoder>
+
+<!-- ============================================================
+     STATE: admin session state field
+     e.g. state="Config-Changed" (admin changed config this session)
+============================================================ -->
+<decoder name="fortigate-wuh-state">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">state="([^"]+)"</regex>
+  <order>state</order>
+</decoder>
+
+<!-- ============================================================
+     POLICY: policyid + policytype
+     policyid=0  = implicit deny or local-in-policy
+     policyid=4  = Private-To-DMZ1 (typical)
+     policyid=5  = DMZ1-To-External (typical)
+     policyid=48 = deny by client reputation (typical)
+============================================================ -->
+<decoder name="fortigate-wuh-policy">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">policyid=(\d+)\s+policytype="([^"]+)"</regex>
+  <order>policyid, policytype</order>
+</decoder>
+
+<!-- ============================================================
+     POLICY NAME (optional — absent for implicit deny / local-in)
+============================================================ -->
+<decoder name="fortigate-wuh-policyname">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">policyname="([^"]+)"</regex>
+  <order>policyname</order>
+</decoder>
+
+<!-- ============================================================
+     APPLICATION CATEGORY (UTM DPI)
+     e.g. "Network.Service", "unscanned"
+============================================================ -->
+<decoder name="fortigate-wuh-appcat">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">appcat="([^"]+)"</regex>
+  <order>appcat</order>
+</decoder>
+
+<!-- ============================================================
+     APPLICATION RISK LEVEL
+     Values: elevated | medium | low | critical
+============================================================ -->
+<decoder name="fortigate-wuh-apprisk">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">apprisk="([^"]+)"</regex>
+  <order>apprisk</order>
+</decoder>
+
+<!-- ============================================================
+     CLIENT REPUTATION (crscore/crlevel)
+     crscore=30, crlevel="high" → FortiGate threat intel block
+     Seen with policyid=48 (client reputation policy)
+============================================================ -->
+<decoder name="fortigate-wuh-cr">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">crscore=(\d+).*?crlevel="([^"]+)"</regex>
+  <order>crscore, crlevel</order>
+</decoder>
+
+<!-- ============================================================
+     UTM SSL: TLS version + SNI (Server Name Indication)
+     tlsver="tls1.2" sni="silverfort-node"
+============================================================ -->
+<decoder name="fortigate-wuh-ssl">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">tlsver="([^"]+)".*?sni="([^"]+)"</regex>
+  <order>tlsver, sni</order>
+</decoder>
+
+<!-- ============================================================
+     UTM SSL EVENT SUBTYPE
+     eventsubtype="certificate-anomaly" = SNI/cert mismatch
+============================================================ -->
+<decoder name="fortigate-wuh-eventsubtype">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">eventsubtype="([^"]+)"</regex>
+  <order>eventsubtype</order>
+</decoder>
+
+<!-- ============================================================
+     HOSTNAME: SSL inspection detected server hostname
+     e.g. hostname="ubnt.hospital.wu.ac.th"
+============================================================ -->
+<decoder name="fortigate-wuh-hostname">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">hostname="([^"]+)"</regex>
+  <order>url_hostname</order>
+</decoder>
+
+<!-- ============================================================
+     AUTHSERVER: LDAP/RADIUS auth server (event/user logs)
+     e.g. authserver="LDAP-WUH"
+============================================================ -->
+<decoder name="fortigate-wuh-authserver">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">authserver="([^"]+)"</regex>
+  <order>authserver</order>
+</decoder>
+
+<!-- ============================================================
+     PERFORMANCE STATS (suppressed at level 0 in rules)
+     Extracted for potential anomaly detection on totalsession
+============================================================ -->
+<decoder name="fortigate-wuh-perf">
+  <parent>fortigate-firewall-v5</parent>
+  <regex type="pcre2">cpu=(\d+)\s+mem=(\d+)\s+totalsession=(\d+)</regex>
+  <order>cpu, mem, totalsession</order>
+</decoder>

@@ -1,0 +1,134 @@
+<!--
+Huawei AgileController (AC) Custom Rules
+Purpose: Generate alerts for Huawei Wireless AC / NAC controller events from 10.251.5.15.
+Rule ID range: 100070 - 100089
+Covers:
+  - 802.1X / MAC Authentication failures & successes
+  - User online/offline/IP-change events
+  - Portal web auth events
+  - Brute-force detection (repeated auth failures)
+Validated: 2026-05-13 with real logs from AgileController (10.251.5.15)
+
+NOTE: All rules use <decoded_as>huawei-ac</decoded_as> because the parent decoder
+is what actually runs, child decoders do not change the decoded_as field.
+Field disambiguation is done with <field> tags.
+-->
+
+<group name="huawei,huawei_ac,network_access,wireless,">
+
+  <!-- ============================================================ -->
+  <!-- BASE CATCH-ALL: any Huawei AC log                            -->
+  <!-- ============================================================ -->
+  <rule id="100070" level="3">
+    <decoded_as>huawei-ac</decoded_as>
+    <description>Huawei AC: Network access control event</description>
+    <group>wireless,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- AUTHENTICATION RULES (from huawei-ac-radius-authen decoder)  -->
+  <!-- field: ac_auth_result = "failed" | "succeeded"               -->
+  <!-- ============================================================ -->
+
+  <!-- Auth failed (any reason) -->
+  <rule id="100071" level="5">
+    <if_sid>100070</if_sid>
+    <field name="ac_auth_result">failed</field>
+    <description>Huawei AC: Authentication failed for device MAC=$(mac) via AP=$(ap_mac) on Switch=$(switch_name) [Error: $(error_code)]</description>
+    <group>authentication,authentication_failed,</group>
+  </rule>
+
+  <!-- Auth failed errorcode 153 = unknown/unregistered MAC device -->
+  <rule id="100072" level="4">
+    <if_sid>100071</if_sid>
+    <field name="error_code">153</field>
+    <description>Huawei AC: Unknown device rejected - MAC=$(mac) not registered, AP=$(ap_mac) Switch=$(switch_name)</description>
+    <group>authentication,authentication_failed,mac_auth,</group>
+  </rule>
+
+  <!-- Auth failed errorcode 116 or 117 = user credential failure -->
+  <rule id="100073" level="7">
+    <if_sid>100071</if_sid>
+    <field name="error_code">^11[67]$</field>
+    <description>Huawei AC: User credential failure for $(dstuser) - Error=$(error_code), AP=$(ap_mac)</description>
+    <group>authentication,authentication_failed,credential_failure,</group>
+  </rule>
+
+  <!-- Brute force: 5 auth failures from same MAC in 120 seconds -->
+  <rule id="100074" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100071</if_matched_sid>
+    <same_field>mac</same_field>
+    <description>Huawei AC: Possible brute-force / scanning - 5+ auth failures from MAC=$(mac) on Switch=$(switch_name)</description>
+    <group>authentication,authentication_failed,brute_force,</group>
+  </rule>
+
+  <!-- Auth succeeded -->
+  <rule id="100075" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_auth_result">succeeded</field>
+    <description>Huawei AC: Authentication succeeded for device MAC=$(mac) via AP=$(ap_mac) on Switch=$(switch_name)</description>
+    <group>authentication,authentication_success,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- USER SESSION RULES (from huawei-ac-radius-logon decoder)     -->
+  <!-- field: ac_msg_type = "online" | "offline" | "ipChange"       -->
+  <!-- ============================================================ -->
+
+  <!-- User goes online -->
+  <rule id="100076" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_msg_type">^online$</field>
+    <description>Huawei AC: User $(dstuser) connected - IP=$(srcip) MAC=$(mac) AP=$(ap_mac)</description>
+    <group>session,user_online,</group>
+  </rule>
+
+  <!-- User goes offline -->
+  <rule id="100077" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_msg_type">^offline$</field>
+    <description>Huawei AC: User $(dstuser) disconnected - MAC=$(mac) AP=$(ap_mac)</description>
+    <group>session,user_offline,</group>
+  </rule>
+
+  <!-- User IP change (Wi-Fi roaming between APs) -->
+  <rule id="100078" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_msg_type">^ipChange$</field>
+    <description>Huawei AC: User $(dstuser) changed IP (roaming) - new IP=$(srcip) MAC=$(mac)</description>
+    <group>session,user_roaming,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- PORTAL AUTHENTICATION & SESSION RULES                        -->
+  <!-- fields: ac_log_type ("1" = Logon, "2" = Logoff)               -->
+  <!--         ac_result   ("0" = Success)                          -->
+  <!-- ============================================================ -->
+
+  <!-- Portal Logon Success -->
+  <rule id="100080" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_log_type">^1$</field>
+    <field name="ac_result">^0$</field>
+    <description>Huawei AC (Portal): User $(dstuser) successfully logged on - IP=$(srcip)</description>
+    <group>session,authentication,authentication_success,portal_logon,</group>
+  </rule>
+
+  <!-- Portal Logon Failed -->
+  <rule id="100081" level="5">
+    <if_sid>100070</if_sid>
+    <field name="ac_log_type">^1$</field>
+    <field name="ac_result" negate="yes">^0$</field>
+    <description>Huawei AC (Portal): User $(dstuser) failed to log on [Result Code: $(ac_result)] - IP=$(srcip)</description>
+    <group>session,authentication,authentication_failed,portal_logon_failed,</group>
+  </rule>
+
+  <!-- Portal Logoff (User disconnect) -->
+  <rule id="100082" level="3">
+    <if_sid>100070</if_sid>
+    <field name="ac_log_type">^2$</field>
+    <description>Huawei AC (Portal): User $(dstuser) logged off / disconnected - IP=$(srcip)</description>
+    <group>session,user_offline,portal_logoff,</group>
+  </rule>
+
+</group>

@@ -1,0 +1,52 @@
+{
+  "properties": {
+    "rule": {
+      "properties": {
+        "description": { "type": "text", "fielddata": true },
+        "gdpr": { "type": "text", "fielddata": true },
+        "gpg13": { "type": "text", "fielddata": true },
+        "groups": { "type": "text", "fielddata": true },
+        "hipaa": { "type": "text", "fielddata": true },
+        "info": { "type": "text", "fielddata": true },
+        "nist_800_53": { "type": "text", "fielddata": true },
+        "pci_dss": { "type": "text", "fielddata": true },
+        "tsc": { "type": "text", "fielddata": true },
+        "mitre": {
+          "properties": {
+            "id": { "type": "text", "fielddata": true },
+            "tactic": { "type": "text", "fielddata": true },
+            "technique": { "type": "text", "fielddata": true }
+          }
+        }
+      }
+    },
+    "decoder": {
+      "properties": {
+        "name": { "type": "text", "fielddata": true },
+        "parent": { "type": "text", "fielddata": true },
+        "ftscomment": { "type": "text", "fielddata": true }
+      }
+    },
+    "manager": {
+      "properties": {
+        "name": { "type": "text", "fielddata": true }
+      }
+    },
+    "agent": {
+      "properties": {
+        "id": { "type": "text", "fielddata": true },
+        "name": { "type": "text", "fielddata": true },
+        "ip": { "type": "text", "fielddata": true }
+      }
+    },
+    "predecoder": {
+      "properties": {
+        "hostname": { "type": "text", "fielddata": true },
+        "program_name": { "type": "text", "fielddata": true }
+      }
+    },
+    "location": { "type": "text", "fielddata": true },
+    "full_log": { "type": "text", "fielddata": true },
+    "id": { "type": "text", "fielddata": true }
+  }
+}

@@ -1,0 +1,11 @@
+*.bak
+*.key
+*.pem
+.env
+secrets/
+private_keys/
+# node/npm
+node_modules/
+# python
+__pycache__/
+.pytest_cache/

@@ -1,0 +1,144 @@
+ขั้นตอนการ Deploy Network Anomaly Detection ไป Wazuh Manager
+==============================================================
+
+📋 สถานะปัจจุบัน:
+- โปรแกรม: ติดตั้ง Wazuh Agent บนเครื่องนี้ (wuh-network)
+- ประเภท: Agent ไม่ใช่ Manager
+- ท่านต้องติดตั้ง Network Anomaly Rules บน Wazuh Manager ที่ IP 10.251.151.13
+
+✅ ไฟล์ที่เตรียมแล้ว:
+──────────────────────────────────────────────────────
+1. Detection Rules (20 rules)
+   📄 /opt/code/wazuh_ova/rules/1003-network-anomaly-rules.xml
+
+2. Python Scripts (3 scripts)
+   🐍 /opt/code/wazuh_ova/network_anomaly_detector.py
+   🐍 /opt/code/wazuh_ova/telegram_network_alert.py
+   🐍 /opt/code/wazuh_ova/generate_network_anomaly_tests.py
+
+3. Deployment Script
+   📦 /opt/code/wazuh_ova/deploy_to_manager_thai.sh
+
+4. Test & Verification
+   🧪 /opt/code/wazuh_ova/test_complete_thai.py
+
+🚀 วิธีติดตั้ง (3 ขั้นตอน):
+──────────────────────────────────────────────────────
+
+ขั้นตอนที่ 1: ติดตั้ง Rules บน Manager
+────────────────────────────────────────
+รัน Deploy Script:
+
+    chmod +x /opt/code/wazuh_ova/deploy_to_manager_thai.sh
+    /opt/code/wazuh_ova/deploy_to_manager_thai.sh
+
+
+ขั้นตอนที่ 2: ทดสอบการส่ง Test Logs
+────────────────────────────────────────
+หลังจากติดตั้ง rules สำเร็จ ทดสอบด้วยคำสั่ง:
+
+    python3 /opt/code/wazuh_ova/test_complete_thai.py
+
+
+ขั้นตอนที่ 3: ตรวจสอบ Alerts บน Manager
+────────────────────────────────────────
+ดูว่ามีการสร้าง alerts หรือไม่:
+
+    # ดูทั้งหมด
+    ssh root@10.251.151.13 "tail -50 /var/ossec/logs/alerts/alerts.log"
+
+    # ดู network_anomaly เท่านั้น
+    ssh root@10.251.151.13 "grep network_anomaly /var/ossec/logs/alerts/alerts.log"
+
+    # นับจำนวน
+    ssh root@10.251.151.13 "grep -c network_anomaly /var/ossec/logs/alerts/alerts.log"
+
+
+📊 สิ่งที่จะตรวจสอบ:
+──────────────────────────────────────────────────────
+
+✓ SSH Connection: ✅ Successfully tested
+✓ Rules Location: /var/ossec/etc/rules/1003-network-anomaly-rules.xml
+✓ Scripts Location: /var/ossec/active-response/bin/
+✓ Rule Count: 20 detection rules
+✓ Severity Levels: Critical(8-10), High(6-7), Medium(4-5), Low(2-3)
+
+
+🎯 Test Scenarios ที่จะทำการทดสอบ:
+──────────────────────────────────────────────────────
+
+[1] ภายในไปภายนอก SSH (BLOCKED)
+    10.251.1.100:22 → 8.8.8.8:443 (DENY)
+    Expected Alert: Rule 100091, Level 4 (MEDIUM)
+
+[2] ภายในไปภายนอก SSH (ALLOWED-Suspicious)
+    10.251.1.101:22 → 203.0.113.45:443 (PERMIT)
+    Expected Alert: Rule 100092, Level 6 (HIGH)
+
+[3] ภายนอกเข้าภายใน SSH (BLOCKED)
+    192.0.2.1:51234 → 10.251.1.100:22 (DENY)
+    Expected Alert: Rule 100093, Level 6 (HIGH)
+
+[4] 🔴 CRITICAL: ภายนอก→ภายใน SSH (ALLOWED)
+    198.51.100.89:51235 → 10.251.1.102:22 (PERMIT)
+    Expected Alert: Rule 100090, Level 8 (CRITICAL)
+
+[5] ภายนอกเข้าภายใน RDP (BLOCKED)
+    208.67.222.222:51236 → 10.251.2.50:3389 (DENY)
+    Expected Alert: Rule 100095, Level 6 (HIGH)
+
+[6] ภายนอกเข้าภายใน Telnet (BLOCKED)
+    1.1.1.1:51237 → 10.251.1.100:23 (DENY)
+    Expected Alert: Rule 100097, Level 6 (HIGH)
+
+[7] Legitimate HTTPS (Control - no alert expected)
+    10.251.1.100:51245 → 8.8.8.8:443 (PERMIT)
+    Expected: No Alert
+
+
+💡 Troubleshooting:
+──────────────────────────────────────────────────────
+
+ถ้าไม่พบ Alerts:
+
+1. ตรวจสอบว่า rules ถูกติดตั้งหรือไม่
+   ssh root@10.251.151.13 "sudo grep -c '<rule' /var/ossec/etc/rules/1003-network-anomaly-rules.xml"
+
+2. ตรวจสอบ logs collection
+   ssh root@10.251.151.13 "sudo grep 'POLICYDENY\|POLICYPERMIT' /var/ossec/logs/ossec.log"
+
+3. Restart Wazuh Manager
+   ssh root@10.251.151.13 "sudo /var/ossec/bin/wazuh-control restart"
+
+4. ดู debug logs
+   ssh root@10.251.151.13 "sudo tail -100 /var/ossec/logs/ossec.log | grep -i 'error\|rule'"
+
+
+🔧 Manual Deployment (ถ้า Deploy Script ไม่ได้):
+──────────────────────────────────────────────────────
+
+1. เชื่อมต่อ Manager
+   ssh root@10.251.151.13
+
+2. ทำสำเนา Rules
+   sudo cp /opt/code/wazuh_ova/rules/1003-network-anomaly-rules.xml \
+           /var/ossec/etc/rules/
+
+3. ตั้งค่า Permissions
+   sudo chown root:ossec /var/ossec/etc/rules/1003-network-anomaly-rules.xml
+   sudo chmod 640 /var/ossec/etc/rules/1003-network-anomaly-rules.xml
+
+4. Restart Wazuh
+   sudo /var/ossec/bin/wazuh-control restart
+
+5. ตรวจสอบ
+   sudo grep -c '<rule' /var/ossec/etc/rules/1003-network-anomaly-rules.xml
+
+
+📝 Notes:
+──────────────────────────────────────────────────────
+- สคริปต์ deploy_to_manager_thai.sh จะทำการติดตั้งอัตโนมัติ
+- ต้องมี SSH access ไปยัง root@10.251.151.13
+- Rules จะทำการ detect logs ที่มาจากทุก agents
+- Alerts จะบันทึกใน /var/ossec/logs/alerts/alerts.log บน Manager
+

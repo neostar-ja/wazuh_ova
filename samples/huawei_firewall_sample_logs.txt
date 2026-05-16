@@ -1,0 +1,59 @@
+## Sample Huawei USG Firewall Logs for Testing
+## These are realistic syslog format entries from Huawei Security Gateways
+## Generated for Wazuh rule/decoder validation
+
+## Format: TIMESTAMP HOSTNAME [%%SEQUENCE_NUMBER: module_id module_sequence] MESSAGE
+
+# TRAFFIC DENIED - Policy enforcement
+2024-05-13 14:23:45 huawei-usg-master [%%01SECURITY/4/URLFILTER_EVENT(l):]: source-ip=192.168.1.100, source-port=45678, destination-ip=8.8.8.8, destination-port=443, protocol=tcp, rule-name=BLOCK_EXTERNAL_DNS, action=denied, threat-level=medium, content-type=dns-over-https
+2024-05-13 14:24:12 huawei-usg-master [%%01SECURITY/5/ACCESSPOLICY_DENY(l):]: source-ip=10.0.2.50, source-port=12345, destination-ip=172.16.0.1, destination-port=22, protocol=tcp, rule-name=DENY_SSH_EXTERNAL, action=denied, interface=eth0, duration=0
+2024-05-13 14:25:33 huawei-usg-master [%%01SECURITY/4/ACCESSPOLICY_DENY(l):]: source-ip=192.168.1.200, source-port=54321, destination-ip=1.1.1.1, destination-port=53, protocol=udp, rule-name=BLOCK_DNS_CLOUDFLARE, action=denied, packets=5, bytes=320
+
+# INTRUSION DETECTION ALERTS
+2024-05-13 14:26:15 huawei-usg-master [%%01IPS/3/ATTACK_DETECTED(l):]: source-ip=203.0.113.45, source-port=6789, destination-ip=10.0.1.10, destination-port=80, protocol=tcp, threat-type=port_scan, threat-name=Nmap_SYN_Scan, severity=high, action=blocked, session-id=5847392
+2024-05-13 14:27:02 huawei-usg-master [%%01IPS/4/MALWARE_DETECTED(l):]: source-ip=198.51.100.22, destination-ip=10.0.1.5, threat-type=trojan, threat-name=Win32.Trojan.Generic, severity=critical, action=dropped, malware-family=trojan.generic
+2024-05-13 14:28:44 huawei-usg-master [%%01IPS/3/SQL_INJECTION_DETECTED(l):]: source-ip=192.0.2.100, source-port=8080, destination-ip=10.0.3.20, destination-port=443, application=HTTP, attack-pattern=SQL_INJECTION, severity=high, action=blocked
+
+# AUTHENTICATION & LOGIN EVENTS
+2024-05-13 14:30:01 huawei-usg-master [%%01ADMIN/6/LOGIN_SUCCESS(l):]: username=admin, ip-address=192.168.0.100, session-id=S001, access-method=SSH, privilege-level=15, timestamp=2024-05-13 14:30:01
+2024-05-13 14:31:15 huawei-usg-master [%%01ADMIN/4/LOGIN_FAILED(l):]: username=operator, ip-address=203.0.113.10, session-id=FAIL001, access-method=SSH, reason=authentication_failure, attempt-number=1
+2024-05-13 14:32:22 huawei-usg-master [%%01ADMIN/2/LOGIN_FAILED(l):]: username=test_user, ip-address=198.51.100.5, session-id=FAIL002, access-method=telnet, reason=invalid_credentials, attempt-number=3
+2024-05-13 14:33:45 huawei-usg-master [%%01ADMIN/4/BRUTE_FORCE_DETECTED(l):]: source-ip=192.0.2.50, failed-attempts=10, timeframe=300, target-service=ssh, action=blocked
+
+# VPN & TUNNEL EVENTS
+2024-05-13 14:35:10 huawei-usg-master [%%01VPN/5/IPSEC_TUNNEL_UP(l):]: tunnel-name=SITE-A-TO-SITE-B, local-ip=10.0.0.1, remote-ip=10.0.0.2, protocol=ipsec, encryption=AES-256, authentication=SHA256, status=established, duration=0
+2024-05-13 14:36:22 huawei-usg-master [%%01VPN/3/IPSEC_TUNNEL_DOWN(l):]: tunnel-name=SITE-A-TO-SITE-B, reason=inactivity_timeout, duration=3600, packets-transmitted=50000, bytes-transmitted=25000000
+2024-05-13 14:37:33 huawei-usg-master [%%01VPN/4/VPN_AUTH_FAILURE(l):]: tunnel-name=REMOTE-USER-VPN, client-ip=203.0.113.200, username=vpn-user, reason=certificate_invalid, action=rejected
+
+# DOS/DDOS ATTACKS
+2024-05-13 14:40:05 huawei-usg-master [%%01SECURITY/2/DDOS_DETECTED(l):]: attack-type=SYN_FLOOD, source-ip=192.0.2.0/24, destination-ip=10.0.1.50, destination-port=80, attack-rate=50000pps, packets-dropped=450000, duration=120, action=rate-limiting-applied
+2024-05-13 14:41:15 huawei-usg-master [%%01SECURITY/3/DDOS_MITIGATED(l):]: attack-type=UDP_FLOOD, source-ip=198.51.100.0/24, destination-ip=10.0.2.100, destination-port=53, attack-rate=100000pps, packets-filtered=2000000, mitigation-method=geo-blocking
+
+# NETWORK ANOMALIES
+2024-05-13 14:43:30 huawei-usg-master [%%01SYSTEM/4/INTERFACE_DOWN(l):]: interface-name=eth0, reason=link-failure, previous-status=up, timestamp=2024-05-13 14:43:30
+2024-05-13 14:44:45 huawei-usg-master [%%01SYSTEM/5/INTERFACE_UP(l):]: interface-name=eth0, reason=link-recovered, previous-status=down, timestamp=2024-05-13 14:44:45
+2024-05-13 14:46:00 huawei-usg-master [%%01SYSTEM/3/CPU_USAGE_HIGH(l):]: current-cpu=92%, threshold=85%, duration=300, top-process=wazuh_manager, process-id=1234
+
+# WEB CONTENT FILTERING
+2024-05-13 14:48:15 huawei-usg-master [%%01URLFILTER/5/BLOCKED_CATEGORY(l):]: source-ip=192.168.1.150, destination-ip=93.184.216.34, destination-port=443, url=example.com/adult, category=adult-content, rule-name=BLOCK_ADULT, action=blocked
+2024-05-13 14:49:22 huawei-usg-master [%%01URLFILTER/4/BLOCKED_MALWARE_SITE(l):]: source-ip=10.0.2.75, destination-ip=85.13.129.76, destination-port=80, url=malicious-site.ru, reputation-score=99, action=blocked
+
+# FIREWALL CONFIGURATION CHANGES
+2024-05-13 14:51:30 huawei-usg-master [%%01ADMIN/5/CONFIG_CHANGED(l):]: changed-by=admin, ip-address=192.168.0.100, change-type=policy_update, object-name=ALLOW_HTTP, action-taken=modified, timestamp=2024-05-13 14:51:30
+2024-05-13 14:52:45 huawei-usg-master [%%01ADMIN/4/CONFIG_SAVE(l):]: saved-by=admin, configuration-size=2345KB, backup-created=yes, backup-location=/flash/backup/config_20240513_145245.zip
+
+# CERTIFICATE & SECURITY EVENTS
+2024-05-13 14:54:00 huawei-usg-master [%%01SECURITY/2/CERTIFICATE_EXPIRING(l):]: certificate-name=SSL_Certificate_WAN, expiry-date=2024-06-15, days-remaining=33, issuer=GeoTrust, action=alert
+2024-05-13 14:55:15 huawei-usg-master [%%01SECURITY/3/SSL_HANDSHAKE_FAILURE(l):]: source-ip=192.168.1.200, destination-ip=10.0.1.100, destination-port=443, reason=certificate_mismatch, action=connection_rejected
+
+# APPLICATION USAGE
+2024-05-13 14:57:30 huawei-usg-master [%%01APPCTRL/5/HIGH_BANDWIDTH_APP(l):]: source-ip=192.168.1.10, application=YouTube, bandwidth-usage=50Mbps, duration=300, action=rate-limited
+2024-05-13 14:58:45 huawei-usg-master [%%01APPCTRL/4/BLOCKED_APPLICATION(l):]: source-ip=10.0.2.80, application=P2P_Torrent, action=blocked, reason=policy_enforcement, rule-name=BLOCK_P2P
+
+# SYSTEM PERFORMANCE
+2024-05-13 15:00:00 huawei-usg-master [%%01SYSTEM/3/MEMORY_USAGE_HIGH(l):]: current-memory=94%, threshold=90%, available-memory=256MB, free-memory=16MB
+2024-05-13 15:01:15 huawei-usg-master [%%01SYSTEM/4/DISK_SPACE_LOW(l):]: disk-name=/flash, usage=98%, threshold=95%, available-space=50MB
+2024-05-13 15:02:30 huawei-usg-master [%%01SYSTEM/5/REBOOT_INITIATED(l):]: reason=scheduled_maintenance, initiated-by=admin, timestamp=2024-05-13 15:02:30, reboot-delay=300
+
+# MULTI-LAYER THREATS
+2024-05-13 15:04:45 huawei-usg-master [%%01SECURITY/1/THREAT_LEVEL_CRITICAL(l):]: source-ip=203.0.113.99, threat-type=advanced_persistent_threat, threat-indicators=15, blocked-attempts=8, last-attempt=2024-05-13 15:04:45, action=emergency-blocking, client-notification=yes

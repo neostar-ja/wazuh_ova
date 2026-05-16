@@ -1,0 +1,1 @@
+May 13 2026 07:04:08 WUH-B-DC-USG6712E-1 %%01POLICY/6/POLICYPERMIT(l):vsys=public, protocol=17, source-ip=10.251.67.69, source-port=51770, destination-ip=172.64.155.209, destination-port=443, time=May 13 2026 14:04:08, source-zone=WUH_Staff, destination-zone=untrust, application-name=QUIC, rule-name=To-Internet.

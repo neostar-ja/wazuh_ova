@@ -1,0 +1,88 @@
+<!--
+MikroTik RouterOS custom rules
+Purpose: Generate dashboard-visible alerts for RouterOS login/VPN/config and firewall logs.
+Validated with real firewall syslog from 10.252.0.1 on 2026-05-13.
+-->
+
+<group name="mikrotik,routeros,">
+  <rule id="101001" level="10">
+    <decoded_as>mikrotik-log</decoded_as>
+    <description>MikroTik log: $(type) $(target) $(action) by $(username) from $(srcip): $(rule_details)</description>
+    <group>configuration_management,</group>
+  </rule>
+
+  <rule id="101002" level="10">
+    <decoded_as>mikrotik-user-login</decoded_as>
+    <description>MikroTik log: User $(username) logged $(action) from $(srcip) via $(access_method)</description>
+    <group>authentication,</group>
+  </rule>
+
+  <rule id="101003" level="11">
+    <decoded_as>mikrotik-user-login-failure</decoded_as>
+    <description>MikroTik log: Login failure for user $(username) from $(srcip) via $(access_method)</description>
+    <group>authentication,failed_login,</group>
+  </rule>
+
+  <rule id="101004" level="10">
+    <decoded_as>mikrotik-wireguard</decoded_as>
+    <description>MikroTik log: WireGuard user $(username) logged $(action) from $(srcip)</description>
+    <group>vpn,wireguard,</group>
+  </rule>
+
+  <rule id="101005" level="10">
+    <decoded_as>mikrotik-ovpn</decoded_as>
+    <description>MikroTik log: $(username) logged $(action), $(localip) from $(srcip)</description>
+    <group>vpn,ovpn,</group>
+  </rule>
+
+  <rule id="101006" level="12">
+    <decoded_as>mikrotik-filter-rule-change</decoded_as>
+    <description>MikroTik log: Filter rule $(action) by $(username) from $(srcip): $(rule_details)</description>
+    <group>configuration_management,firewall,</group>
+  </rule>
+
+  <rule id="101007" level="12">
+    <decoded_as>mikrotik-raw-rule-change</decoded_as>
+    <description>MikroTik log: Raw rule $(action) by $(username) from $(srcip): $(rule_details)</description>
+    <group>configuration_management,firewall,</group>
+  </rule>
+
+  <rule id="101008" level="12">
+    <decoded_as>mikrotik-user-change</decoded_as>
+    <description>MikroTik log: User $(newuser) $(action) by $(username) from $(srcip): $(rule_details)</description>
+    <group>configuration_management,identity,</group>
+  </rule>
+
+  <rule id="101050" level="3">
+    <decoded_as>mikrotik-firewall</decoded_as>
+    <description>MikroTik firewall: $(chain) $(protocol) $(srcip):$(srcport) to $(dstip):$(dstport) state $(connection_state) via $(in_iface) to $(out_iface)</description>
+    <group>firewall,network_traffic,nat,</group>
+  </rule>
+
+  <rule id="101051" level="3">
+    <decoded_as>mikrotik-firewall-no-nat</decoded_as>
+    <description>MikroTik firewall: $(chain) $(protocol) $(srcip):$(srcport) to $(dstip):$(dstport) state $(connection_state) via $(in_iface) to $(out_iface)</description>
+    <group>firewall,network_traffic,</group>
+  </rule>
+
+  <rule id="101052" level="4">
+    <if_sid>101050</if_sid>
+    <match>proto UDP</match>
+    <description>MikroTik firewall: UDP flow $(srcip):$(srcport) to $(dstip):$(dstport) NAT $(nat_public_ip):$(nat_public_port)</description>
+    <group>firewall,network_traffic,udp,nat,</group>
+  </rule>
+
+  <rule id="101053" level="4">
+    <if_sid>101050</if_sid>
+    <match>proto TCP</match>
+    <description>MikroTik firewall: TCP flow $(srcip):$(srcport) to $(dstip):$(dstport) flags $(tcp_flags) NAT $(nat_public_ip):$(nat_public_port)</description>
+    <group>firewall,network_traffic,tcp,nat,</group>
+  </rule>
+
+  <rule id="101054" level="5">
+    <if_sid>101050</if_sid>
+    <field name="connection_state">new</field>
+    <description>MikroTik firewall: New connection $(protocol) $(srcip):$(srcport) to $(dstip):$(dstport)</description>
+    <group>firewall,connection_new,</group>
+  </rule>
+</group>

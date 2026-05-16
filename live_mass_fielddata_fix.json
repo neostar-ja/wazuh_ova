@@ -1,0 +1,36 @@
+{
+  "properties": {
+    "data": {
+      "properties": {
+        "application": { "type": "text", "fielddata": true },
+        "chain": { "type": "text", "fielddata": true },
+        "command": { "type": "text", "fielddata": true },
+        "connection_state": { "type": "text", "fielddata": true },
+        "dst_zone": { "type": "text", "fielddata": true },
+        "dstip": { "type": "text", "fielddata": true },
+        "dstport": { "type": "text", "fielddata": true },
+        "dstuser": { "type": "text", "fielddata": true },
+        "in_iface": { "type": "text", "fielddata": true },
+        "length": { "type": "text", "fielddata": true },
+        "nat_action": { "type": "text", "fielddata": true },
+        "nat_dstip": { "type": "text", "fielddata": true },
+        "nat_dstport": { "type": "text", "fielddata": true },
+        "nat_public_ip": { "type": "text", "fielddata": true },
+        "nat_public_port": { "type": "text", "fielddata": true },
+        "nat_srcip": { "type": "text", "fielddata": true },
+        "nat_srcport": { "type": "text", "fielddata": true },
+        "out_iface": { "type": "text", "fielddata": true },
+        "protocol": { "type": "text", "fielddata": true },
+        "pwd": { "type": "text", "fielddata": true },
+        "rule_name": { "type": "text", "fielddata": true },
+        "src_zone": { "type": "text", "fielddata": true },
+        "srcip": { "type": "text", "fielddata": true },
+        "srcmac": { "type": "text", "fielddata": true },
+        "srcport": { "type": "text", "fielddata": true },
+        "srcuser": { "type": "text", "fielddata": true },
+        "tcp_flags": { "type": "text", "fielddata": true },
+        "uid": { "type": "text", "fielddata": true }
+      }
+    }
+  }
+}

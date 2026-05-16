@@ -1,0 +1,66 @@
+# FortiGate WUH Real Sample Logs — 2026-05-16
+# Source  : FW-WUH01 (FG3K4ETB19900367) + FW-WUH02 (FG3K4ETB19900355)
+# Syslog  : 10.251.151.1 → Wazuh Worker 10.251.151.12 UDP/1514
+# Format  : Raw messages as received by Wazuh (without archives.log timestamp prefix)
+#
+# Log types covered:
+#   T1 : traffic/forward — accept (with app-ctrl DPI)
+#   T2 : traffic/forward — deny (with client reputation crlevel=high)
+#   T3 : traffic/forward — deny (implicit policyid=0)
+#   T4 : traffic/forward — server-rst close
+#   T5 : traffic/local   — deny (local-in-policy, IPv4 broadcast)
+#   T6 : traffic/local   — deny (local-in-policy6, IPv6 multicast mDNS)
+#   T7 : traffic/forward — accept (with dstuser LDAP)
+#   T8 : traffic/forward — session update (logid=0000000020)
+#   U1 : utm/app-ctrl    — SNMP_GetBulkRequest pass
+#   U2 : utm/app-ctrl    — SSL/TLS1.2 with hostname (SSL DPI)
+#   U3 : utm/ssl         — certificate-anomaly (SNI mismatch)
+#   E1 : event/system    — performance statistics (suppressed)
+#   E2 : event/user      — auth-logon (LDAP-WUH)
+#   E3 : event/system    — admin logout (state=Config-Changed)
+#   E4 : event/system    — configuration changed (level=alert)
+
+# ── T1: Traffic forward ACCEPT with AppControl DPI ──────────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925966866876720 tz="+0700" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.150.180 srcport=42931 srcintf="VLAN-1500" srcintfrole="dmz" dstip=10.251.15.28 dstport=161 dstintf="VLAN-1004" dstintfrole="wan" srccountry="Reserved" dstcountry="Reserved" sessionid=1925785487 proto=17 action="accept" policyid=5 policytype="policy" poluuid="d9c98cd2-6ae9-51ed-b25b-5c3a2d9a3a91" policyname="DMZ1-To-External" service="SNMP" trandisp="noop" appid=34797 app="SNMP_GetBulkRequest" appcat="Network.Service" apprisk="elevated" applist="Monitor" duration=180 sentbyte=84 rcvdbyte=3400 sentpkt=1 rcvdpkt=1 utmaction="allow" countapp=1 mastersrcmac="fe:fc:fe:88:1f:02" srcmac="fe:fc:fe:88:1f:02" srcserver=0
+
+# ── T2: Traffic forward DENY — client reputation high ───────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967106875011 tz="+0700" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.150.58 srcport=51112 srcintf="VLAN-1500" srcintfrole="dmz" dstip=199.232.166.172 dstport=80 dstintf="VLAN-1004" dstintfrole="wan" srccountry="Reserved" dstcountry="Thailand" sessionid=1925832399 proto=6 action="deny" policyid=48 policytype="policy" service="HTTP" trandisp="noop" appcat="unscanned" duration=1 sentbyte=0 rcvdbyte=498 sentpkt=0 rcvdpkt=5 crscore=30 craction=131072 crlevel="high" osname="Windows" srcswversion="10/11" mastersrcmac="fe:fc:fe:46:d7:cc" srcmac="fe:fc:fe:46:d7:cc" srcserver=0
+
+# ── T3: Traffic forward DENY — implicit deny policyid=0 ─────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967743335121 tz="+0700" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.204.65 srcport=50048 srcintf="VLAN-2004" srcintfrole="lan" dstip=162.159.140.167 dstport=443 dstintf="VLAN-1004" dstintfrole="wan" srccountry="Reserved" dstcountry="United States" sessionid=1925832828 proto=6 action="deny" policyid=0 policytype="policy" service="HTTPS" trandisp="noop" appcat="unscanned" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 crscore=30 craction=131072 crlevel="high" mastersrcmac="00:0c:29:d5:0d:a9" srcmac="00:0c:29:d5:0d:a9" srcserver=0
+
+# ── T4: Traffic forward server-rst close ────────────────────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967396878498 tz="+0700" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.65.77 srcport=55451 srcintf="VLAN-1004" srcintfrole="wan" dstip=10.251.150.60 dstport=389 dstintf="VLAN-1500" dstintfrole="dmz" srccountry="Reserved" dstcountry="Reserved" sessionid=1925831743 proto=6 action="server-rst" policyid=4 policytype="policy" poluuid="0d9b1be8-6a4a-51ed-7337-c802496ac2e0" policyname="Private-To-DMZ1" dstuser="peerachai.in" service="Internet-Locator-Service" trandisp="noop" appid=16173 app="LDAP" appcat="Network.Service" apprisk="elevated" applist="Monitor" duration=6 sentbyte=3759 rcvdbyte=4989 sentpkt=12 rcvdpkt=10 utmaction="allow" countapp=1 dstosname="Windows" dstswversion="10/11" masterdstmac="fe:fc:fe:01:ab:a4" dstmac="fe:fc:fe:01:ab:a4" dstserver=0
+
+# ── T5: Traffic local DENY — local-in-policy IPv4 broadcast ─────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925966894444671 tz="+0700" logid="0001000014" type="traffic" subtype="local" level="notice" vd="root" srcip=10.251.205.11 srcport=2010 srcintf="VLAN-2005" srcintfrole="lan" dstip=255.255.255.255 dstport=2011 dstintf="root" dstintfrole="undefined" srccountry="Reserved" dstcountry="Reserved" sessionid=1925832703 proto=17 action="deny" policyid=0 policytype="local-in-policy" service="MMS" trandisp="noop" app="MMS" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 msg="Connection Failed" mastersrcmac="fe:fb:fe:a9:3e:34" srcmac="fe:fb:fe:a9:3e:34" srcserver=0
+
+# ── T6: Traffic local DENY — local-in-policy6 IPv6 mDNS multicast ───────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967137943394 tz="+0700" logid="0001000014" type="traffic" subtype="local" level="notice" vd="root" srcip=fe80::69d7:acb2:9253:8ee6 srcport=5353 srcintf="VLAN-1500" srcintfrole="dmz" dstip=ff02::fb dstport=5353 dstintf="root" dstintfrole="undefined" sessionid=239176143 proto=17 action="deny" policyid=0 policytype="local-in-policy6" service="udp/5353" trandisp="noop" app="udp/5353" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 msg="Connection Failed" mastersrcmac="00:83:d4:05:05:d6" srcmac="00:83:d4:05:05:d6" srcserver=0
+
+# ── T7: Traffic forward ACCEPT with LDAP dstuser ────────────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967446870421 tz="+0700" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.65.77 srcport=55448 srcintf="VLAN-1004" srcintfrole="wan" dstip=10.251.151.66 dstport=135 dstintf="VLAN-1501" dstintfrole="dmz" srccountry="Reserved" dstcountry="Reserved" sessionid=1925831539 proto=6 action="client-rst" policyid=4 policytype="policy" poluuid="0d9b1be8-6a4a-51ed-7337-c802496ac2e0" policyname="Private-To-DMZ1" service="DCE-RPC" trandisp="noop" appid=15897 app="Microsoft.RPC" appcat="Network.Service" apprisk="elevated" applist="Monitor" duration=6 sentbyte=828 rcvdbyte=816 sentpkt=8 rcvdpkt=4 utmaction="allow" countapp=1 masterdstmac="fe:fc:fe:ac:4f:76" dstmac="fe:fc:fe:ac:4f:76" dstserver=0
+
+# ── T8: Traffic forward session UPDATE (logid=0000000020 with delta) ─────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925966869442227 tz="+0700" logid="0000000020" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.251.70.29 srcport=50107 srcintf="VLAN-1004" srcintfrole="wan" dstip=10.251.150.31 dstport=443 dstintf="VLAN-1500" dstintfrole="dmz" srccountry="Reserved" dstcountry="Reserved" sessionid=1924301996 proto=6 action="accept" policyid=4 policytype="policy" poluuid="0d9b1be8-6a4a-51ed-7337-c802496ac2e0" policyname="Private-To-DMZ1" service="HTTPS" trandisp="noop" appid=41540 app="SSL_TLSv1.2" appcat="Network.Service" apprisk="medium" applist="Monitor" duration=6682 sentbyte=58138 rcvdbyte=113197 sentpkt=924 rcvdpkt=929 sentdelta=2308 rcvddelta=2257 durationdelta=211 sentpktdelta=37 rcvdpktdelta=17 masterdstmac="fe:fc:fe:96:6f:01" dstmac="fe:fc:fe:96:6f:01" dstserver=0
+
+# ── U1: UTM app-ctrl SNMP_GetBulkRequest pass ───────────────────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925966916549788 tz="+0700" logid="1059028704" type="utm" subtype="app-ctrl" eventtype="signature" level="information" vd="root" appid=34789 srcip=10.251.150.222 srccountry="Reserved" dstip=10.251.15.43 dstcountry="Reserved" srcport=45037 dstport=161 srcintf="VLAN-1500" srcintfrole="dmz" dstintf="VLAN-1004" dstintfrole="wan" proto=17 service="SNMP" direction="outgoing" policyid=5 poluuid="d9c98cd2-6ae9-51ed-b25b-5c3a2d9a3a91" policytype="policy" sessionid=1925832707 applist="Monitor" action="pass" appcat="Network.Service" app="SNMP_GetRequest" incidentserialno=1060053103 msg="Network.Service: SNMP_GetRequest" apprisk="elevated"
+
+# ── U2: UTM app-ctrl SSL with hostname (SSL DPI inspection) ─────────────────
+date=2026-05-16 time=17:06:07 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778925967798130982 tz="+0700" logid="1059028704" type="utm" subtype="app-ctrl" eventtype="signature" level="information" vd="root" appid=15895 srcip=10.252.0.105 srccountry="Reserved" dstip=10.251.150.44 dstcountry="Reserved" srcport=36110 dstport=443 srcintf="VLAN-1004" srcintfrole="wan" dstintf="VLAN-1500" dstintfrole="dmz" proto=6 service="SSL" direction="outgoing" policyid=16 poluuid="b8d8ce86-810d-51ed-8ec8-4b52bf653741" policytype="policy" sessionid=1925832831 applist="Monitor" action="pass" appcat="Network.Service" app="SSL" hostname="ubnt.hospital.wu.ac.th" incidentserialno=1060053143 url="/" msg="Network.Service: SSL" apprisk="elevated" scertcname="hospital.wu.ac.th" scertissuer="Sectigo Public Server Authentication CA OV R36"
+
+# ── U3: UTM ssl certificate-anomaly (SNI mismatch) ──────────────────────────
+date=2026-05-16 time=11:52:15 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778907134770653016 tz="+0700" logid="1700062307" type="utm" subtype="ssl" eventtype="ssl-anomaly" level="information" vd="root" action="info" policyid=5 poluuid="d9c98cd2-6ae9-51ed-b25b-5c3a2d9a3a91" policytype="policy" sessionid=1921252696 service="SSL" profile="certificate-inspection" srcip=10.251.151.70 srcport=53661 srccountry="Reserved" dstip=10.250.0.202 dstport=443 dstcountry="Reserved" srcintf="VLAN-1501" srcintfrole="dmz" dstintf="VLAN-1004" dstintfrole="wan" proto=6 tlsver="tls1.2" sni="silverfort-node" eventsubtype="certificate-anomaly" msg="Server certificate and SNI mismatched" hostname="silverfort-node"
+
+# ── E1: Event system — performance statistics (expect level=0 suppress) ──────
+date=2026-05-16 time=11:52:16 devname="FW-WUH02" devid="FG3K4ETB19900355" eventtime=1778907136454452987 tz="+0700" logid="0100040704" type="event" subtype="system" level="notice" vd="root" logdesc="System performance statistics" action="perf-stats" cpu=0 mem=26 totalsession=3947 disk=0 bandwidth="45/842" setuprate=0 disklograte=0 fazlograte=0 freediskstorage=0 sysuptime=8267216 waninfo="name=Agg_External,bytes=707889349/1268155430,packets=1838738/7988789;name=VLAN-1004,bytes=553437704/431957134,packets=738268/2755598;" msg="Performance statistics: average CPU: 0, memory:  26, concurrent sessions:  3947, setup-rate: 0"
+
+# ── E2: Event user — auth-logon via LDAP-WUH ────────────────────────────────
+date=2026-05-16 time=11:52:28 devname="FW-WUH02" devid="FG3K4ETB19900355" eventtime=1778907148176865083 tz="+0700" logid="0102043039" type="event" subtype="user" level="notice" vd="root" logdesc="Authentication logon" srcip=10.251.150.69 user="kitpakorn.ma" authserver="LDAP-WUH" action="auth-logon" status="logon" msg="User kitpakorn.ma added to auth logon"
+
+# ── E3: Event system — admin logout with state=Config-Changed ───────────────
+date=2026-05-16 time=11:55:45 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778907345312732509 tz="+0700" logid="0100032003" type="event" subtype="system" level="information" vd="root" logdesc="Admin logout successful" sn="1778905659" user="apirak.ja" ui="jsconsole" method="jsconsole" srcip=10.251.151.30 dstip=10.251.1.14 action="logout" status="success" duration=1686 state="Config-Changed" reason="timeout" msg="Administrator apirak.ja timed out on jsconsole"
+
+# ── E4: Event system — configuration changed (level=alert, critical) ─────────
+date=2026-05-16 time=11:55:45 devname="FW-WUH01" devid="FG3K4ETB19900367" eventtime=1778907345312747033 tz="+0700" logid="0100032102" type="event" subtype="system" level="alert" vd="root" logdesc="Configuration changed" user="apirak.ja" ui="jsconsole" msg="Configuration is changed in the admin session"

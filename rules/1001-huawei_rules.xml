@@ -1,0 +1,35 @@
+<!--
+Huawei USG Custom Rules
+Purpose: Generate dashboard-visible Wazuh alerts for Huawei USG policy logs.
+Validated with real log:
+May 13 2026 07:04:08 WUH-B-DC-USG6712E-1 %%01POLICY/6/POLICYPERMIT(l):...
+-->
+
+<group name="huawei,firewall,huawei_usg,">
+  <rule id="100050" level="3">
+    <decoded_as>huawei-usg-custom</decoded_as>
+    <description>Huawei USG Firewall Event.</description>
+    <group>network_policy,</group>
+  </rule>
+
+  <rule id="100051" level="5">
+    <if_sid>100050</if_sid>
+    <match>POLICYDENY|ACCESSPOLICY_DENY|denied</match>
+    <description>Huawei USG: Traffic denied by policy $(rule_name) from $(srcip):$(srcport) to $(dstip):$(dstport)</description>
+    <group>network_policy,firewall_drop,access_denied,</group>
+  </rule>
+
+  <rule id="100052" level="3">
+    <if_sid>100050</if_sid>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>Huawei USG: Traffic permitted by policy $(rule_name) from $(srcip):$(srcport) to $(dstip):$(dstport)</description>
+    <group>network_policy,policy_permit,</group>
+  </rule>
+
+  <rule id="100053" level="4">
+    <if_sid>100050</if_sid>
+    <field name="application">QUIC</field>
+    <description>Huawei USG: QUIC traffic observed from $(srcip) to $(dstip):$(dstport) by policy $(rule_name)</description>
+    <group>network_policy,application_control,quic,</group>
+  </rule>
+</group>

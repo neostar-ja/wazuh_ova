@@ -1,0 +1,362 @@
+<!--
+  Infoblox NIOS Custom Rules
+  Rule ID Range: 100400 – 100499
+  รองรับ: DNS, DHCP, RPZ Threats, Audit, Brute Force Detection
+  Decoder อ้างอิง: 1003-infoblox-decoders.xml + built-in 0155-named_decoders.xml (patched)
+  อัปเดต: 15 พฤษภาคม 2026
+
+  สถาปัตยกรรม:
+    - DNS Rules ใช้ if_sid:12100 (named) + field checks (dns_domain, dns_type, ฯลฯ)
+    - DHCP Rules ใช้ decoded_as:infoblox-dhcp + field name dhcp_action
+    - NIOS/Audit Rules ใช้ decoded_as:infoblox-nios + field checks
+    - RPZ Rules ใช้ if_sid:12100 + field name rpz_policy/rpz_type
+-->
+
+<group name="infoblox,">
+
+  <!-- ============================================================== -->
+  <!-- SECTION 1: DNS RULES (parent: built-in named = rule 12100)    -->
+  <!-- ============================================================== -->
+
+  <!-- DNS Query — A record (chain จาก 12138 = "Domain A record found")
+       ทำงานกับ Format 1 (@handle), Format 2 (response), NIOS 8.x
+  -->
+  <rule id="100400" level="3">
+    <if_sid>12138</if_sid>
+    <field name="dns_domain" type="pcre2">.+</field>
+    <description>Infoblox DNS: Query $(dns_domain) (A) from $(srcip)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dns,dns_query,</group>
+  </rule>
+
+  <!-- DNS Query — Non-A records (AAAA, MX, TXT, CNAME, HTTPS etc.)
+       chain จาก 12100 ซึ่งเป็น parent ของทุก named event
+  -->
+  <rule id="100401" level="3">
+    <if_sid>12100</if_sid>
+    <field name="dns_domain" type="pcre2">.+</field>
+    <field name="dns_type" type="pcre2">^(?!A$).+</field>
+    <description>Infoblox DNS: Query $(dns_domain) ($(dns_type)) from $(srcip)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dns,dns_query,</group>
+  </rule>
+
+  <!-- DNS NXDOMAIN Response — Domain ไม่มีอยู่จริง (potential DGA/Malware)
+       dns_response field มาจาก named-query decoder (response log format)
+  -->
+  <rule id="100407" level="5">
+    <if_sid>12100</if_sid>
+    <field name="dns_response">^NXDOMAIN$</field>
+    <description>Infoblox DNS: NXDOMAIN for $(dns_domain) from $(srcip) — Domain not found</description>
+    <group>infoblox_dns,dns_nxdomain,</group>
+  </rule>
+
+  <!-- DNS NXDOMAIN Flood — DGA Malware Detection -->
+  <rule id="100408" level="10" frequency="20" timeframe="60">
+    <if_matched_sid>100407</if_matched_sid>
+    <same_field>srcip</same_field>
+    <description>Infoblox DNS: Client $(srcip) got 20+ NXDOMAIN in 60s — Possible DGA Malware</description>
+    <mitre>
+      <id>T1568.002</id>
+    </mitre>
+    <group>infoblox_dns,dns_nxdomain,dga_malware,infected_host,</group>
+  </rule>
+
+  <!-- DNS A Record Query (หมายเหตุ: 100400 ก็รับ A record แล้ว แต่ 100409 เป็น backup) -->
+  <rule id="100409" level="3">
+    <if_sid>12138</if_sid>
+    <field name="dns_domain" type="pcre2">.+</field>
+    <description>Infoblox DNS: A record query for $(dns_domain) from $(srcip)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dns,dns_query,</group>
+  </rule>
+
+  <!-- DNS AXFR Zone Transfer Denied — Level 10 สัญญาณ Reconnaissance -->
+  <rule id="100402" level="10">
+    <if_sid>12100</if_sid>
+    <match>denied AXFR</match>
+    <description>Infoblox DNS: Zone Transfer (AXFR) denied from $(srcip) — Possible Reconnaissance</description>
+    <mitre>
+      <id>T1590.002</id>
+    </mitre>
+    <group>infoblox_dns,dns_axfr,attack,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- DNS Zone Transfer IXFR Denied -->
+  <rule id="100403" level="9">
+    <if_sid>12100</if_sid>
+    <match>denied IXFR</match>
+    <description>Infoblox DNS: IXFR Zone Transfer denied from $(srcip)</description>
+    <mitre>
+      <id>T1590.002</id>
+    </mitre>
+    <group>infoblox_dns,dns_axfr,attack,</group>
+  </rule>
+
+  <!-- DNS Dynamic Update Denied -->
+  <rule id="100404" level="7">
+    <if_sid>12100</if_sid>
+    <match>denied update from</match>
+    <description>Infoblox DNS: Dynamic update denied from $(srcip) — Possible DNS Hijack Attempt</description>
+    <mitre>
+      <id>T1584</id>
+    </mitre>
+    <group>infoblox_dns,dns_update_denied,</group>
+  </rule>
+
+  <!-- DNS Zone Notify -->
+  <rule id="100405" level="3">
+    <if_sid>12100</if_sid>
+    <match>received notify for zone</match>
+    <description>Infoblox DNS: Zone change notification for $(dns_domain) from $(srcip)</description>
+    <group>infoblox_dns,dns_notify,</group>
+  </rule>
+
+  <!-- DNS Query Cache Denied -->
+  <rule id="100406" level="5">
+    <if_sid>12100</if_sid>
+    <match>query (cache)</match>
+    <match>denied</match>
+    <description>Infoblox DNS: Recursive query denied from $(srcip) — Unauthorized resolver access attempt</description>
+    <group>infoblox_dns,dns_denied,access_denied,</group>
+  </rule>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 2: RPZ THREAT RULES                                    -->
+  <!-- ============================================================== -->
+
+  <!-- DNS RPZ Block — QNAME Policy (Domain blocked) -->
+  <rule id="100430" level="8">
+    <if_sid>12100</if_sid>
+    <match>rpz QNAME Policy Rewrite</match>
+    <description>Infoblox RPZ: Malicious domain blocked for $(srcip) by DNS Firewall Policy</description>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+    <group>infoblox_dns,infoblox_threat,rpz_block,dns_threat,pci_dss_11.4,</group>
+  </rule>
+
+  <!-- DNS RPZ Block — IP Policy (IP reputation) -->
+  <rule id="100431" level="8">
+    <if_sid>12100</if_sid>
+    <match>rpz IP Policy Rewrite</match>
+    <description>Infoblox RPZ: Malicious IP blocked for $(srcip) by DNS Firewall Policy</description>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+    <group>infoblox_dns,infoblox_threat,rpz_block,dns_threat,</group>
+  </rule>
+
+  <!-- RPZ Block — CNAME Policy -->
+  <rule id="100432" level="8">
+    <if_sid>12100</if_sid>
+    <match>rpz CNAME Policy Rewrite</match>
+    <description>Infoblox RPZ: CNAME-based threat block for $(srcip) by DNS Firewall Policy</description>
+    <mitre>
+      <id>T1568</id>
+    </mitre>
+    <group>infoblox_dns,infoblox_threat,rpz_block,dns_threat,</group>
+  </rule>
+
+  <!-- RPZ Excessive Blocks from one client — Infected Host Detection -->
+  <rule id="100433" level="10" frequency="10" timeframe="120">
+    <if_matched_sid>100430</if_matched_sid>
+    <same_field>srcip</same_field>
+    <description>Infoblox RPZ: Client $(srcip) blocked 10+ times in 120s — Likely Infected Host with Malware DNS Activity</description>
+    <mitre>
+      <id>T1071.004</id>
+      <id>T1568.001</id>
+    </mitre>
+    <group>infoblox_dns,infoblox_threat,rpz_storm,infected_host,</group>
+  </rule>
+
+  <!-- RPZ Excessive IP-based Blocks from same client -->
+  <rule id="100434" level="10" frequency="10" timeframe="120">
+    <if_matched_sid>100431</if_matched_sid>
+    <same_field>srcip</same_field>
+    <description>Infoblox RPZ: Client $(srcip) hitting IP blacklists 10+ times — Possible C2 Callback</description>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+    <group>infoblox_dns,infoblox_threat,rpz_storm,</group>
+  </rule>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 3: DHCP RULES                                          -->
+  <!-- ============================================================== -->
+
+  <!-- Base: ทุก DHCP event จาก Infoblox -->
+  <rule id="100410" level="0">
+    <decoded_as>infoblox-dhcp</decoded_as>
+    <description>Infoblox: DHCP event</description>
+    <group>dhcp,infoblox_dhcp,</group>
+  </rule>
+
+  <!-- DHCPACK: IP Lease Confirmed — ข้อมูล IP-to-MAC mapping -->
+  <rule id="100411" level="3">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPACK$</field>
+    <description>Infoblox DHCP: Lease confirmed — IP $(dhcp_ip) to MAC $(dhcp_mac) [$(dhcp_hostname)] via $(dhcp_interface)</description>
+    <group>infoblox_dhcp,dhcp_lease,</group>
+  </rule>
+
+  <!-- DHCPOFFER: IP offered to client -->
+  <rule id="100412" level="2">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPOFFER$</field>
+    <description>Infoblox DHCP: Offer — IP $(dhcp_ip) to $(dhcp_mac) via $(dhcp_interface)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dhcp,dhcp_offer,</group>
+  </rule>
+
+  <!-- DHCPDISCOVER: New device requesting IP -->
+  <rule id="100413" level="3">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPDISCOVER$</field>
+    <description>Infoblox DHCP: New device — MAC=$(dhcp_mac) [$(dhcp_hostname)] via $(dhcp_interface)</description>
+    <group>infoblox_dhcp,dhcp_discover,new_device,</group>
+  </rule>
+
+  <!-- DHCPREQUEST: Client requesting / renewing -->
+  <rule id="100414" level="2">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPREQUEST$</field>
+    <description>Infoblox DHCP: Request for $(dhcp_ip) from $(dhcp_mac) via $(dhcp_interface)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dhcp,dhcp_request,</group>
+  </rule>
+
+  <!-- DHCPRELEASE: Client releasing IP -->
+  <rule id="100415" level="3">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPRELEASE$</field>
+    <description>Infoblox DHCP: Lease released — IP $(dhcp_ip) by $(dhcp_mac) [$(dhcp_hostname)]</description>
+    <group>infoblox_dhcp,dhcp_release,</group>
+  </rule>
+
+  <!-- DHCPNAK: Lease rejected -->
+  <rule id="100416" level="5">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPNAK$</field>
+    <description>Infoblox DHCP: Lease NAK — IP $(dhcp_ip) refused to $(dhcp_mac)</description>
+    <group>infoblox_dhcp,dhcp_nak,</group>
+  </rule>
+
+  <!-- DHCPDECLINE: IP Conflict -->
+  <rule id="100417" level="8">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPDECLINE$</field>
+    <description>Infoblox DHCP: IP Conflict — $(dhcp_mac) declined $(dhcp_ip) — Possible IP Spoofing or Duplicate Address</description>
+    <group>infoblox_dhcp,dhcp_conflict,ip_conflict,</group>
+  </rule>
+
+  <!-- DHCP Flood — Rogue DHCP Client / DoS -->
+  <rule id="100418" level="10" frequency="20" timeframe="60">
+    <if_matched_sid>100413</if_matched_sid>
+    <same_field>dhcp_mac</same_field>
+    <description>Infoblox DHCP: MAC $(dhcp_mac) sent 20+ DHCPDISCOVER in 60s — DHCP Flood / Rogue Client</description>
+    <mitre>
+      <id>T1499</id>
+    </mitre>
+    <group>infoblox_dhcp,dhcp_flood,dos_attack,</group>
+  </rule>
+
+  <!-- DHCPEXPIRE: Lease expired on server side -->
+  <rule id="100419" level="2">
+    <if_sid>100410</if_sid>
+    <field name="dhcp_action">^DHCPEXPIRE$</field>
+    <description>Infoblox DHCP: Lease expired — IP $(dhcp_ip) from $(dhcp_mac)</description>
+    <options>no_full_log</options>
+    <group>infoblox_dhcp,dhcp_expire,</group>
+  </rule>
+
+  <!-- DHCP Pool Exhaustion — no free leases -->
+  <rule id="100441" level="9">
+    <if_sid>100410</if_sid>
+    <match>no free leases</match>
+    <description>Infoblox DHCP: Pool exhausted — no free leases for network. Possible DHCP starvation attack.</description>
+    <mitre>
+      <id>T1499</id>
+    </mitre>
+    <group>infoblox_dhcp,dhcp_pool_exhausted,dos_attack,</group>
+  </rule>
+
+  <!-- DHCP Pool Exhaustion Repeated — Starvation Attack -->
+  <rule id="100442" level="12" frequency="5" timeframe="60">
+    <if_matched_sid>100441</if_matched_sid>
+    <description>Infoblox DHCP: Pool exhaustion repeated 5+ times in 60s — Active DHCP Starvation Attack</description>
+    <mitre>
+      <id>T1499</id>
+    </mitre>
+    <group>infoblox_dhcp,dhcp_pool_exhausted,dos_attack,critical,</group>
+  </rule>
+
+  <!-- ============================================================== -->
+  <!-- SECTION 4: INFOBLOX NIOS AUDIT RULES                          -->
+  <!-- ============================================================== -->
+
+  <!-- Base: Infoblox NIOS Syslog events -->
+  <rule id="100420" level="0">
+    <decoded_as>infoblox-nios</decoded_as>
+    <description>Infoblox NIOS: System / Audit event</description>
+    <group>infoblox_audit,</group>
+  </rule>
+
+  <!-- Admin Login Success -->
+  <rule id="100421" level="3">
+    <if_sid>100420</if_sid>
+    <match>LOGIN</match>
+    <description>Infoblox NIOS: Admin $(username) logged in from $(srcip)</description>
+    <group>infoblox_audit,authentication,authentication_success,</group>
+  </rule>
+
+  <!-- Admin Login Failure -->
+  <rule id="100422" level="5">
+    <if_sid>100420</if_sid>
+    <match>FAILED LOGIN|login failed</match>
+    <description>Infoblox NIOS: Admin login failed for $(username) from $(srcip)</description>
+    <group>infoblox_audit,authentication,authentication_failed,</group>
+  </rule>
+
+  <!-- Admin Login Brute Force -->
+  <rule id="100423" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100422</if_matched_sid>
+    <same_field>srcip</same_field>
+    <description>Infoblox NIOS: Brute force admin login — 5+ failures from $(srcip)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>infoblox_audit,authentication,brute_force,</group>
+  </rule>
+
+  <!-- DNS Record Changed (Configuration Change) -->
+  <rule id="100424" level="7">
+    <if_sid>100420</if_sid>
+    <match>MODIFY:|ADD:|DELETE:|REMOVE:</match>
+    <description>Infoblox NIOS: DNS record $(action) — Configuration changed by admin</description>
+    <mitre>
+      <id>T1584.002</id>
+    </mitre>
+    <group>infoblox_audit,config_change,dns_record_change,</group>
+  </rule>
+
+  <!-- Grid Member Event -->
+  <rule id="100425" level="5">
+    <if_sid>100420</if_sid>
+    <match>Grid member</match>
+    <description>Infoblox Grid: Member event — $(srcip) $(action) the grid</description>
+    <group>infoblox_audit,grid_event,</group>
+  </rule>
+
+  <!-- DNS Firewall / Threat Category Match -->
+  <rule id="100426" level="8">
+    <if_sid>100420</if_sid>
+    <match>dns_category</match>
+    <description>Infoblox DNS Firewall: Domain $(dns_domain) matched threat category '$(threat_category)' from $(srcip)</description>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+    <group>infoblox_audit,infoblox_threat,dns_firewall,</group>
+  </rule>
+
+</group>

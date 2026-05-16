@@ -1,0 +1,65 @@
+<!--
+MikroTik RouterOS custom decoders
+Purpose: Parse RouterOS login, VPN, config change, and firewall/NAT logs.
+Validated with real syslog from 10.252.0.1 on 2026-05-13.
+-->
+
+<decoder name="mikrotik-user-login">
+  <prematch>user </prematch>
+  <regex type="pcre2">user (\S+) logged (\S+) from (\S+) via (\S+)</regex>
+  <order>username, action, srcip, access_method</order>
+</decoder>
+
+<decoder name="mikrotik-user-login-failure">
+  <prematch>login failure for user </prematch>
+  <regex type="pcre2">login failure for user (\S+) from (\S+) via (\S+)</regex>
+  <order>username, srcip, access_method</order>
+</decoder>
+
+<decoder name="mikrotik-wireguard">
+  <prematch>wireguard user </prematch>
+  <regex type="pcre2">wireguard user (\S+) logged (\S+) from (\S+)</regex>
+  <order>username, action, srcip</order>
+</decoder>
+
+<decoder name="mikrotik-ovpn">
+  <prematch> logged </prematch>
+  <regex type="pcre2">(\S+) logged (\S+), (\S+) from (\S+)</regex>
+  <order>username, action, localip, srcip</order>
+</decoder>
+
+<decoder name="mikrotik-filter-rule-change">
+  <prematch type="pcre2">filter rule (changed|removed|added) by</prematch>
+  <regex type="pcre2">filter rule (changed|removed|added) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
+  <order>action, username, srcip, rule_details</order>
+</decoder>
+
+<decoder name="mikrotik-raw-rule-change">
+  <prematch type="pcre2">raw rule (changed|removed|added) by</prematch>
+  <regex type="pcre2">raw rule (changed|removed|added) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
+  <order>action, username, srcip, rule_details</order>
+</decoder>
+
+<decoder name="mikrotik-user-change">
+  <prematch type="pcre2">user (\S+) (added|password changed|removed) by</prematch>
+  <regex type="pcre2">user (\S+) (added|password changed|removed) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
+  <order>newuser, action, username, srcip, rule_details</order>
+</decoder>
+
+<decoder name="mikrotik-log">
+  <prematch type="pcre2">(\S+) (\S+) (\S+) by</prematch>
+  <regex type="pcre2">(\S+) (\S+) (\S+) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
+  <order>type, target, action, username, srcip, rule_details</order>
+</decoder>
+
+<decoder name="mikrotik-firewall">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+),(\S+) src-mac (\S+), proto (\S+)(?: \(([^)]*)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), NAT \((\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+)\)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
+  <order>chain,in_iface,out_iface,connection_state,nat_action,srcmac,protocol,tcp_flags,srcip,srcport,dstip,dstport,nat_srcip,nat_srcport,nat_public_ip,nat_public_port,nat_dstip,nat_dstport,length</order>
+</decoder>
+
+<decoder name="mikrotik-firewall-no-nat">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+),(\S+) src-mac (\S+), proto (\S+)(?: \(([^)]*)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
+  <order>chain,in_iface,out_iface,connection_state,nat_action,srcmac,protocol,tcp_flags,srcip,srcport,dstip,dstport,length</order>
+</decoder>

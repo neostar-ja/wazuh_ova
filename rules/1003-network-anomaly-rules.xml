@@ -1,0 +1,119 @@
+<group name="network_anomaly,suspicious_flow,threat_detection,">
+
+  <!-- ============================================================ -->
+  <!-- INBOUND ANOMALIES (External -> Internal) - FIREWALL PERMIT   -->
+  <!-- ============================================================ -->
+
+  <!-- Rule 100101: Inbound SSH Permit -->
+  <rule id="100101" level="8">
+    <if_sid>100050</if_sid>
+    <srcip negate="yes">10.0.0.0/8</srcip>
+    <dstip>10.0.0.0/8</dstip>
+    <dstport>^22$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>CRITICAL ALERT: Permitted inbound SSH from external $(srcip) to internal $(dstip):22 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,inbound_ssh,critical_permit,</group>
+  </rule>
+
+  <!-- Rule 100102: Inbound RDP Permit -->
+  <rule id="100102" level="8">
+    <if_sid>100050</if_sid>
+    <srcip negate="yes">10.0.0.0/8</srcip>
+    <dstip>10.0.0.0/8</dstip>
+    <dstport>^3389$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>CRITICAL ALERT: Permitted inbound RDP from external $(srcip) to internal $(dstip):3389 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,inbound_rdp,critical_permit,</group>
+  </rule>
+
+  <!-- Rule 100103: Inbound Telnet Permit -->
+  <rule id="100103" level="8">
+    <if_sid>100050</if_sid>
+    <srcip negate="yes">10.0.0.0/8</srcip>
+    <dstip>10.0.0.0/8</dstip>
+    <dstport>^23$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>CRITICAL ALERT: Permitted inbound Telnet from external $(srcip) to internal $(dstip):23 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,inbound_telnet,critical_permit,</group>
+  </rule>
+
+  <!-- Rule 100104: Inbound VNC Permit -->
+  <rule id="100104" level="8">
+    <if_sid>100050</if_sid>
+    <srcip negate="yes">10.0.0.0/8</srcip>
+    <dstip>10.0.0.0/8</dstip>
+    <dstport>^5900$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>CRITICAL ALERT: Permitted inbound VNC from external $(srcip) to internal $(dstip):5900 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,inbound_vnc,critical_permit,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- OUTBOUND ANOMALIES (Internal -> External) - FIREWALL PERMIT  -->
+  <!-- ============================================================ -->
+
+  <!-- Rule 100105: Outbound SSH Permit -->
+  <rule id="100105" level="7">
+    <if_sid>100050</if_sid>
+    <srcip>10.0.0.0/8</srcip>
+    <dstip negate="yes">10.0.0.0/8</dstip>
+    <dstport>^22$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>WARNING ALERT: Permitted outbound SSH from internal $(srcip) to external $(dstip):22 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,outbound_ssh,warning_permit,</group>
+  </rule>
+
+  <!-- Rule 100106: Outbound RDP Permit -->
+  <rule id="100106" level="7">
+    <if_sid>100050</if_sid>
+    <srcip>10.0.0.0/8</srcip>
+    <dstip negate="yes">10.0.0.0/8</dstip>
+    <dstport>^3389$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>WARNING ALERT: Permitted outbound RDP from internal $(srcip) to external $(dstip):3389 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,outbound_rdp,warning_permit,</group>
+  </rule>
+
+  <!-- Rule 100107: Outbound Telnet Permit -->
+  <rule id="100107" level="7">
+    <if_sid>100050</if_sid>
+    <srcip>10.0.0.0/8</srcip>
+    <dstip negate="yes">10.0.0.0/8</dstip>
+    <dstport>^23$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>WARNING ALERT: Permitted outbound Telnet (unencrypted) from internal $(srcip) to external $(dstip):23 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,outbound_telnet,warning_permit,</group>
+  </rule>
+
+  <!-- Rule 100108: Outbound VNC Permit -->
+  <rule id="100108" level="7">
+    <if_sid>100050</if_sid>
+    <srcip>10.0.0.0/8</srcip>
+    <dstip negate="yes">10.0.0.0/8</dstip>
+    <dstport>^5900$</dstport>
+    <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
+    <description>WARNING ALERT: Permitted outbound VNC from internal $(srcip) to external $(dstip):5900 - Policy: $(rule_name) [ALLOWED]</description>
+    <group>network_anomaly,suspicious_permit,outbound_vnc,warning_permit,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- OUTBOUND WHITELISTS (Evaluated Last to override Anomalies)   -->
+  <!-- ============================================================ -->
+
+  <!-- Rule 100120: Outbound Anomaly Whitelist - SOURCE IP -->
+  <rule id="100120" level="3">
+    <if_sid>100105, 100106, 100107, 100108</if_sid>
+    <list field="srcip" lookup="address_match_key">etc/lists/network-whitelist-sources</list>
+    <description>MINIMUM ALERT: Outbound connection from whitelisted Source IP Address - [WHITELISTED VIA SOURCE CDB LIST]</description>
+    <group>network_anomaly,whitelisted_permit,minimum_alert,</group>
+  </rule>
+
+  <!-- Rule 100121: Outbound Anomaly Whitelist - DESTINATION IP -->
+  <rule id="100121" level="3">
+    <if_sid>100105, 100106, 100107, 100108</if_sid>
+    <list field="dstip" lookup="address_match_key">etc/lists/network-whitelist-destinations</list>
+    <description>MINIMUM ALERT: Outbound connection to whitelisted Destination IP Address - [WHITELISTED VIA DESTINATION CDB LIST]</description>
+    <group>network_anomaly,whitelisted_permit,minimum_alert,</group>
+  </rule>
+
+</group>

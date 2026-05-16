@@ -1,0 +1,18 @@
+<!--
+Huawei USG Custom Decoders
+Purpose: Parse Huawei USG logs with non-default hostnames such as WUH-B-DC-USG6712E-1.
+Validated with real POLICY/POLICYPERMIT logs from May 13 2026.
+-->
+
+<decoder name="huawei-usg-custom">
+  <prematch type="pcre2">^\w+\s+\d+\s+\d+\s+\d+:\d+:\d+\s+\S+\s+%%\d\d(?:POLICY|SECURITY)/\d/(?:POLICYPERMIT|POLICYDENY|ACCESSPOLICY_ALLOW|ACCESSPOLICY_DENY)\(\w\):</prematch>
+  <regex type="pcre2">protocol=([^,]+), source-ip=([^,]+), source-port=([0-9]+), destination-ip=([^,]+), destination-port=([0-9]+), time=[A-Za-z]+ [0-9]+ [0-9]+ [0-9:]+, source-zone=([^,]+), destination-zone=([^,]+), application-name=([^,]*), rule-name=(.+?)\.?$</regex>
+  <order>protocol, srcip, srcport, dstip, dstport, src_zone, dst_zone, application, rule_name</order>
+</decoder>
+
+<!-- SIBLING PARENT DECODER: Runs in parallel to extract pure dynamic strings for PCRE2 matches -->
+<decoder name="huawei-usg-custom-strings">
+  <prematch type="pcre2">^\w+\s+\d+\s+\d+\s+\d+:\d+:\d+\s+\S+\s+%%\d\d(?:POLICY|SECURITY)/\d/(?:POLICYPERMIT|POLICYDENY|ACCESSPOLICY_ALLOW|ACCESSPOLICY_DENY)\(\w\):</prematch>
+  <regex type="pcre2">source-ip=([^,]+), source-port=([0-9]+), destination-ip=([^,]+)</regex>
+  <order>dyn_srcip, dummy_port, dyn_dstip</order>
+</decoder>

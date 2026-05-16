@@ -1,0 +1,332 @@
+<!--
+FortiGate WUH Custom Rules
+Devices : FW-WUH01 (FG3K4ETB19900367) + FW-WUH02 (FG3K4ETB19900355)
+Decoder : 1004-fortigate-wuh-decoders.xml (children of fortigate-firewall-v5)
+Rule IDs: 110000 – 110037
+
+Chain anchor:
+  built-in rule 81603 → fires for ALL FortiGate v5 logs (level 0)
+  rule 110000         → <if_sid>81603</if_sid>  ← our root
+
+Architecture: 2-level match chains (no .* combinator — does not work in Wazuh OSRegex)
+  Each level adds one match condition. Child fires only when parent fired.
+  Deepest matching rule in any branch is the alert that shows.
+
+Rule tree:
+  110000  Base (all FG)
+    110001  Suppress perf-stats (level 0)
+    110010  type=traffic
+      110011  action=accept          → firewall_allowed
+        110018  dstport=445 (SMB)   → lateral_movement
+      110012  action=deny            → firewall_drop
+        110013  crlevel=high (TI)   → threat_intel   L7
+        110014  DMZ→WAN deny         → dmz_violation  L5
+        110015  subtype=local deny   → local_policy   L3 (suppress noise)
+        110019  policyid=0           → implicit_deny  L4
+      110016  action=server-rst      → connection_reset
+      110017  action=client-rst      → connection_reset
+    110020  type=utm
+      110021  subtype=app-ctrl
+        110022  apprisk=elevated
+        110023  hostname present (SSL DPI)
+      110024  subtype=ssl
+        110025  eventsubtype=certificate-anomaly  L6
+    110030  type=event
+      110031  subtype=user
+        110032  action=auth-logon        L3
+      110033  logdesc=Admin login OK     L5
+      110034  logdesc=Admin login FAIL   L7
+      110035  logdesc=Admin logout OK    L3
+        110036  state=Config-Changed     L8
+      110037  logdesc=Configuration changed  L10
+
+Frequency rules (if_matched_sid, separate chain):
+  110038  10+ denies from same IP in 60s    L8
+  110039  5+ SSL cert anomalies in 120s     L8
+  110040  5+ admin login failures in 60s   L12
+
+Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
+-->
+
+<group name="fortigate,firewall,fortigate_wuh,">
+
+  <!-- ============================================================
+       BASE: Attach to built-in fortigate-firewall-v5 chain
+       built-in rule 81603 = "Fortigate messages grouped" level 0
+  ============================================================ -->
+  <rule id="110000" level="0">
+    <if_sid>81603</if_sid>
+    <description>FortiGate WUH: Base anchor — all FG logs grouped</description>
+    <group>network_traffic,</group>
+  </rule>
+
+  <!-- SUPPRESS: Performance stats (every ~5 min) -->
+  <rule id="110001" level="0">
+    <if_sid>110000</if_sid>
+    <match>logdesc="System performance statistics"</match>
+    <description>FortiGate WUH: Performance statistics suppressed</description>
+  </rule>
+
+  <!-- ============================================================
+       TRAFFIC BASE: type="traffic"
+  ============================================================ -->
+  <rule id="110010" level="3">
+    <if_sid>110000</if_sid>
+    <match>type="traffic"</match>
+    <description>FortiGate WUH: Traffic event $(srcip) → $(dstip):$(dstport)</description>
+    <group>firewall_traffic,</group>
+  </rule>
+
+  <!-- TRAFFIC: Accept -->
+  <rule id="110011" level="4">
+    <if_sid>110010</if_sid>
+    <match>action="accept"</match>
+    <description>FortiGate WUH: Traffic ALLOWED $(srcip):$(srcport) → $(dstip):$(dstport) [$(service)] [$(policyname)]</description>
+    <group>firewall_allowed,</group>
+  </rule>
+
+  <!-- TRAFFIC: Deny (general) -->
+  <rule id="110012" level="5">
+    <if_sid>110010</if_sid>
+    <match>action="deny"</match>
+    <description>FortiGate WUH: Traffic DENIED $(srcip):$(srcport) → $(dstip):$(dstport) [$(service)]</description>
+    <group>firewall_drop,</group>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- TRAFFIC: TCP RST close (server-rst) -->
+  <rule id="110016" level="3">
+    <if_sid>110010</if_sid>
+    <match>action="server-rst"</match>
+    <description>FortiGate WUH: TCP RST (server-rst) $(srcip):$(srcport) → $(dstip):$(dstport)</description>
+    <group>connection_reset,</group>
+  </rule>
+
+  <!-- TRAFFIC: TCP RST close (client-rst) -->
+  <rule id="110017" level="3">
+    <if_sid>110010</if_sid>
+    <match>action="client-rst"</match>
+    <description>FortiGate WUH: TCP RST (client-rst) $(srcip):$(srcport) → $(dstip):$(dstport)</description>
+    <group>connection_reset,</group>
+  </rule>
+
+  <!-- TRAFFIC: SMB/445 allowed (child of accept) -->
+  <rule id="110018" level="4">
+    <if_sid>110011</if_sid>
+    <match>dstport=445</match>
+    <description>FortiGate WUH: SMB/445 ALLOWED $(srcip) → $(dstip) [$(app)] [$(policyname)]</description>
+    <group>firewall_allowed,smb,lateral_movement,</group>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+  </rule>
+
+  <!-- TRAFFIC: Deny — Client Reputation high (child of deny) -->
+  <rule id="110013" level="7">
+    <if_sid>110012</if_sid>
+    <field name="crlevel">^high$</field>
+    <description>FortiGate WUH: THREAT INTEL block (crlevel=high) $(srcip) → $(dstip):$(dstport) [crscore=$(crscore)]</description>
+    <group>firewall_drop,threat_intel,</group>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+  </rule>
+
+  <!-- TRAFFIC: Deny — DMZ to WAN (child of deny) -->
+  <rule id="110014" level="5">
+    <if_sid>110012</if_sid>
+    <field name="srcintfrole">^dmz$</field>
+    <field name="dstintfrole">^wan$</field>
+    <description>FortiGate WUH: DMZ→WAN DENIED $(srcip) → $(dstip):$(dstport) [$(service)]</description>
+    <group>firewall_drop,dmz_violation,</group>
+  </rule>
+
+  <!-- TRAFFIC: Deny — Implicit deny policyid=0 (child of deny) -->
+  <rule id="110019" level="4">
+    <if_sid>110012</if_sid>
+    <match>policyid=0 </match>
+    <description>FortiGate WUH: Implicit DENY (no policy matched) $(srcip) → $(dstip):$(dstport)</description>
+    <group>firewall_drop,implicit_deny,</group>
+  </rule>
+
+  <!-- TRAFFIC: Local-in-policy deny — suppress noise (child of deny) -->
+  <rule id="110015" level="3">
+    <if_sid>110012</if_sid>
+    <match>subtype="local"</match>
+    <description>FortiGate WUH: Local-in-policy DENY $(srcip) → $(dstip) [$(service)]</description>
+    <group>firewall_drop,local_policy,</group>
+  </rule>
+
+  <!-- ANOMALY: Port scan / flood 10+ denies from same src in 60s -->
+  <rule id="110038" level="8" frequency="10" timeframe="60">
+    <if_matched_sid>110012</if_matched_sid>
+    <same_source_ip />
+    <description>FortiGate WUH: Possible port scan/flood — 10+ denies from $(srcip) in 60s</description>
+    <group>firewall_drop,port_scan,anomaly,ids,</group>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================
+       UTM BASE: type="utm"
+  ============================================================ -->
+  <rule id="110020" level="3">
+    <if_sid>110000</if_sid>
+    <match>type="utm"</match>
+    <description>FortiGate WUH: UTM security event $(srcip) → $(dstip):$(dstport)</description>
+    <group>utm,</group>
+  </rule>
+
+  <!-- UTM APP-CTRL BASE: subtype="app-ctrl" -->
+  <rule id="110021" level="3">
+    <if_sid>110020</if_sid>
+    <match>subtype="app-ctrl"</match>
+    <description>FortiGate WUH: App-ctrl DPI — $(app) ($(appcat)) from $(srcip) → $(dstip)</description>
+    <group>utm,appcontrol,</group>
+  </rule>
+
+  <!-- UTM APP-CTRL: Elevated risk -->
+  <rule id="110022" level="4">
+    <if_sid>110021</if_sid>
+    <field name="apprisk">^elevated$</field>
+    <description>FortiGate WUH: App-ctrl ELEVATED risk — $(app) from $(srcip) → $(dstip)</description>
+    <group>utm,appcontrol,</group>
+    <mitre>
+      <id>T1071</id>
+    </mitre>
+  </rule>
+
+  <!-- UTM APP-CTRL: SSL DPI with hostname identified -->
+  <rule id="110023" level="3">
+    <if_sid>110021</if_sid>
+    <match>hostname="</match>
+    <description>FortiGate WUH: SSL DPI — $(app) hostname=$(url_hostname) from $(srcip) → $(dstip)</description>
+    <group>utm,appcontrol,ssl_inspection,</group>
+  </rule>
+
+  <!-- UTM SSL BASE: subtype="ssl" -->
+  <rule id="110024" level="4">
+    <if_sid>110020</if_sid>
+    <match>subtype="ssl"</match>
+    <description>FortiGate WUH: SSL inspection event from $(srcip) → $(dstip):$(dstport)</description>
+    <group>utm,ssl,</group>
+  </rule>
+
+  <!-- UTM SSL: Certificate anomaly -->
+  <rule id="110025" level="6">
+    <if_sid>110024</if_sid>
+    <match>eventsubtype="certificate-anomaly"</match>
+    <description>FortiGate WUH: SSL CERT ANOMALY — SNI mismatch from $(srcip) → $(dstip)</description>
+    <group>utm,ssl,certificate_anomaly,</group>
+    <mitre>
+      <id>T1553</id>
+    </mitre>
+  </rule>
+
+  <!-- ANOMALY: Repeated cert anomalies 5 in 120s -->
+  <rule id="110039" level="8" frequency="5" timeframe="120">
+    <if_matched_sid>110025</if_matched_sid>
+    <same_source_ip />
+    <description>FortiGate WUH: REPEATED SSL cert anomaly — 5+ from $(srcip) in 120s</description>
+    <group>utm,ssl,certificate_anomaly,anomaly,</group>
+    <mitre>
+      <id>T1553</id>
+    </mitre>
+  </rule>
+
+  <!-- ============================================================
+       EVENT BASE: type="event"
+  ============================================================ -->
+  <rule id="110030" level="3">
+    <if_sid>110000</if_sid>
+    <match>type="event"</match>
+    <description>FortiGate WUH: System/user event from $(devname)</description>
+    <group>system_event,</group>
+  </rule>
+
+  <!-- EVENT USER BASE: subtype="user" -->
+  <rule id="110031" level="3">
+    <if_sid>110030</if_sid>
+    <match>subtype="user"</match>
+    <description>FortiGate WUH: User event from $(srcip)</description>
+    <group>system_event,</group>
+  </rule>
+
+  <!-- EVENT USER: Auth logon (LDAP firewall auth) -->
+  <rule id="110032" level="3">
+    <if_sid>110031</if_sid>
+    <match>action="auth-logon"</match>
+    <description>FortiGate WUH: User auth logon from $(srcip) [$(authserver)]</description>
+    <group>authentication,authentication_success,firewall_auth,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- EVENT SYSTEM: Admin login successful -->
+  <rule id="110033" level="5">
+    <if_sid>110030</if_sid>
+    <match>logdesc="Admin login successful"</match>
+    <description>FortiGate WUH: Admin LOGIN SUCCESS from $(srcip)</description>
+    <group>authentication,authentication_success,admin_login,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- EVENT SYSTEM: Admin login failed -->
+  <rule id="110034" level="7">
+    <if_sid>110030</if_sid>
+    <match>logdesc="Admin login failed"</match>
+    <description>FortiGate WUH: Admin LOGIN FAILED from $(srcip)</description>
+    <group>authentication,authentication_failed,admin_login,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- EVENT SYSTEM: Admin logout -->
+  <rule id="110035" level="3">
+    <if_sid>110030</if_sid>
+    <match>logdesc="Admin logout successful"</match>
+    <description>FortiGate WUH: Admin LOGOUT from $(devname)</description>
+    <group>admin_logout,</group>
+  </rule>
+
+  <!-- EVENT SYSTEM: Admin logout WITH Config-Changed -->
+  <rule id="110036" level="8">
+    <if_sid>110035</if_sid>
+    <match>state="Config-Changed"</match>
+    <description>FortiGate WUH: Admin LOGOUT with CONFIG CHANGES [$(devname)]</description>
+    <group>admin_logout,config_changed,policy_changed,</group>
+    <mitre>
+      <id>T1562</id>
+    </mitre>
+  </rule>
+
+  <!-- EVENT SYSTEM: Configuration changed (FortiGate ALERT level) -->
+  <rule id="110037" level="10">
+    <if_sid>110030</if_sid>
+    <match>logdesc="Configuration changed"</match>
+    <description>FortiGate WUH: CONFIGURATION CHANGED on $(devname)</description>
+    <group>config_changed,policy_changed,</group>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+  </rule>
+
+  <!-- FREQUENCY: Admin brute-force 5 failures in 60s -->
+  <rule id="110040" level="12" frequency="5" timeframe="60">
+    <if_matched_sid>110034</if_matched_sid>
+    <same_source_ip />
+    <description>FortiGate WUH: BRUTE FORCE — 5+ admin login failures from $(srcip) in 60s</description>
+    <group>authentication,authentication_failed,brute_force,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+</group>

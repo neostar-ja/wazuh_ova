@@ -1,0 +1,38 @@
+<!--
+Huawei AgileController (AC) / iMaster NCE-Campus Custom Decoders
+Purpose: Parse Huawei Wireless AC / NAC controller logs from 10.251.5.15.
+Log types covered:
+  - %%01RADIUSLOG/6/AUTHENTICATION : 802.1X/MAC auth success/failure
+  - %%01RADIUSLOG/6/LOGONOROFF     : User online/offline/ipChange events
+  - %%01PORTALLOG/6/LOGONOROFF     : Portal web auth online/offline events
+Validated: 2026-05-13 with real logs from AgileController (10.251.5.15)
+-->
+
+<!-- ==== PARENT DECODER ==== -->
+<decoder name="huawei-ac">
+  <prematch type="pcre2">AgileController\s+%%01(?:RADIUSLOG|PORTALLOG)/\d+/</prematch>
+</decoder>
+
+<!-- ==== RADIUS AUTHENTICATION (802.1X/MAC Auth Failure/Success) ==== -->
+<decoder name="huawei-ac-radius-authen">
+  <parent>huawei-ac</parent>
+  <prematch type="pcre2">%%01RADIUSLOG/\d+/AUTHENTICATION</prematch>
+  <regex type="pcre2">(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) AgileController %%01RADIUSLOG/\d+/AUTHENTICATION\(\w\): The user authentication (\w+)\.\s+user="([^"]*)" ip="([^"]*)" ipv6="([^"]*)" radiusclientip="([^"]*)" time="[^"]*" mac="([^"]*)" apmac="([^"]*)" authenrule="([^"]*)" authorrule="([^"]*)" errorcode="([^"]*)" radiusClientSysName="([^"]*)"</regex>
+  <order>timestamp, ac_auth_result, user, srcip, srcip_v6, radius_client_ip, mac, ap_mac, authen_rule, author_rule, error_code, switch_name</order>
+</decoder>
+
+<!-- ==== RADIUS LOGON/LOGOFF (user online/offline/ipChange) ==== -->
+<decoder name="huawei-ac-radius-logon">
+  <parent>huawei-ac</parent>
+  <prematch type="pcre2">%%01RADIUSLOG/\d+/LOGONOROFF</prematch>
+  <regex type="pcre2">(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) AgileController %%01RADIUSLOG/\d+/LOGONOROFF\(\w\): The user log was created\.\s+user="([^"]*)" userName="([^"]*)" ip="([^"]*)" ipv6="([^"]*)" radiusclientip="([^"]*)" msgtype="([^"]*)" time="[^"]*" mac="([^"]*)" apmac="([^"]*)"</regex>
+  <order>timestamp, user, username, srcip, srcip_v6, radius_client_ip, ac_msg_type, mac, ap_mac</order>
+</decoder>
+
+<!-- ==== PORTAL LOGON/LOGOFF (Web Portal auth) ==== -->
+<decoder name="huawei-ac-portal-logon">
+  <parent>huawei-ac</parent>
+  <prematch type="pcre2">%%01PORTALLOG/\d+/LOGONOROFF</prematch>
+  <regex type="pcre2">^\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) AgileController %%01PORTALLOG/\d+/LOGONOROFF\(\w\):\s+The user log was (?:created|deleted)\.\s+user="([^"]*)" hostname="([^"]*)" ip="([^"]*)" ipv6="([^"]*)" logtype="([^"]*)" authtype="([^"]*)" time="[^"]*" mac="([^"]*)" result="([^"]*)"</regex>
+  <order>timestamp, dstuser, hostname, srcip, srcip_v6, ac_log_type, ac_auth_type, mac, ac_result</order>
+</decoder>

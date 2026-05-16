@@ -1,0 +1,287 @@
+<!--
+  Infoblox NIOS Custom Decoders
+  รองรับ Infoblox NIOS 8.x / 9.x
+  Log Categories:
+    1. DNS Queries (named/BIND format)       — program: named
+    2. DNS Threats / RPZ Blocking             — program: named
+    3. DHCP Lifecycle (ISC dhcpd format)      — program: dhcpd
+    4. Infoblox Audit Log                     — program: infoblox-syslog / httpd
+    5. NIOS System / Grid Events              — program: infoblox-syslog
+  ตรวจสอบแล้ว: 15 พฤษภาคม 2026
+-->
+
+<!-- ==================================================================
+     SECTION 1: DNS — BIND (named) Decoder
+     Infoblox ส่ง named log ผ่าน syslog ด้วย program_name = named
+     หมายเหตุ: Parent decoder "named" อยู่ใน built-in 0155-named_decoders.xml แล้ว
+     Decoders ด้านล่างนี้เป็น Child ที่ต่อจาก named (parent)
+     ================================================================== -->
+
+<!-- ==================================================================
+     DNS QUERY LOG — FORMAT ที่ใช้จริงจาก Infoblox NIOS (10.251.1.244)
+     ================================================================== -->
+
+<!-- Format 1: NIOS query log พร้อม @handle (format ที่พบมากที่สุด)
+     ตัวอย่าง: client @0x7f108c7f4968 10.251.66.51#59072 (example.com): query: example.com IN A + (10.251.1.242)
+     หมายเหตุ: message นี้เริ่มด้วย "client @" (ไม่มี "queries:" prefix)
+-->
+<decoder name="infoblox-dns-handle-query">
+  <parent>named</parent>
+  <prematch type="pcre2">^client\s+@</prematch>
+  <regex type="pcre2">client\s+@\S+\s+([\d\.]+)#(\d+)\s+\([^)]*\):\s+query:\s+(\S+)\s+(\S+)\s+(\S+)</regex>
+  <order>srcip, srcport, dns_domain, dns_class, dns_type</order>
+</decoder>
+
+<!-- Format 2: NIOS response log — มี timestamp และ NOERROR/NXDOMAIN
+     ตัวอย่าง: 15-May-2026 19:22:22.025 client 10.251.66.51#59072: UDP: query: example.com IN A response: NOERROR + ...
+     หมายเหตุ: เป็น DNS response log ที่บอก query + response ในบรรทัดเดียวกัน
+-->
+<decoder name="infoblox-dns-response-log">
+  <parent>named</parent>
+  <prematch type="pcre2">^\d{2}-[A-Za-z]+-\d{4}</prematch>
+  <regex type="pcre2">\d{2}-\S+-\d{4}\s+\S+\s+client\s+([\d\.]+)#(\d+):\s+\w+:\s+query:\s+(\S+)\s+(\S+)\s+(\S+)\s+response:\s+(\S+)</regex>
+  <order>srcip, srcport, dns_domain, dns_class, dns_type, dns_response</order>
+</decoder>
+
+<!-- Format 3: queries: info: client @handle (NIOS 8.x with queries: prefix)
+     ตัวอย่าง: queries: info: client @0x7f8a 10.251.1.100#54321 (example.com): query: example.com IN A + (10.251.5.15)
+     หมายเหตุ: built-in named-infoblox-fields ถูก patch ให้รองรับ format นี้แล้ว
+     (ดูที่ /var/ossec/ruleset/decoders/0155-named_decoders.xml)
+-->
+
+<!-- DNS Response Error: NXDOMAIN / SERVFAIL / REFUSED
+     ตัวอย่าง: client 10.251.1.100#54321: query (cache) 'notexist.com/A/IN' denied
+-->
+<decoder name="infoblox-dns-denied">
+  <parent>named</parent>
+  <prematch>query (cache)</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?query\s+\(cache\)\s+'(\S+)/(\S+)/(\S+)'\s+(\S+)</regex>
+  <order>srcip, srcport, dns_domain, dns_type, dns_class, dns_response</order>
+</decoder>
+
+<!-- DNS Zone Transfer Attempt
+     ตัวอย่าง: client 10.251.1.100#54321: received notify for zone 'example.com'
+-->
+<decoder name="infoblox-dns-notify">
+  <parent>named</parent>
+  <prematch>received notify for zone</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?received notify for zone\s+'(\S+)'</regex>
+  <order>srcip, srcport, dns_domain</order>
+</decoder>
+
+<!-- DNS Zone Transfer (AXFR/IXFR) Denied
+     ตัวอย่าง: client 10.251.1.100#54321: denied AXFR from '10.251.1.100'
+-->
+<decoder name="infoblox-dns-axfr">
+  <parent>named</parent>
+  <prematch>denied AXFR</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?denied\s+(AXFR|IXFR)\s+from\s+'(\S+)'</regex>
+  <order>srcip, srcport, dns_type, dns_src</order>
+</decoder>
+
+<!-- DNS Update Denied (Dynamic DNS)
+     ตัวอย่าง: client 10.251.1.100#54321: denied update from '10.251.1.100'
+-->
+<decoder name="infoblox-dns-update-denied">
+  <parent>named</parent>
+  <prematch>denied update from</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?denied update from\s+'(\S+)'</regex>
+  <order>srcip, srcport, dns_src</order>
+</decoder>
+
+<!-- ==================================================================
+     SECTION 2: DNS RPZ (Response Policy Zone) — Threat Blocking
+     Infoblox RPZ ส่ง log ผ่าน named
+     ================================================================== -->
+
+<!-- RPZ QNAME Policy Rewrite (Block by domain name)
+     ตัวอย่าง: client 10.251.1.100#54321: rpz QNAME Policy Rewrite blocked.malware.com/A/IN via rpz.malware (NODATA)
+-->
+<decoder name="infoblox-dns-rpz">
+  <parent>named</parent>
+  <prematch>rpz QNAME Policy</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?rpz\s+(\S+)\s+Policy\s+Rewrite\s+(\S+)/(\S+)/(\S+)\s+via\s+(\S+)</regex>
+  <order>srcip, srcport, rpz_type, dns_domain, dns_type, dns_class, rpz_policy</order>
+</decoder>
+
+<!-- RPZ IP Policy Rewrite (Block by IP address)
+     ตัวอย่าง: client 10.251.1.100#54321: rpz IP Policy Rewrite 1.2.3.4.rpz-ip/A/IN via rpz.malware
+-->
+<decoder name="infoblox-dns-rpz-ip">
+  <parent>named</parent>
+  <prematch>rpz IP Policy</prematch>
+  <regex type="pcre2">client\s+([\d\.]+)#(\d+).*?rpz\s+IP\s+Policy\s+Rewrite\s+(\S+)/(\S+)/(\S+)\s+via\s+(\S+)</regex>
+  <order>srcip, srcport, dns_domain, dns_type, dns_class, rpz_policy</order>
+</decoder>
+
+<!-- ==================================================================
+     SECTION 3: DHCP — ISC dhcpd Decoders
+     program_name: dhcpd
+     ================================================================== -->
+
+<!-- Parent DHCP Decoder -->
+<decoder name="infoblox-dhcp">
+  <program_name>^dhcpd$</program_name>
+  <prematch>^DHCP</prematch>
+</decoder>
+
+<!-- DHCPACK: Lease confirmed
+     ตัวอย่าง: DHCPACK on 10.251.100.50 to 00:0c:29:87:fe:ee (PC-JOHN) via eth0
+-->
+<decoder name="infoblox-dhcp-ack">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPACK</prematch>
+  <regex type="pcre2">^(DHCPACK)\s+on\s+([\d\.]+)\s+to\s+([a-fA-F0-9:]+)(?:\s+\(([^)]+)\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_hostname, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPOFFER: IP address offered
+     ตัวอย่าง: DHCPOFFER on 10.251.100.50 to 00:0c:29:87:fe:ee via eth0
+-->
+<decoder name="infoblox-dhcp-offer">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPOFFER</prematch>
+  <regex type="pcre2">^(DHCPOFFER)\s+on\s+([\d\.]+)\s+to\s+([a-fA-F0-9:]+)(?:\s+\(([^)]+)\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_hostname, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPDISCOVER: Client looking for IP
+     ตัวอย่าง: DHCPDISCOVER from 00:0c:29:87:fe:ee via eth0
+-->
+<decoder name="infoblox-dhcp-discover">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPDISCOVER</prematch>
+  <regex type="pcre2">^(DHCPDISCOVER)\s+from\s+([a-fA-F0-9:]+)(?:\s+\(([^)]+)\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_mac, dhcp_hostname, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPREQUEST: Client requesting/renewing IP
+     Format 1: DHCPREQUEST for IP from MAC via IFACE (ไม่มี server IP)
+     Format 2: DHCPREQUEST for IP (server_IP) from MAC (hostname) via IFACE
+-->
+<decoder name="infoblox-dhcp-request">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPREQUEST</prematch>
+  <regex type="pcre2">^(DHCPREQUEST)\s+for\s+([\d\.]+)(?:\s+\([\d\.]+\))?\s+from\s+([a-fA-F0-9:]+)(?:\s+\(([^)]+)\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_hostname, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPRELEASE: Client releasing IP
+     ตัวอย่าง: DHCPRELEASE of 10.251.100.50 from 00:0c:29:87:fe:ee (PC-JOHN) via eth0
+-->
+<decoder name="infoblox-dhcp-release">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPRELEASE</prematch>
+  <regex type="pcre2">^(DHCPRELEASE)\s+of\s+([\d\.]+)\s+from\s+([a-fA-F0-9:]+)(?:\s+\(([^)]+)\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_hostname, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPNAK: Server rejecting request
+     ตัวอย่าง: DHCPNAK on 10.251.100.50 to 00:0c:29:87:fe:ee via eth0
+-->
+<decoder name="infoblox-dhcp-nak">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPNAK</prematch>
+  <regex type="pcre2">^(DHCPNAK)\s+on\s+([\d\.]+)\s+to\s+([a-fA-F0-9:]+)\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_interface</order>
+</decoder>
+
+<!-- DHCP Lease Conflict / Duplicate IP
+     ตัวอย่าง: DHCPDECLINE of 10.251.100.50 from 00:0c:29:87:fe:ee via eth0
+-->
+<decoder name="infoblox-dhcp-decline">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPDECLINE</prematch>
+  <regex type="pcre2">^(DHCPDECLINE)\s+of\s+([\d\.]+)\s+from\s+([a-fA-F0-9:]+)\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac, dhcp_interface</order>
+</decoder>
+
+<!-- DHCPEXPIRE: Lease expired (server-side expiry)
+     ตัวอย่าง: DHCPEXPIRE on 10.251.93.226 to f6:5f:bb:d6:b9:f5
+-->
+<decoder name="infoblox-dhcp-expire">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPEXPIRE</prematch>
+  <regex type="pcre2">^(DHCPEXPIRE)\s+on\s+([\d\.]+)\s+to\s+([a-fA-F0-9:]+)</regex>
+  <order>dhcp_action, dhcp_ip, dhcp_mac</order>
+</decoder>
+
+<!-- DHCPDISCOVER: No free leases (pool exhaustion)
+     ตัวอย่าง: DHCPDISCOVER from fe:fc:fe:55:13:cc via 10.251.205.1 TransID ...: network 10.251.205.0/24: no free leases
+     หมายเหตุ: infoblox-dhcp-discover จะ decode MAC และ interface แล้ว
+     ส่วนนี้เป็น child ที่ตรวจจับ "no free leases" จาก full_log
+-->
+<decoder name="infoblox-dhcp-nofree">
+  <parent>infoblox-dhcp</parent>
+  <prematch>^DHCPDISCOVER</prematch>
+  <prematch>no free leases</prematch>
+  <regex type="pcre2">^(DHCPDISCOVER)\s+from\s+([a-fA-F0-9:]+)(?:\s+\([^)]+\))?\s+via\s+(\S+)</regex>
+  <order>dhcp_action, dhcp_mac, dhcp_interface</order>
+</decoder>
+
+<!-- ==================================================================
+     SECTION 4: Infoblox NIOS Audit Log
+     program_name: infoblox-syslog
+     Infoblox ส่ง audit events ผ่าน infoblox-syslog program
+     ================================================================== -->
+
+<!-- Parent: Infoblox NIOS Syslog -->
+<decoder name="infoblox-nios">
+  <program_name>^infoblox-syslog$</program_name>
+</decoder>
+
+<!-- Admin Login Success
+     ตัวอย่าง: 15-May-2026 10:00:00.000 - infoblox-syslog: [admin]: LOGIN AdminName from 10.251.1.100
+     หรือ: infoblox-syslog admin: LOGIN: user = admin, ip_address = 10.251.1.100, auth_type = LOCAL
+-->
+<decoder name="infoblox-audit-login">
+  <parent>infoblox-nios</parent>
+  <prematch type="pcre2">LOGIN</prematch>
+  <regex type="pcre2">(?:admin:|Admin)\s+(\S+).*?(?:from|ip_address\s*=\s*)([\d\.]+)</regex>
+  <order>username, srcip</order>
+</decoder>
+
+<!-- Admin Login Failure
+     ตัวอย่าง: infoblox-syslog: [admin]: FAILED LOGIN AdminName from 10.251.1.100
+-->
+<decoder name="infoblox-audit-login-fail">
+  <parent>infoblox-nios</parent>
+  <prematch type="pcre2">FAILED\s+LOGIN|login\s+failed</prematch>
+  <regex type="pcre2">(?:FAILED LOGIN|login failed)[:\s]+(\S+).*?(?:from|ip_address\s*=\s*)([\d\.]+)</regex>
+  <order>username, srcip</order>
+</decoder>
+
+<!-- DNS Record Modification (Add/Modify/Delete)
+     ตัวอย่าง: infoblox-syslog admin: MODIFY: Record A 'server.corp.local' Changed: IP Old=10.0.0.1, New=10.0.0.2
+-->
+<decoder name="infoblox-audit-record-change">
+  <parent>infoblox-nios</parent>
+  <prematch type="pcre2">(?:MODIFY|ADD|DELETE|REMOVE):</prematch>
+  <regex type="pcre2">(\w+):\s+(\S+).*?'([^']+)'</regex>
+  <order>action, dns_record_type, dns_domain</order>
+</decoder>
+
+<!-- Grid Member Join/Leave
+     ตัวอย่าง: infoblox-syslog: Grid member '10.251.5.16' joined the grid
+-->
+<decoder name="infoblox-grid-event">
+  <parent>infoblox-nios</parent>
+  <prematch>Grid member</prematch>
+  <regex type="pcre2">Grid member\s+'([\d\.]+)'\s+(\S+)</regex>
+  <order>srcip, action</order>
+</decoder>
+
+<!-- ==================================================================
+     SECTION 5: NIOS Threat / RPZ Category Events
+     Infoblox Threat Protection sends via infoblox-syslog
+     ================================================================== -->
+
+<!-- DNS Category Match (Infoblox Threat Protect)
+     ตัวอย่าง: infoblox-syslog: dns_category_fqdn 'malware.example.com' hit category 'Malware' from 10.251.1.100
+-->
+<decoder name="infoblox-threat-category">
+  <parent>infoblox-nios</parent>
+  <prematch>dns_category</prematch>
+  <regex type="pcre2">dns_category\S*\s+'(\S+)'\s+hit\s+category\s+'([^']+)'\s+from\s+([\d\.]+)</regex>
+  <order>dns_domain, threat_category, srcip</order>
+</decoder>

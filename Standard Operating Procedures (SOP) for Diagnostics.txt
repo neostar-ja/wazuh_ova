@@ -1,0 +1,7 @@
+Step,Action,Command to Execute,Expected Outcome
+1. Network Layer,ตรวจสอบว่าแพ็กเก็ตมาถึงการ์ดแลนของ Worker หรือไม่,sudo tcpdump -i any udp port 514 -A,ต้องเห็น Log ดิบของอุปกรณ์วิ่งเข้ามา
+2. App Layer (Port),ตรวจสอบว่า Wazuh Worker เปิดพอร์ต 514 รอรับหรือไม่,sudo ss -ulpn | grep 514,ต้องเห็นโปรเซส wazuh-remoted ฟังอยู่ที่พอร์ต 514
+3. Block List,ตรวจสอบว่า Wazuh เตะ Log ทิ้งเพราะ IP ไม่ได้รับอนุญาตหรือไม่,"sudo grep -i ""not allowed"" /var/ossec/logs/ossec.log",ต้องไม่มีข้อความ Error นี้ (ถ้ามีให้ไปแก้ ossec.conf)
+4. Cluster Sync,ตรวจสอบว่า Master ส่ง Ruleset มาให้ Worker สำเร็จหรือไม่,sudo /var/ossec/bin/cluster_control -i,โหนด Worker ต้องแสดงสถานะ Synced ไม่ใช่ n/a
+5. Ruleset Test,ตรวจสอบว่า Rules/Decoders ไม่มี Syntax Error,sudo /var/ossec/bin/wazuh-logtest,เมื่อโยน Log ดิบใส่ ต้องขึ้น **Alert to be generated. ใน Phase 3
+6. Analysis Engine,ตรวจสอบว่า Worker แปลง Log เป็น Alert สำเร็จหรือไม่,sudo tail -f /var/ossec/logs/alerts/alerts.json,ต้องเห็นข้อมูลถูกเขียนออกมาเป็นโครงสร้าง JSON

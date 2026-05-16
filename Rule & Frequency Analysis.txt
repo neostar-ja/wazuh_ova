@@ -1,0 +1,13 @@
+ตัวอย่างการยกระดับ Rule ธรรมดา ให้เป็นระบบตรวจจับการโจมตี (Port Scan)
+<rule id="100051" level="5">
+  <if_sid>100050</if_sid>
+  <match>POLICYDENY</match>
+  <description>Huawei USG: Traffic denied by policy $(rule_name).</description>
+</rule>
+
+<rule id="100052" level="10" frequency="10" timeframe="60">
+  <if_matched_sid>100051</if_matched_sid>
+  <same_source_ip />
+  <description>Huawei USG: Port Scanning detected from IP $(srcip).</description>
+  <group>reconnaissance,port_scan</group>
+</rule>
