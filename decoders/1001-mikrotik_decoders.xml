@@ -47,7 +47,7 @@ Validated with real syslog from 10.252.0.1 on 2026-05-13.
 </decoder>
 
 <decoder name="mikrotik-log">
-  <prematch type="pcre2">(\S+) (\S+) (\S+) by</prematch>
+  <prematch type="pcre2">\bby tcp-msg\(winbox\):</prematch>
   <regex type="pcre2">(\S+) (\S+) (\S+) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
   <order>type, target, action, username, srcip, rule_details</order>
 </decoder>
