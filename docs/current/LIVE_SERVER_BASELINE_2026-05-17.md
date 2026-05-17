@@ -52,17 +52,22 @@ This document summarizes what was verified directly from the live Wazuh environm
 
 <integration>
   <name>custom-suricata-telegram</name>
-  <level>10</level>
+  <level>12</level>
   <group>suricata,</group>
   <alert_format>json</alert_format>
 </integration>
 
 <integration>
   <name>custom-telegram.py</name>
-  <level>10</level>
+  <level>12</level>
   <alert_format>json</alert_format>
 </integration>
 ```
+
+- Worker `custom-telegram.py`, `custom-suricata-telegram`, and `custom-telegram-anomaly.py` now enforce:
+  - High: rule level `12-14`
+  - Critical: rule level `15+`
+- Network-anomaly rules `100101-100108` remain level `7-8`, so they do not produce Telegram messages under the current policy
 
 ## Master Runtime State
 
@@ -169,7 +174,8 @@ These repo changes were made to match the live environment:
 - renamed `rules/1001-huawei_rules.xml` → `rules/1000-huawei_rules.xml`
 - added `rules/local_abuseipdb_rules.xml`
 - split master and worker integration scripts into separate directories
-- updated worker Suricata trigger threshold in repo to `level >= 10`
+- updated worker generic and Suricata Telegram thresholds in repo and live config to `level >= 12`
+- aligned worker anomaly Telegram script to the same `12-14` High / `15+` Critical policy
 - kept secrets redacted instead of committing live credentials
 
 ## Known Historical Drift

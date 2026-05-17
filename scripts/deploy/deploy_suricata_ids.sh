@@ -569,7 +569,7 @@ cp /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak.\$(date +%Y%m%d%H%M%S
 if grep -q 'custom-suricata-telegram' /var/ossec/etc/ossec.conf; then
     echo 'Integration block already present — skipping'
 else
-    sed -i 's|</ossec_config>|  <integration>\n    <name>custom-suricata-telegram</name>\n    <level>10</level>\n    <group>suricata,</group>\n    <alert_format>json</alert_format>\n  </integration>\n</ossec_config>|' /var/ossec/etc/ossec.conf
+    sed -i 's|</ossec_config>|  <integration>\n    <name>custom-suricata-telegram</name>\n    <level>12</level>\n    <group>suricata,</group>\n    <alert_format>json</alert_format>\n  </integration>\n</ossec_config>|' /var/ossec/etc/ossec.conf
     echo 'Integration block added to Worker ossec.conf'
 fi
 

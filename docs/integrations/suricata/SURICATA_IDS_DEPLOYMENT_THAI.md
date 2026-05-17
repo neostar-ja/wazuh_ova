@@ -32,7 +32,9 @@
 
 3. เพิ่มหรือคง integration block ใน Worker `ossec.conf`
    - `group=suricata`
-   - `level=10`
+   - `level=12`
+
+เฉพาะ alert ระดับ `12-14` จะถูกจัดเป็น High และ `15+` เป็น Critical ใน Telegram
 
 แนวทางนี้ช่วยให้ใช้งาน Telegram token/chat id เดิมของระบบได้ทันที โดยไม่ต้องแก้ค่าซ้ำซ้อน
 

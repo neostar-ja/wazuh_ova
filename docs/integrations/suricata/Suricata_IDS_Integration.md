@@ -36,7 +36,7 @@ Network Traffic (eth0)
 │  Wazuh Integration               │
 │  └─ custom-suricata-telegram     │
 │     trigger: group=suricata      │
-│              level >= 10         │
+│              level >= 12         │
 └──────────────────────────────────┘
        │  Telegram Bot API
        ▼
@@ -126,14 +126,15 @@ ossec.conf integration block:
 ```xml
 <integration>
   <name>custom-suricata-telegram</name>
-  <level>10</level>
+  <level>12</level>
   <group>suricata,</group>
   <alert_format>json</alert_format>
 </integration>
 ```
 
 Credentials: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` environment variables
-Trigger threshold: Level ≥ 10
+Trigger threshold: Level ≥ 12
+Severity mapping: `12-14 = HIGH`, `15+ = CRITICAL`
 
 ---
 
@@ -168,7 +169,7 @@ Login: admin / admin
 - **Top Source IPs**: Terms on `data.src_ip.keyword` (Top 20)
 - **Alert Categories**: Terms on `data.alert.category.keyword`
 - **Top Signatures**: Terms on `data.alert.signature.keyword`
-- **Critical Alerts Count**: `rule.level: [12 TO 15] AND rule.groups:suricata`
+- **High/Critical Alerts Count**: `rule.level: [12 TO 15] AND rule.groups:suricata`
 
 ---
 
@@ -197,7 +198,7 @@ Login: admin / admin
 Suricata: CRITICAL alert [Malware...] - ET MALWARE ...
 ```
 
-Level mapping: ≥14 🔴 CRITICAL | ≥12 🟠 HIGH | ≥8 🟡 MEDIUM | ≥7 🟢 LOW
+Level mapping: `12-14` 🟠 HIGH | `15+` 🔴 CRITICAL
 
 ---
 

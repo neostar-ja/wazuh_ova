@@ -6,6 +6,8 @@ import sys
 import requests
 
 LOG_FILE = '/var/ossec/logs/telegram_general_debug.log'
+MIN_ALERT_LEVEL = 12
+CRITICAL_ALERT_LEVEL = 15
 
 
 def dbg(message):
@@ -36,7 +38,10 @@ chat_id = sys.argv[2]
 rule = alert_json.get('rule', {})
 agent = alert_json.get('agent', {})
 groups = rule.get('groups', [])
-level = rule.get('level', '?')
+try:
+    level = int(rule.get('level', 0))
+except (TypeError, ValueError):
+    level = 0
 rid = rule.get('id', '?')
 
 dbg(f'Alert: rule={rid} level={level} groups={groups}')
@@ -52,10 +57,21 @@ if SKIP_GROUPS & set(groups):
     dbg(f'Skipping - group in SKIP_GROUPS: {SKIP_GROUPS & set(groups)}')
     sys.exit(0)
 
+if level < MIN_ALERT_LEVEL:
+    dbg(f'Skipping - level {level} below minimum {MIN_ALERT_LEVEL}')
+    sys.exit(0)
+
 desc = rule.get('description', '?')
 aname = agent.get('name', '?')
 
-msg = f'\U0001f514 *Wazuh Alert (Level {level})*\n'
+if level >= CRITICAL_ALERT_LEVEL:
+    severity_emoji = '\U0001f534'
+    severity_label = 'CRITICAL'
+else:
+    severity_emoji = '\U0001f7e0'
+    severity_label = 'HIGH'
+
+msg = f'{severity_emoji} *Wazuh Alert — {severity_label} (Level {level})*\n'
 msg += f'\U0001f4cc *Description:* {desc}\n'
 msg += f'\U0001f5a5️ *Agent:* {aname}\n'
 msg += f'\U0001f194 *Rule ID:* {rid}\n'

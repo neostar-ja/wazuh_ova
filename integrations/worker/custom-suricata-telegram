@@ -2,7 +2,9 @@
 """
 Suricata IDS Telegram Alert Sender
 Wazuh Integration script — called by <integration> block in ossec.conf
-Sends Telegram notifications for Suricata IDS alerts (level >= 10)
+Sends Telegram notifications for Suricata IDS alerts:
+  Level 12-14 -> HIGH
+  Level 15+   -> CRITICAL
 Created: 2026-05-16
 
 Usage (called by Wazuh):
@@ -21,27 +23,23 @@ from typing import Dict, Any
 # Telegram Configuration — same env vars as telegram_network_alert.py
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REPLACE_WITH_TELEGRAM_BOT_TOKEN>")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "<REPLACE_WITH_TELEGRAM_CHAT_ID>")
+MIN_ALERT_LEVEL = 12
+CRITICAL_ALERT_LEVEL = 15
 
 # Level to severity emoji mapping (matches telegram_network_alert.py style)
 def get_severity_emoji(level: int) -> str:
-    if level >= 14:
+    if level >= CRITICAL_ALERT_LEVEL:
         return "🔴"
-    elif level >= 12:
+    if level >= MIN_ALERT_LEVEL:
         return "🟠"
-    elif level >= 8:
-        return "🟡"
-    else:
-        return "🟢"
+    return "⚪"
 
 def get_severity_label(level: int) -> str:
-    if level >= 14:
+    if level >= CRITICAL_ALERT_LEVEL:
         return "CRITICAL"
-    elif level >= 12:
+    if level >= MIN_ALERT_LEVEL:
         return "HIGH"
-    elif level >= 8:
-        return "MEDIUM"
-    else:
-        return "LOW"
+    return "SUPPRESSED"
 
 # Category to MITRE emoji
 CATEGORY_EMOJI = {
@@ -143,7 +141,7 @@ def process_wazuh_alert(alert_file_path: str) -> bool:
     data = alert_json.get("data", {})
 
     level = int(rule.get("level", 0))
-    if level < 10:
+    if level < MIN_ALERT_LEVEL:
         sys.exit(0)
 
     # Extract Suricata EVE JSON fields from Wazuh alert data

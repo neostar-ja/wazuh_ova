@@ -19,13 +19,13 @@ DEBUG_LOG = "/var/ossec/logs/telegram_anomaly_debug.log"
 # The repo keeps them externalized to avoid committing secrets.
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REDACTED_LIVE_SERVER_TOKEN>")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "<REDACTED_LIVE_SERVER_CHAT_ID>")
+MIN_ALERT_LEVEL = 12
+CRITICAL_ALERT_LEVEL = 15
 
 # Severity levels to emoji mapping
 SEVERITY_EMOJI = {
     'critical': '🔴',
     'high': '🟠',
-    'medium': '🟡',
-    'low': '🟢'
 }
 
 # Alert type to emoji mapping
@@ -55,24 +55,18 @@ def escape_markdown(text: Any) -> str:
     return text
 
 
-def get_severity_level(rule_level: int, flow_type: str, action: str) -> str:
-    if flow_type == 'inbound' and action == 'permit':
+def get_severity_level(rule_level: int) -> str:
+    if rule_level >= CRITICAL_ALERT_LEVEL:
         return 'critical'
-    elif flow_type == 'inbound':
+    if rule_level >= MIN_ALERT_LEVEL:
         return 'high'
-    elif flow_type == 'outbound' and action == 'permit':
-        return 'high'
-    else:
-        return 'medium'
+    return 'suppressed'
 
 def format_telegram_message(alert_data: Dict[str, Any]) -> str:
     flow_type = alert_data.get('flow_type', 'unknown')
     action = alert_data.get('action', 'unknown')
-    severity = get_severity_level(
-        int(alert_data.get('level', 0)),
-        flow_type,
-        action
-    )
+    level = int(alert_data.get('level', 0))
+    severity = get_severity_level(level)
     
     severity_emoji = SEVERITY_EMOJI.get(severity, '⚠️')
     flow_emoji = ALERT_TYPE_EMOJI.get(flow_type, '📊')
@@ -94,7 +88,7 @@ def format_telegram_message(alert_data: Dict[str, Any]) -> str:
 {severity_emoji} *NETWORK ANOMALY DETECTED* {flow_emoji}
 
 🔍 *Alert Details*
-├ Severity: {severity.upper()}
+├ Severity: {severity.upper()} (Level {level})
 ├ Type: {flow_type.upper()}
 ├ Action: {action.upper()}
 ├ Time: {timestamp}
@@ -151,6 +145,13 @@ def process_wazuh_alert(alert_file_path: str) -> bool:
         return False
     data = alert_json.get('data', {})
     rule = alert_json.get('rule', {})
+    try:
+        level = int(rule.get('level', 0))
+    except (TypeError, ValueError):
+        level = 0
+    if level < MIN_ALERT_LEVEL:
+        log_debug(f"Skipping rule_id={rule.get('id')} level={level} below minimum {MIN_ALERT_LEVEL}")
+        return True
     alert_data = {
         'srcip': data.get('srcip'),
         'dstip': data.get('dstip'),
@@ -162,7 +163,7 @@ def process_wazuh_alert(alert_file_path: str) -> bool:
         'src_zone': data.get('src_zone'),
         'dst_zone': data.get('dst_zone'),
         'rule_id': rule.get('id'),
-        'level': rule.get('level', 0),
+        'level': level,
         'action': 'deny' if 'DENY' in rule.get('description', '') else 'permit',
         'flow_type': 'unknown',
         'threat_description': rule.get('description'),

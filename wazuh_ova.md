@@ -58,6 +58,15 @@
 
 หมายเหตุ: repo version ทำการ redacted secret/token ออกจาก Git แต่ logic และ threshold ถูก sync ให้ตรงกับ live server
 
+## นโยบาย Telegram ปัจจุบัน
+
+- generic Telegram ของ Wazuh ส่งเฉพาะ:
+  - High: rule level `12-14`
+  - Critical: rule level `15+`
+- worker Suricata Telegram ใช้ threshold เดียวกัน คือ `12+`
+- worker network-anomaly Telegram script ก็ enforce `12+` เช่นกัน
+- แต่ rule network anomaly ชุด `100101-100108` ปัจจุบันยังเป็น level `7-8` จึงจะไม่ส่ง Telegram จนกว่าจะยกระดับ rule เอง
+
 ## โครงสร้าง repo ใหม่
 
 - `decoders/`, `rules/`, `lists/` คือ config หลัก

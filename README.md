@@ -90,6 +90,15 @@ wazuh_ova/
 
 Repo copies redact live secrets intentionally. Behavior and thresholds were synced from the live servers; credentials and tokens were not committed.
 
+## Telegram Alert Policy
+
+- Generic Wazuh Telegram alerts send only:
+  - High: rule level `12-14`
+  - Critical: rule level `15+`
+- Worker Suricata Telegram follows the same threshold: `12+`
+- Worker network-anomaly Telegram script also enforces `12+`
+- Current network-anomaly rules `100101-100108` are still level `7-8`, so they are suppressed by Telegram until those rule levels are raised
+
 ## Current Documentation
 
 - `wazuh_ova.md` — Thai project index
