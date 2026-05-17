@@ -5,7 +5,7 @@ Validated with real firewall syslog from 10.252.0.1 on 2026-05-13.
 -->
 
 <group name="mikrotik,routeros,">
-  <rule id="101001" level="10">
+  <rule id="101001" level="12">
     <decoded_as>mikrotik-log</decoded_as>
     <description>MikroTik log: $(type) $(target) $(action) by $(username) from $(srcip): $(rule_details)</description>
     <group>configuration_management,</group>

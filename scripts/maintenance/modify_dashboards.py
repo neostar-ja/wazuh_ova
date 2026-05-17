@@ -1,8 +1,10 @@
 import json
 import os
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 def modify_huawei():
-    file_path = '/opt/code/wazuh_ova/visualizations/huawei_usg_dashboard.ndjson'
+    file_path = os.path.join(REPO_ROOT, 'visualizations', 'huawei_usg_dashboard.ndjson')
     lines = []
     with open(file_path, 'r') as f:
         lines = f.readlines()
@@ -46,7 +48,7 @@ def modify_huawei():
     print("Updated Huawei dashboard")
 
 def modify_mikrotik():
-    file_path = '/opt/code/wazuh_ova/visualizations/mikrotik_routeros_dashboard.ndjson'
+    file_path = os.path.join(REPO_ROOT, 'visualizations', 'mikrotik_routeros_dashboard.ndjson')
     lines = []
     with open(file_path, 'r') as f:
         lines = f.readlines()

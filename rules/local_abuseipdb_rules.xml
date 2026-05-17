@@ -1,0 +1,25 @@
+<!--
+  AbuseIPDB Threat Intelligence Rules
+  Rule ID Range: 100200-100210
+  Triggered by: custom-abuseipdb integration (real-time per alert)
+-->
+
+<group name="abuseipdb,threat_intel,">
+
+  <!-- Score 50-79: Suspicious IP -->
+  <rule id="100200" level="7">
+    <field name="integration">abuseipdb</field>
+    <field name="abuseipdb.score" type="pcre2">^[5-7][0-9]$</field>
+    <description>AbuseIPDB: Suspicious IP $(abuseipdb.ip) - Score $(abuseipdb.score)/100 [$(abuseipdb.country)] $(abuseipdb.reports) reports</description>
+    <group>abuseipdb_suspicious,</group>
+  </rule>
+
+  <!-- Score 80-100: Malicious IP -->
+  <rule id="100201" level="12">
+    <field name="integration">abuseipdb</field>
+    <field name="abuseipdb.score" type="pcre2">^(8[0-9]|9[0-9]|100)$</field>
+    <description>AbuseIPDB: MALICIOUS IP $(abuseipdb.ip) - Score $(abuseipdb.score)/100 [$(abuseipdb.country), $(abuseipdb.isp)] $(abuseipdb.reports) reports</description>
+    <group>abuseipdb_malicious,attacks,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+</group>

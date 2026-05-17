@@ -1,6 +1,8 @@
 import json
 import os
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 def create_infoblox_dashboard():
     index_pattern_id = "wazuh-infoblox-alerts"
     
@@ -178,7 +180,7 @@ def create_infoblox_dashboard():
         ]
     }
 
-    out_path = '/opt/code/wazuh_ova/visualizations/infoblox_ddi_dashboard.ndjson'
+    out_path = os.path.join(REPO_ROOT, 'visualizations', 'infoblox_ddi_dashboard.ndjson')
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, 'w') as f:
         f.write(json.dumps(obj_index) + '\n')

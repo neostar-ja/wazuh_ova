@@ -1,6 +1,8 @@
 import json
 import os
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 def create_ac_dashboard():
     index_pattern_id = "wazuh-huawei-ac-alerts"
     
@@ -218,7 +220,7 @@ def create_ac_dashboard():
         ]
     }
     
-    out_path = '/opt/code/wazuh_ova/visualizations/huawei_ac_dashboard.ndjson'
+    out_path = os.path.join(REPO_ROOT, 'visualizations', 'huawei_ac_dashboard.ndjson')
     with open(out_path, 'w') as f:
         f.write(json.dumps(obj_index) + '\n')
         f.write(json.dumps(obj_search) + '\n')

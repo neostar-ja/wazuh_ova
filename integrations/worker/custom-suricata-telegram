@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+Suricata IDS Telegram Alert Sender
+Wazuh Integration script — called by <integration> block in ossec.conf
+Sends Telegram notifications for Suricata IDS alerts (level >= 10)
+Created: 2026-05-16
+
+Usage (called by Wazuh):
+  custom-suricata-telegram <alert_file> <api_key>
+  sys.argv[1] = path to alert JSON file
+  sys.argv[2] = (unused — Telegram credentials come from env vars)
+"""
+
+import sys
+import json
+import requests
+import os
+from datetime import datetime
+from typing import Dict, Any
+
+# Telegram Configuration — same env vars as telegram_network_alert.py
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REPLACE_WITH_TELEGRAM_BOT_TOKEN>")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "<REPLACE_WITH_TELEGRAM_CHAT_ID>")
+
+# Level to severity emoji mapping (matches telegram_network_alert.py style)
+def get_severity_emoji(level: int) -> str:
+    if level >= 14:
+        return "🔴"
+    elif level >= 12:
+        return "🟠"
+    elif level >= 8:
+        return "🟡"
+    else:
+        return "🟢"
+
+def get_severity_label(level: int) -> str:
+    if level >= 14:
+        return "CRITICAL"
+    elif level >= 12:
+        return "HIGH"
+    elif level >= 8:
+        return "MEDIUM"
+    else:
+        return "LOW"
+
+# Category to MITRE emoji
+CATEGORY_EMOJI = {
+    "malware": "🦠",
+    "trojan": "🦠",
+    "exploit": "💥",
+    "recon": "🔍",
+    "scan": "🔍",
+    "brute": "🔨",
+    "dns": "🌐",
+    "tls": "🔐",
+    "ssl": "🔐",
+    "policy": "📋",
+    "attack": "⚔️",
+}
+
+def get_category_emoji(signature: str, category: str) -> str:
+    text = (signature + " " + category).lower()
+    for key, emoji in CATEGORY_EMOJI.items():
+        if key in text:
+            return emoji
+    return "⚠️"
+
+
+def format_telegram_message(alert_data: Dict[str, Any]) -> str:
+    level = alert_data.get("level", 0)
+    severity_emoji = get_severity_emoji(level)
+    severity_label = get_severity_label(level)
+    category_emoji = get_category_emoji(
+        alert_data.get("signature", ""),
+        alert_data.get("category", "")
+    )
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    src = alert_data.get("src_ip", "N/A")
+    src_port = alert_data.get("src_port", "")
+    dst = alert_data.get("dest_ip", "N/A")
+    dst_port = alert_data.get("dest_port", "")
+    proto = alert_data.get("proto", "N/A")
+
+    src_str = f"{src}:{src_port}" if src_port else src
+    dst_str = f"{dst}:{dst_port}" if dst_port else dst
+
+    mitre = alert_data.get("mitre", "")
+    mitre_line = f"\n├ MITRE: `{mitre}`" if mitre else ""
+
+    message = (
+        f"{severity_emoji} *SURICATA IDS ALERT* {category_emoji}\n"
+        f"\n"
+        f"🔍 *Alert Details*\n"
+        f"├ Severity: {severity_label} (Level {level})\n"
+        f"├ Rule: {alert_data.get('rule_id', 'N/A')}\n"
+        f"├ Time: {timestamp}{mitre_line}\n"
+        f"\n"
+        f"📡 *IDS Signature*\n"
+        f"├ Signature: `{alert_data.get('signature', 'N/A')}`\n"
+        f"├ Category: `{alert_data.get('category', 'N/A')}`\n"
+        f"└ Suri Severity: {alert_data.get('ids_severity', 'N/A')}\n"
+        f"\n"
+        f"📊 *Traffic*\n"
+        f"├ From: `{src_str}`\n"
+        f"├ To: `{dst_str}`\n"
+        f"├ Protocol: {proto}\n"
+        f"└ Flow ID: {alert_data.get('flow_id', 'N/A')}\n"
+        f"\n"
+        f"💬 *Description*\n"
+        f"{alert_data.get('description', 'Suricata IDS alert detected')}"
+    )
+    return message
+
+
+def send_telegram_alert(alert_data: Dict[str, Any]) -> bool:
+    try:
+        message = format_telegram_message(alert_data)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True,
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Telegram send error: {e}", file=sys.stderr)
+        return False
+
+
+def process_wazuh_alert(alert_file_path: str) -> bool:
+    try:
+        with open(alert_file_path, "r") as f:
+            alert_json = json.load(f)
+    except Exception as e:
+        print(f"Cannot read alert file: {e}", file=sys.stderr)
+        return False
+
+    rule = alert_json.get("rule", {})
+    data = alert_json.get("data", {})
+
+    level = int(rule.get("level", 0))
+    if level < 10:
+        sys.exit(0)
+
+    # Extract Suricata EVE JSON fields from Wazuh alert data
+    ids_alert = data.get("alert", {})
+    mitre_ids = rule.get("mitre", {}).get("id", [])
+    mitre_str = mitre_ids[0] if isinstance(mitre_ids, list) and mitre_ids else str(mitre_ids)
+
+    alert_data = {
+        "level": level,
+        "rule_id": rule.get("id", "N/A"),
+        "description": rule.get("description", "N/A"),
+        "mitre": mitre_str,
+        "signature": ids_alert.get("signature", data.get("alert.signature", "N/A")),
+        "category": ids_alert.get("category", data.get("alert.category", "N/A")),
+        "ids_severity": ids_alert.get("severity", data.get("alert.severity", "N/A")),
+        "src_ip": data.get("src_ip", "N/A"),
+        "src_port": data.get("src_port", ""),
+        "dest_ip": data.get("dest_ip", "N/A"),
+        "dest_port": data.get("dest_port", ""),
+        "proto": data.get("proto", "N/A"),
+        "flow_id": data.get("flow_id", "N/A"),
+    }
+
+    return send_telegram_alert(alert_data)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: custom-suricata-telegram <alert_file> [api_key]", file=sys.stderr)
+        sys.exit(1)
+
+    success = process_wazuh_alert(sys.argv[1])
+    sys.exit(0 if success else 1)

@@ -5,9 +5,12 @@ Sends sample Huawei logs to Wazuh syslog port for testing
 """
 
 import socket
-import time
 import sys
+import time
 from datetime import datetime
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 def send_syslog(host, port, messages):
     """
@@ -58,7 +61,7 @@ def main():
     # Configuration
     wazuh_host = "10.251.151.12"
     wazuh_port = 514
-    sample_file = "/opt/code/wazuh_ova/samples/huawei_firewall_sample_logs.txt"
+    sample_file = str(REPO_ROOT / "samples" / "huawei_firewall_sample_logs.txt")
     
     print("=" * 60)
     print("Huawei Firewall Test Log Sender")

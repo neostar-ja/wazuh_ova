@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
 Network Anomaly Telegram Alert Sender
-Sends real-time Telegram alerts for suspicious network flows
-- Internal to External with non-standard ports
-- External to Internal (inbound attacks) with non-standard ports
-- Both DENY and PERMIT policies
-Created: 2026-05-14
+Worker live variant as of 2026-05-17, with secrets redacted for Git.
 """
 
-import sys
 import json
-import requests
 import os
+import sys
+import traceback
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
-# Telegram Configuration
-# Read sensitive values from environment variables. Do NOT commit secrets to Git.
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REPLACE_WITH_TELEGRAM_BOT_TOKEN>")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "<REPLACE_WITH_TELEGRAM_CHAT_ID>")
+import requests
+
+DEBUG_LOG = "/var/ossec/logs/telegram_anomaly_debug.log"
+
+# Live worker currently stores these values directly in production.
+# The repo keeps them externalized to avoid committing secrets.
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REDACTED_LIVE_SERVER_TOKEN>")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "<REDACTED_LIVE_SERVER_CHAT_ID>")
 
 # Severity levels to emoji mapping
 SEVERITY_EMOJI = {
@@ -38,8 +38,24 @@ ALERT_TYPE_EMOJI = {
     'allowed': '⚠️',
 }
 
+def log_debug(message: str) -> None:
+    try:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as handle:
+            handle.write(f"{datetime.now().isoformat()} - {message}\n")
+    except Exception:
+        pass
+
+
+def escape_markdown(text: Any) -> str:
+    if not text:
+        return "N/A"
+    text = str(text)
+    for char in ["_", "*", "[", "]", "`"]:
+        text = text.replace(char, "\\" + char)
+    return text
+
+
 def get_severity_level(rule_level: int, flow_type: str, action: str) -> str:
-    """Determine severity based on rule level and context"""
     if flow_type == 'inbound' and action == 'permit':
         return 'critical'
     elif flow_type == 'inbound':
@@ -50,8 +66,6 @@ def get_severity_level(rule_level: int, flow_type: str, action: str) -> str:
         return 'medium'
 
 def format_telegram_message(alert_data: Dict[str, Any]) -> str:
-    """Format alert data for Telegram"""
-    
     flow_type = alert_data.get('flow_type', 'unknown')
     action = alert_data.get('action', 'unknown')
     severity = get_severity_level(
@@ -64,46 +78,52 @@ def format_telegram_message(alert_data: Dict[str, Any]) -> str:
     flow_emoji = ALERT_TYPE_EMOJI.get(flow_type, '📊')
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    # Build message
+    srcip = escape_markdown(alert_data.get('srcip'))
+    dstip = escape_markdown(alert_data.get('dstip'))
+    srcport = escape_markdown(alert_data.get('srcport'))
+    dstport = escape_markdown(alert_data.get('dstport'))
+    protocol = escape_markdown(alert_data.get('protocol'))
+    application = escape_markdown(alert_data.get('application'))
+    rule_name = escape_markdown(alert_data.get('rule_name'))
+    rule_id = escape_markdown(alert_data.get('rule_id'))
+    src_zone = escape_markdown(alert_data.get('src_zone'))
+    dst_zone = escape_markdown(alert_data.get('dst_zone'))
+    threat_description = escape_markdown(alert_data.get('threat_description'))
+    recommendation = escape_markdown(alert_data.get('recommendation'))
     message = f"""
 {severity_emoji} *NETWORK ANOMALY DETECTED* {flow_emoji}
 
-🔍 **Alert Details**
+🔍 *Alert Details*
 ├ Severity: {severity.upper()}
 ├ Type: {flow_type.upper()}
 ├ Action: {action.upper()}
 ├ Time: {timestamp}
 
-📊 **Flow Information**
-├ Source IP: `{alert_data.get('srcip', 'N/A')}`
-├ Source Port: {alert_data.get('srcport', 'N/A')}
-├ Dest IP: `{alert_data.get('dstip', 'N/A')}`
-├ Dest Port: {alert_data.get('dstport', 'N/A')}
-├ Protocol: {alert_data.get('protocol', 'N/A')}
-├ Application: {alert_data.get('application', 'N/A')}
+📊 *Flow Information*
+├ Source IP: `{srcip}`
+├ Source Port: {srcport}
+├ Dest IP: `{dstip}`
+├ Dest Port: {dstport}
+├ Protocol: {protocol}
+├ Application: {application}
 
-⚙️ **Policy Information**
-├ Rule Name: `{alert_data.get('rule_name', 'N/A')}`
-├ Rule ID: {alert_data.get('rule_id', 'N/A')}
-├ Source Zone: {alert_data.get('src_zone', 'N/A')}
-└ Dest Zone: {alert_data.get('dst_zone', 'N/A')}
+⚙️ *Policy Information*
+├ Rule Name: `{rule_name}`
+├ Rule ID: {rule_id}
+├ Source Zone: {src_zone}
+└ Dest Zone: {dst_zone}
 
-💬 **Analysis**
-{alert_data.get('threat_description', 'Suspicious network flow detected')}
+💬 *Analysis*
+{threat_description}
 
-📋 **Recommendation**
-{alert_data.get('recommendation', 'Review firewall logs for more details')}
+📋 *Recommendation*
+{recommendation}
 """
-    
     return message
 
 def send_telegram_alert(alert_data: Dict[str, Any]) -> bool:
-    """Send alert to Telegram"""
-    
     try:
         message = format_telegram_message(alert_data)
-        
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
             'chat_id': TELEGRAM_CHAT_ID,
@@ -111,30 +131,26 @@ def send_telegram_alert(alert_data: Dict[str, Any]) -> bool:
             'parse_mode': 'Markdown',
             'disable_web_page_preview': True
         }
-        
+        log_debug(f"Sending rule_id={alert_data.get('rule_id')} chat_id={TELEGRAM_CHAT_ID}")
         response = requests.post(url, json=payload, timeout=10)
-        
-        if response.status_code == 200:
-            return True
-        else:
-            return False
-            
-    except Exception as e:
+        log_debug(f"Telegram status={response.status_code} body={response.text[:200]}")
+        return response.status_code == 200
+    except Exception:
+        log_debug(f"Telegram error: {traceback.format_exc()}")
         return False
 
 def process_wazuh_alert(alert_file_path: str) -> bool:
-    """Read Wazuh alert and send Telegram notification"""
-    
+    log_debug(f"Processing alert file: {alert_file_path}")
     try:
-        with open(alert_file_path, 'r') as f:
-            alert_json = json.load(f)
+        with open(alert_file_path, 'r', encoding='utf-8') as handle:
+            raw_data = handle.read()
+            log_debug(f"RAW JSON RECEIVED: {raw_data}")
+            alert_json = json.loads(raw_data)
     except Exception:
+        log_debug(f"JSON load error: {traceback.format_exc()}")
         return False
-    
-    # Extract data
     data = alert_json.get('data', {})
     rule = alert_json.get('rule', {})
-    
     alert_data = {
         'srcip': data.get('srcip'),
         'dstip': data.get('dstip'),
@@ -152,24 +168,15 @@ def process_wazuh_alert(alert_file_path: str) -> bool:
         'threat_description': rule.get('description'),
         'recommendation': 'Review the alert in Wazuh Dashboard for more details'
     }
-    
-    # Determine flow type
     if 'inbound' in rule.get('description', '').lower():
         alert_data['flow_type'] = 'inbound'
     elif 'outbound' in rule.get('description', '').lower():
         alert_data['flow_type'] = 'outbound'
-    
-    # Send to Telegram
     return send_telegram_alert(alert_data)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(json.dumps({
-            'error': 'Usage: telegram_network_alert.py <alert_file>',
-            'status': 'error'
-        }))
         sys.exit(1)
-    
     alert_file = sys.argv[1]
     success = process_wazuh_alert(alert_file)
     sys.exit(0 if success else 1)

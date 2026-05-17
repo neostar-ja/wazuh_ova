@@ -29,14 +29,14 @@ ssh wazuh-user@10.251.151.11
 sudo su
 
 # 2. Copy files
-cp /path/to/1001-huawei_decoders.xml /var/ossec/etc/decoders/
-cp /path/to/1001-huawei_rules.xml /var/ossec/etc/rules/
+cp /path/to/local_decoder.xml /var/ossec/etc/decoders/
+cp /path/to/1000-huawei_rules.xml /var/ossec/etc/rules/
 
 # 3. Fix permissions
-chown root:wazuh /var/ossec/etc/decoders/1001-huawei_decoders.xml
-chown root:wazuh /var/ossec/etc/rules/1001-huawei_rules.xml
-chmod 640 /var/ossec/etc/decoders/1001-huawei_decoders.xml
-chmod 640 /var/ossec/etc/rules/1001-huawei_rules.xml
+chown root:wazuh /var/ossec/etc/decoders/local_decoder.xml
+chown root:wazuh /var/ossec/etc/rules/1000-huawei_rules.xml
+chmod 640 /var/ossec/etc/decoders/local_decoder.xml
+chmod 640 /var/ossec/etc/rules/1000-huawei_rules.xml
 
 # 4. Restart and verify
 systemctl restart wazuh-manager
@@ -104,29 +104,29 @@ sudo mkdir -p /var/ossec/etc/decoders.backup_$(date +%Y%m%d)
 sudo cp /var/ossec/etc/decoders/* /var/ossec/etc/decoders.backup_$(date +%Y%m%d)/
 
 # Copy Huawei decoders
-sudo cp 1001-huawei_decoders.xml /var/ossec/etc/decoders/
+sudo cp local_decoder.xml /var/ossec/etc/decoders/
 
 # Copy Huawei rules
-sudo cp 1001-huawei_rules.xml /var/ossec/etc/rules/
+sudo cp 1000-huawei_rules.xml /var/ossec/etc/rules/
 ```
 
 ### 2. Set Proper Permissions
 
 ```bash
 # Owner and group
-sudo chown root:wazuh /var/ossec/etc/decoders/1001-huawei_decoders.xml
-sudo chown root:wazuh /var/ossec/etc/rules/1001-huawei_rules.xml
+sudo chown root:wazuh /var/ossec/etc/decoders/local_decoder.xml
+sudo chown root:wazuh /var/ossec/etc/rules/1000-huawei_rules.xml
 
 # Permissions (read-only for wazuh user)
-sudo chmod 640 /var/ossec/etc/decoders/1001-huawei_decoders.xml
-sudo chmod 640 /var/ossec/etc/rules/1001-huawei_rules.xml
+sudo chmod 640 /var/ossec/etc/decoders/local_decoder.xml
+sudo chmod 640 /var/ossec/etc/rules/1000-huawei_rules.xml
 ```
 
 ### 3. Verify File Syntax
 
 ```bash
 # Test decoders
-sudo /var/ossec/bin/wazuh-logtest -d 1001-huawei_decoders.xml -t
+sudo /var/ossec/bin/wazuh-logtest -d local_decoder.xml -t
 
 # Test rules
 # (Note: Wazuh doesn't have a rule test without decoders, next step)
@@ -171,7 +171,7 @@ sudo cat /path/to/huawei_firewall_sample_logs.txt | \
   nc -w 1 localhost 514
 
 # Alternative: Use our Python analyzer
-python3 huawei_firewall_analyzer.py --validate-decoders 1001-huawei_decoders.xml
+python3 scripts/analysis/huawei_firewall_analyzer.py --validate-decoders local_decoder.xml
 ```
 
 ### Step 3: Monitor Alerts in Real-Time
@@ -223,12 +223,12 @@ Run this comprehensive validation:
 ```bash
 # Syntax validation
 ./scripts/wazuh_deployment_test.py \
-  --validate decoders/1001-huawei_decoders.xml rules/1001-huawei_rules.xml
+  --validate decoders/local_decoder.xml rules/1000-huawei_rules.xml
 
 # Decoder testing
 ./scripts/wazuh_deployment_test.py \
   --test-decoders samples/huawei_firewall_sample_logs.txt \
-  --test-logfile decoders/1001-huawei_decoders.xml
+  --test-logfile decoders/local_decoder.xml
 
 # Generate report
 ./scripts/wazuh_deployment_test.py \
@@ -287,7 +287,7 @@ sudo systemctl restart wazuh-manager
 
 ```bash
 # Check if decoder file is valid XML
-sudo xmllint --noout /var/ossec/etc/decoders/1001-huawei_decoders.xml
+sudo xmllint --noout /var/ossec/etc/decoders/local_decoder.xml
 
 # Check if decoder is loaded
 sudo grep "huawei" /var/ossec/logs/ossec.log

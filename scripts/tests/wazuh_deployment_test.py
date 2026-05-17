@@ -234,16 +234,16 @@ PRE-DEPLOYMENT CHECKS:
 
 DEPLOYMENT STEPS:
   1. Copy decoder file to Master:
-     cp 1001-huawei_decoders.xml /var/ossec/etc/decoders/
+     cp local_decoder.xml /var/ossec/etc/decoders/
      
   2. Copy rule file to Master:
-     cp 1001-huawei_rules.xml /var/ossec/etc/rules/
+     cp 1000-huawei_rules.xml /var/ossec/etc/rules/
      
   3. Update rule permissions:
-     chown root:wazuh /var/ossec/etc/decoders/1001-huawei_decoders.xml
-     chown root:wazuh /var/ossec/etc/rules/1001-huawei_rules.xml
-     chmod 640 /var/ossec/etc/decoders/1001-huawei_decoders.xml
-     chmod 640 /var/ossec/etc/rules/1001-huawei_rules.xml
+     chown root:wazuh /var/ossec/etc/decoders/local_decoder.xml
+     chown root:wazuh /var/ossec/etc/rules/1000-huawei_rules.xml
+     chmod 640 /var/ossec/etc/decoders/local_decoder.xml
+     chmod 640 /var/ossec/etc/rules/1000-huawei_rules.xml
      
   4. Test syntax:
      /var/ossec/bin/wazuh-logtest -t
@@ -328,7 +328,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  %(prog)s --validate decoders/1001-huawei_decoders.xml rules/1001-huawei_rules.xml
+  %(prog)s --validate decoders/local_decoder.xml rules/1000-huawei_rules.xml
   %(prog)s --test-decoders samples/huawei_firewall_sample_logs.txt
   %(prog)s --generate-checklist
   %(prog)s --report report.json

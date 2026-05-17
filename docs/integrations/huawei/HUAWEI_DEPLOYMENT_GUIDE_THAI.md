@@ -235,7 +235,7 @@ curl -u admin:admin https://10.251.151.14/api/rules \
 ### huawei_firewall_analyzer.py
 ```bash
 # ตำแหน่ง
-/opt/code/wazuh_ova/scripts/huawei_firewall_analyzer.py
+/opt/code/wazuh_ova/scripts/analysis/huawei_firewall_analyzer.py
 
 # ใช้งาน
 python3 huawei_firewall_analyzer.py --analyze samples/huawei_firewall_sample_logs.txt
@@ -263,10 +263,10 @@ python3 wazuh_deployment_test.py --generate-checklist
 |------|----------|---------|
 | Decoders (Built-in) | `/var/ossec/ruleset/decoders/0377-huawei-usg_decoders.xml` | 39 Huawei log decoders |
 | Rules (Built-in) | `/var/ossec/ruleset/rules/0785-huawei-usg_rules.xml` | 42 Detection rules |
-| Analyzer | `/opt/code/wazuh_ova/scripts/huawei_firewall_analyzer.py` | Analysis & reporting tool |
+| Analyzer | `/opt/code/wazuh_ova/scripts/analysis/huawei_firewall_analyzer.py` | Analysis & reporting tool |
 | Sample Logs | `/opt/code/wazuh_ova/samples/huawei_firewall_sample_logs.txt` | 30 test events |
-| Documentation (EN) | `/opt/code/wazuh_ova/docs/HUAWEI_DEPLOYMENT_GUIDE.md` | English guide |
-| Documentation (TH) | `/opt/code/wazuh_ova/docs/HUAWEI_DEPLOYMENT_GUIDE_THAI.md` | Thai guide (this file) |
+| Documentation (EN) | `/opt/code/wazuh_ova/docs/integrations/huawei/HUAWEI_DEPLOYMENT_GUIDE.md` | English guide |
+| Documentation (TH) | `/opt/code/wazuh_ova/docs/integrations/huawei/HUAWEI_DEPLOYMENT_GUIDE_THAI.md` | Thai guide (this file) |
 
 ---
 

@@ -1,0 +1,47 @@
+<!--
+Custom Rules maintained locally
+Note: Huawei USG rules moved to 1000-huawei_rules.xml for load-order dependency.
+IDs 100300-100302: CDB passive lookup (avoid conflict with 100070-100082 Huawei-AC)
+-->
+<group name="threat_intel,">
+
+  <!-- ── OTX Threat Intelligence (100060-100061) ──────────────
+       Triggered by custom-otx integration (real-time per alert)
+       Groups: huawei, mikrotik, firewall_drop                -->
+
+  <rule id="100060" level="8">
+    <field name="otx_status">malicious</field>
+    <field name="otx_pulse_count" type="pcre2">^[1-4]$</field>
+    <description>OTX: Suspicious $(otx_ip_type) $(otx_ip) — $(otx_pulse_count) threat feed(s): $(otx_pulse_name)</description>
+    <group>otx_intel,otx_suspicious,attacks,</group>
+  </rule>
+
+  <rule id="100061" level="12">
+    <field name="otx_status">malicious</field>
+    <field name="otx_pulse_count" type="pcre2">^([5-9]|[1-9][0-9]+)$</field>
+    <description>OTX: MALICIOUS $(otx_ip_type) $(otx_ip) — $(otx_pulse_count) threat feeds | $(otx_pulse_name)</description>
+    <group>otx_intel,otx_malicious,attacks,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+  <!-- ── CDB Passive Blocklist (100300-100302) ────────────────
+       Fires on every alert matching field — no external API   -->
+
+  <rule id="100300" level="12">
+    <list field="srcip" lookup="match_key">etc/lists/malicious-ioc/malicious-ip</list>
+    <description>CDB Blocklist: Source IP $(srcip) matches malicious-ip list</description>
+    <group>cdb_intel,cdb_malicious_ip,attacks,pci_dss_11.4,</group>
+  </rule>
+
+  <rule id="100301" level="10">
+    <list field="dstip" lookup="match_key">etc/lists/malicious-ioc/malicious-ip</list>
+    <description>CDB Blocklist: Destination IP $(dstip) matches malicious-ip list</description>
+    <group>cdb_intel,cdb_malicious_ip,attacks,pci_dss_11.4,</group>
+  </rule>
+
+  <rule id="100302" level="12">
+    <list field="syscheck.sha256_after" lookup="match_key">etc/lists/malicious-ioc/malware-hashes</list>
+    <description>CDB Blocklist: File hash $(syscheck.sha256_after) matches known malware</description>
+    <group>cdb_intel,cdb_malware_hash,malware,pci_dss_11.4,gdpr_IV_35.7.d,</group>
+  </rule>
+
+</group>

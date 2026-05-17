@@ -157,10 +157,10 @@ sudo grep "$(date +%Y/%m/%d)" /var/ossec/logs/alerts/alerts.log | grep 'infoblox
 
 ```bash
 # ส่ง test logs จาก machine นี้ไปยัง Wazuh Worker
-python3 /opt/code/wazuh_ova/test_infoblox_integration.py
+python3 /opt/code/wazuh_ova/scripts/tests/test_infoblox_integration.py
 
 # หรือทดสอบ dry-run (แสดงรายการเท่านั้น)
-python3 /opt/code/wazuh_ova/test_infoblox_integration.py --dry-run
+python3 /opt/code/wazuh_ova/scripts/tests/test_infoblox_integration.py --dry-run
 ```
 
 ---
@@ -272,5 +272,5 @@ sudo grep -i 'error\|critical' /var/ossec/logs/ossec.log | tail -20
 **ไฟล์ที่เกี่ยวข้อง:**
 - Decoders: [`decoders/1003-infoblox-decoders.xml`](../decoders/1003-infoblox-decoders.xml)
 - Rules: [`rules/1004-infoblox-rules.xml`](../rules/1004-infoblox-rules.xml)  
-- Dashboard: [`visualizations/infoblox_ddi_dashboard.ndjson`](../visualizations/infoblox_ddi_dashboard.ndjson)
-- Test Script: [`test_infoblox_integration.py`](../test_infoblox_integration.py)
+- Dashboard: [`visualizations/infoblox_ddi_dashboard.ndjson`](../../../visualizations/infoblox_ddi_dashboard.ndjson)
+- Test Script: [`scripts/tests/test_infoblox_integration.py`](../../../scripts/tests/test_infoblox_integration.py)

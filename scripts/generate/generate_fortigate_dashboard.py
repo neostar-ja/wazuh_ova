@@ -13,6 +13,8 @@ Usage:
 import json
 import os
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 INDEX_PATTERN_ID = "wazuh-alerts-fortigate"
 DECODER_FILTER  = 'decoder.name: "fortigate-wuh"'
 GROUP_FILTER    = 'rule.groups: "fortigate"'
@@ -603,7 +605,7 @@ obj_dashboard = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Write NDJSON
 # ─────────────────────────────────────────────────────────────────────────────
-out_path = os.path.join(os.path.dirname(__file__), "fortigate-wuh-dashboard.ndjson")
+out_path = os.path.join(REPO_ROOT, "visualizations", "fortigate", "fortigate-wuh-dashboard.ndjson")
 
 all_objects = [obj_index, obj_search] + vis_objects + [obj_dashboard]
 

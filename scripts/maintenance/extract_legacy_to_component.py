@@ -1,7 +1,12 @@
 import json
+import os
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+INPUT_PATH = os.path.join(REPO_ROOT, "data", "opensearch", "legacy_wazuh.json")
+OUTPUT_PATH = os.path.join(REPO_ROOT, "data", "opensearch", "wazuh_core_mappings_component.json")
 
 def convert():
-    with open("/opt/code/wazuh_ova/legacy_wazuh.json", "r") as f:
+    with open(INPUT_PATH, "r", encoding="utf-8") as f:
         legacy = json.load(f)
     
     # Extract mappings, settings, aliases from the legacy template
@@ -20,7 +25,7 @@ def convert():
         }
     }
     
-    with open("/opt/code/wazuh_ova/wazuh_core_mappings_component.json", "w") as out:
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as out:
         json.dump(component_payload, out)
         
     print("✅ Success: Extracted mappings and settings to component json payload.")

@@ -1,0 +1,200 @@
+<!--
+Suricata IDS Custom Rules
+Source  : Suricata EVE JSON → /var/log/suricata/eve.json
+Node    : Worker 10.251.151.12 writes EVE JSON
+          Master 10.251.151.11 holds this rules file
+Decoder : Wazuh built-in JSON decoder (no custom decoder needed)
+Rule IDs: 200000 – 200050
+
+Architecture:
+  Built-in chain anchor:
+    86600 (all Suricata JSON logs, requires timestamp + event_type fields)
+    └─ 86601 (event_type=alert)           ← our rules hang off here
+       └─ 200000 (our base — no extra conditions needed)
+          ├─ 200001 severity=1  L14
+          ├─ 200002 severity=2  L12
+          ├─ 200003 severity=3  L7
+          ├─ 200004 severity=4  L3
+          ├─ 200010 malware sig L14
+          ├─ 200011 exploit cat L12
+          ├─ 200012 recon cat   L8
+          ├─ 200013 brute force L10
+          ├─ 200014 DNS tunnel  L10
+          ├─ 200015 TLS/SSL     L8
+          ├─ 200016 policy      L6
+          ├─ 200020 local scan  L10
+          ├─ 200021 local ssh   L12
+          └─ 200050 high-conf   L15 (child of 200001/200002/200010/200011)
+    └─ 200030 (event_type=anomaly) L5
+    └─ 200040 (event_type=stats)   L0
+
+  Key: rules must be children of 86601 (not root rules), otherwise
+  Wazuh stops evaluating after 86600→86601 fires and never reaches
+  independent root rules. This design anchors our chain to the built-in.
+
+Telegram: /var/ossec/integrations/custom-suricata-telegram
+  Triggered by <integration> block in ossec.conf for level>=12, group=suricata
+
+Validated: 2026-05-16
+-->
+
+<group name="suricata,ids,">
+
+  <!-- ===== BASE RULE (child of built-in 86601) ===== -->
+  <!-- 86600 → 86601 → 200000 : our chain anchor -->
+  <rule id="200000" level="3">
+    <if_sid>86601</if_sid>
+    <description>Suricata: IDS Alert - $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- ===== SEVERITY-BASED RULES ===== -->
+
+  <!-- Severity 1: Critical -->
+  <rule id="200001" level="14">
+    <if_sid>200000</if_sid>
+    <field name="alert.severity">^1$</field>
+    <description>Suricata: CRITICAL alert [$(alert.category)] - $(alert.signature) | $(src_ip):$(src_port) -> $(dest_ip):$(dest_port)</description>
+    <group>suricata,ids,attack,critical,</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- Severity 2: High -->
+  <rule id="200002" level="12">
+    <if_sid>200000</if_sid>
+    <field name="alert.severity">^2$</field>
+    <description>Suricata: HIGH alert [$(alert.category)] - $(alert.signature) | $(src_ip) -> $(dest_ip)</description>
+    <group>suricata,ids,attack,</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- Severity 3: Medium -->
+  <rule id="200003" level="7">
+    <if_sid>200000</if_sid>
+    <field name="alert.severity">^3$</field>
+    <description>Suricata: MEDIUM alert [$(alert.category)] - $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- Severity 4: Low / Informational -->
+  <rule id="200004" level="3">
+    <if_sid>200000</if_sid>
+    <field name="alert.severity">^4$</field>
+    <description>Suricata: LOW alert - $(alert.signature)</description>
+    <group>suricata,ids,</group>
+  </rule>
+
+  <!-- ===== CATEGORY-BASED RULES ===== -->
+
+  <!-- Malware / Trojan / C2 -->
+  <rule id="200010" level="14">
+    <if_sid>200000</if_sid>
+    <field name="alert.signature" type="pcre2">(?i)ET MALWARE|ET TROJAN|ET CNC|Malware|Backdoor|RAT\b</field>
+    <description>Suricata: MALWARE detected - $(alert.signature) | src: $(src_ip)</description>
+    <group>suricata,ids,malware,attack,</group>
+    <mitre><id>T1071</id></mitre>
+  </rule>
+
+  <!-- Exploit attempts -->
+  <rule id="200011" level="12">
+    <if_sid>200000</if_sid>
+    <field name="alert.category" type="pcre2">(?i)Attempted Administrator Privilege Gain|Exploit|Web Application Attack</field>
+    <description>Suricata: Exploit attempt - $(alert.signature) | $(src_ip) -> $(dest_ip):$(dest_port)</description>
+    <group>suricata,ids,exploit,attack,</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- Port scan / Reconnaissance -->
+  <rule id="200012" level="8">
+    <if_sid>200000</if_sid>
+    <field name="alert.category" type="pcre2">(?i)Attempted Information Leak|Reconnaissance|Network Scan|Port Scan</field>
+    <description>Suricata: Reconnaissance - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,recon,</group>
+    <mitre><id>T1046</id></mitre>
+  </rule>
+
+  <!-- Brute force -->
+  <rule id="200013" level="10">
+    <if_sid>200000</if_sid>
+    <field name="alert.category" type="pcre2">(?i)Brute Force|Authentication|Login Failure</field>
+    <description>Suricata: Brute force detected - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,brute_force,authentication_failed,</group>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- DNS Anomaly / Tunneling -->
+  <rule id="200014" level="10">
+    <if_sid>200000</if_sid>
+    <field name="alert.signature" type="pcre2">(?i)DNS Tunnel|DNS Exfil|ET DNS</field>
+    <description>Suricata: DNS anomaly - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,dns,exfiltration,</group>
+    <mitre><id>T1071.004</id></mitre>
+  </rule>
+
+  <!-- TLS/SSL suspicious -->
+  <rule id="200015" level="8">
+    <if_sid>200000</if_sid>
+    <field name="alert.signature" type="pcre2">(?i)ET SSL|TLS|HTTPS|JA3</field>
+    <description>Suricata: Suspicious TLS/SSL - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,tls,</group>
+    <mitre><id>T1573</id></mitre>
+  </rule>
+
+  <!-- Policy violation -->
+  <rule id="200016" level="6">
+    <if_sid>200000</if_sid>
+    <field name="alert.category" type="pcre2">(?i)Policy Violation|Misc Activity|Potentially Bad Traffic</field>
+    <description>Suricata: Policy violation - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,policy,</group>
+  </rule>
+
+  <!-- ===== CUSTOM LOCAL RULES ===== -->
+
+  <!-- Local: Port scan -->
+  <rule id="200020" level="10">
+    <if_sid>200000</if_sid>
+    <field name="alert.signature">LOCAL Port scan detected</field>
+    <description>Suricata: Port scan targeting Wazuh cluster from $(src_ip)</description>
+    <group>suricata,ids,recon,local,</group>
+    <mitre><id>T1046</id></mitre>
+  </rule>
+
+  <!-- Local: SSH brute force -->
+  <rule id="200021" level="12">
+    <if_sid>200000</if_sid>
+    <field name="alert.signature">LOCAL SSH brute force</field>
+    <description>Suricata: SSH brute force on Wazuh cluster from $(src_ip)</description>
+    <group>suricata,ids,brute_force,ssh,authentication_failed,local,</group>
+    <mitre><id>T1110.001</id></mitre>
+  </rule>
+
+  <!-- ===== HIGH-CONFIDENCE CORRELATION ===== -->
+
+  <!-- Correlation: critical/high/malware/exploit from any IP -->
+  <rule id="200050" level="15">
+    <if_sid>200001,200002,200010,200011</if_sid>
+    <field name="src_ip" type="pcre2">\d+\.\d+\.\d+\.\d+</field>
+    <description>Suricata: HIGH CONFIDENCE attack - $(alert.signature) from $(src_ip)</description>
+    <group>suricata,ids,threat_intel,attack,critical,</group>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- ===== NON-ALERT EVENT TYPES (children of 86600) ===== -->
+
+  <!-- Anomaly events — child of built-in 86600 base rule -->
+  <rule id="200030" level="5">
+    <if_sid>86600</if_sid>
+    <field name="event_type">^anomaly$</field>
+    <description>Suricata: Network anomaly detected - $(anomaly.type)</description>
+    <group>suricata,ids,anomaly,</group>
+  </rule>
+
+  <!-- Stats (informational only — suppressed) — child of 86600 -->
+  <rule id="200040" level="0">
+    <if_sid>86600</if_sid>
+    <field name="event_type">^stats$</field>
+    <description>Suricata: Statistics event</description>
+    <group>suricata,ids,stats,</group>
+  </rule>
+
+</group>
