@@ -79,6 +79,17 @@ wazuh_ova/
 - `rules/local_abuseipdb_rules.xml`
 - `rules/local_rules.xml`
 
+### OpenSearch configuration (Indexer Node 10.251.151.13)
+
+- **Ingest pipeline**: `wazuh-geoip-pipeline` — enriches `data.srcip` → `GeoLocation`, `data.dstip` → `DestLocation`, `src_ip` → `GeoLocation` (Suricata)
+- **Index template**: `wazuh-alerts-custom-geoip` (priority 150) — geo_point + keyword mapping for GeoLocation/DestLocation
+- **Index template**: `wazuh-alerts-default-pipeline` (priority 200) — sets `wazuh-geoip-pipeline` as default for all `wazuh-alerts-4.x-*` indexes
+- **Setup script**: `scripts/deploy/setup_geoip_final.sh` (reads MAXMIND_LICENSE_KEY from env)
+- **DB location**: `/etc/wazuh-indexer/ingest-geoip/GeoLite2-City-local.mmdb` (63MB, weekly auto-update)
+- **DB filename note**: Must be `GeoLite2-City-local.mmdb` — OpenSearch 2.19.5 reserves `GeoLite2-City.mmdb` for internal use
+- **Auto-update**: `/etc/cron.weekly/update-geoip` (sources key from `/etc/wazuh-indexer/geoip.env`)
+- **Bind address**: OpenSearch binds to `10.251.151.13:9200` (not localhost) — use IP in all API calls
+
 ### Node-specific integrations
 
 - `integrations/master/custom-abuseipdb.py`
@@ -96,6 +107,11 @@ Repo copies redact live secrets intentionally. Behavior and thresholds were sync
   - High: rule level `12-14`
   - Critical: rule level `15+`
 - Worker Suricata Telegram follows the same threshold: `12+`
+- Worker `custom-suricata-telegram` reuses the live Telegram `hook_url` and `api_key` from the worker's `custom-telegram.py` integration block when no dedicated env vars are present
+- Worker Suricata local-signature mapping accepts the live worker messages:
+  - `LOCAL SSH brute force attempt` → Wazuh rule `200021` → `level 12`
+  - `LOCAL Port scan detected - SYN flood` → Wazuh rule `200020` → `level 10`
+- `scripts/tests/ssh_bruteforce_test.sh` now defaults to deterministic EVE JSON injection (`inject`) because the older network-only SSH simulation is not reliable for triggering the worker's local Suricata SYN-threshold rule in the current environment
 - Worker network-anomaly Telegram script also enforces `12+`
 - Current network-anomaly rules `100101-100108` are still level `7-8`, so they are suppressed by Telegram until those rule levels are raised
 - CDB source-IP rule logic:

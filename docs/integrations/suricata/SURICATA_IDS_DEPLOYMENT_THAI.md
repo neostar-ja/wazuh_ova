@@ -60,6 +60,13 @@ chmod +x scripts/deploy/deploy_suricata_ids.sh
 8. restart Wazuh ตามลำดับ Master -> Worker
 9. ตรวจสอบสถานะบริการและ log สำคัญ
 
+## หมายเหตุการทดสอบ
+
+- local rule ของ Suricata ฝั่ง worker ใช้ข้อความ `LOCAL SSH brute force attempt`
+- Wazuh rule `200021` ต้อง match ข้อความนี้โดยตรง มิฉะนั้น alert จะตกกลับไปใช้ rule Suricata ทั่วไปที่ระดับต่ำกว่า `12`
+- `custom-suricata-telegram` ควร reuse `hook_url` และ `api_key` จาก integration `custom-telegram.py` ใน `ossec.conf` หากไม่ได้ตั้ง env vars แยก
+- การยิง SSH brute force ผ่านเครือข่ายอย่างเดียวเป็น best-effort test; สำหรับการยืนยัน Telegram path แบบแน่นอน ให้ใช้ `scripts/tests/ssh_bruteforce_test.sh` โหมด `inject`
+
 ## จุดตรวจหลังรัน
 
 ตรวจบน Worker:

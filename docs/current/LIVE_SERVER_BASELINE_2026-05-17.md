@@ -67,6 +67,11 @@ This document summarizes what was verified directly from the live Wazuh environm
 - Worker `custom-telegram.py`, `custom-suricata-telegram`, and `custom-telegram-anomaly.py` now enforce:
   - High: rule level `12-14`
   - Critical: rule level `15+`
+- On the live worker, `custom-suricata-telegram` should reuse the existing Telegram `hook_url` and `api_key` from the `custom-telegram.py` integration block when dedicated env vars are absent
+- Worker local Suricata rules currently use these live messages:
+  - `LOCAL SSH brute force attempt`
+  - `LOCAL Port scan detected - SYN flood`
+- The repo's Suricata Wazuh mapping must accept those exact live strings; deterministic EVE injection is the reliable way to validate the Telegram path end-to-end
 - Network-anomaly rules `100101-100108` remain level `7-8`, so they do not produce Telegram messages under the current policy
 
 ## Master Runtime State
@@ -186,3 +191,17 @@ Historical documents in `docs/archive/` may still mention:
 - old flat repo paths such as `/opt/code/wazuh_ova/*.py`
 - pre-reorg dashboard locations
 - older network-anomaly deployment assumptions
+
+## GeoIP Enrichment (added 2026-05-18)
+
+- **Status**: Active
+- **Database**: MaxMind GeoLite2-City at `/etc/wazuh-indexer/ingest-geoip/GeoLite2-City-local.mmdb` (63MB)
+- **Note on filename**: Named `GeoLite2-City-local.mmdb` — OpenSearch 2.19.5 reserves `GeoLite2-City.mmdb` for its internal auto-downloader; using the built-in name causes a startup crash
+- **Pipeline**: `wazuh-geoip-pipeline` in OpenSearch ingest (3 processors: data.srcip, data.dstip, src_ip)
+- **Mapping template**: `wazuh-alerts-custom-geoip` (priority 150) — geo_point + keyword fields
+- **Default pipeline template**: `wazuh-alerts-default-pipeline` (priority 200)
+- **Auto-update**: `/etc/cron.weekly/update-geoip` (weekly, sources MAXMIND_LICENSE_KEY from `/etc/wazuh-indexer/geoip.env`)
+- **Key storage on Indexer**: `/etc/wazuh-indexer/geoip.env` (mode 600, root:root)
+- **Fields enriched**: `GeoLocation.{country_name,city_name,region_name,location,ip}` and `DestLocation.*`
+- **Coverage**: All new alerts with `data.srcip` (FortiGate, Huawei USG, MikroTik, Infoblox) or `src_ip` (Suricata)
+- **OpenSearch bind address**: `10.251.151.13:9200` — not localhost; all API calls must use the IP

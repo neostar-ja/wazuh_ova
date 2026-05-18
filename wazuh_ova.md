@@ -64,6 +64,11 @@
   - High: rule level `12-14`
   - Critical: rule level `15+`
 - worker Suricata Telegram ใช้ threshold เดียวกัน คือ `12+`
+- `custom-suricata-telegram` จะ reuse `hook_url` และ `api_key` จาก integration `custom-telegram.py` บน worker หากไม่มี env vars เฉพาะของตัวเอง
+- mapping ของ local Suricata บน worker รองรับข้อความที่ deploy จริง:
+  - `LOCAL SSH brute force attempt` → Wazuh rule `200021` → `level 12`
+  - `LOCAL Port scan detected - SYN flood` → Wazuh rule `200020` → `level 10`
+- `scripts/tests/ssh_bruteforce_test.sh` เปลี่ยน default เป็นโหมด `inject` เพื่อทดสอบ Wazuh+Telegram แบบ deterministic เพราะโหมดยิง SSH อย่างเดียวไม่ trigger local Suricata SYN-threshold ได้สม่ำเสมอใน live environment ปัจจุบัน
 - worker network-anomaly Telegram script ก็ enforce `12+` เช่นกัน
 - แต่ rule network anomaly ชุด `100101-100108` ปัจจุบันยังเป็น level `7-8` จึงจะไม่ส่ง Telegram จนกว่าจะยกระดับ rule เอง
 - CDB source-IP ตอนนี้แยกเพิ่ม:

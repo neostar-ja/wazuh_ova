@@ -153,7 +153,7 @@ Validated: 2026-05-16
   <!-- Local: Port scan -->
   <rule id="200020" level="10">
     <if_sid>200000</if_sid>
-    <field name="alert.signature">LOCAL Port scan detected</field>
+    <field name="alert.signature" type="pcre2">^LOCAL Port scan detected(?: - .+)?$</field>
     <description>Suricata: Port scan targeting Wazuh cluster from $(src_ip)</description>
     <group>suricata,ids,recon,local,</group>
     <mitre><id>T1046</id></mitre>
@@ -162,7 +162,7 @@ Validated: 2026-05-16
   <!-- Local: SSH brute force -->
   <rule id="200021" level="12">
     <if_sid>200000</if_sid>
-    <field name="alert.signature">LOCAL SSH brute force</field>
+    <field name="alert.signature" type="pcre2">^LOCAL SSH brute force(?: attempt)?$</field>
     <description>Suricata: SSH brute force on Wazuh cluster from $(src_ip)</description>
     <group>suricata,ids,brute_force,ssh,authentication_failed,local,</group>
     <mitre><id>T1110.001</id></mitre>

@@ -106,7 +106,7 @@ Built-in 86600 (Suricata JSON base, requires timestamp)
       ├─ 200015  Suspicious TLS/SSL      L8  + MITRE T1573
       ├─ 200016  Policy violation        L6
       ├─ 200020  LOCAL Port scan         L10 + MITRE T1046
-      ├─ 200021  LOCAL SSH brute force   L12 + MITRE T1110.001
+      ├─ 200021  LOCAL SSH brute force attempt  L12 + MITRE T1110.001
       └─ 200050  HIGH CONFIDENCE (child of 200001/200002/200010/200011) L15
 Built-in 86600
 ├─ 200030  Anomaly event   L5
@@ -135,6 +135,12 @@ ossec.conf integration block:
 Credentials: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` environment variables
 Trigger threshold: Level ≥ 12
 Severity mapping: `12-14 = HIGH`, `15+ = CRITICAL`
+
+Important live detail:
+- The worker's deployed local Suricata rule text is `LOCAL SSH brute force attempt`.
+- The Wazuh mapping must accept that exact string, otherwise the alert falls back to lower-level generic Suricata rules and Telegram will not fire.
+- The worker Suricata Telegram script should reuse the existing `custom-telegram.py` credentials from `ossec.conf` when dedicated env vars are absent.
+- `scripts/tests/ssh_bruteforce_test.sh` now defaults to deterministic EVE JSON injection for end-to-end validation. Use `network` mode only for best-effort packet-path testing.
 
 ---
 
