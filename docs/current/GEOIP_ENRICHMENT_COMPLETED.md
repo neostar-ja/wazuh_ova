@@ -124,12 +124,53 @@ These log sources send srcip/dstip that are automatically enriched:
 2. **Top Attacker Countries** → Terms aggregation on `GeoLocation.country_name`
 3. **Alert by Country + Rule** → Split rows by `GeoLocation.country_name` + `rule.description`
 
+### Current Dashboard Fix For Field Conflict
+
+The live dashboard now uses a dedicated index pattern saved object:
+
+- Saved object ID: `wazuh-alerts-geoip`
+- Pattern:
+  - `wazuh-alerts-4.x-*,-wazuh-alerts-4.x-2026.05.14-proper-timestamp,-wazuh-alerts-4.x-2026.05.15`
+
+Reason:
+
+- historical indexes `wazuh-alerts-4.x-2026.05.14-proper-timestamp` and `wazuh-alerts-4.x-2026.05.15`
+  exposed `GeoLocation.location` as `object`
+- the general `wazuh-alerts-*` index pattern therefore marked `GeoLocation.location` as `conflict`
+- OpenSearch Dashboards UI then rejected the field for the Coordinate Map `Geohash` aggregation
+
+The dedicated GeoIP index pattern excludes those two conflicting indexes so
+`GeoLocation.location` resolves as `geo_point` in the dashboard UI.
+
+### MikroTik Dashboard Map Fix
+
+The live `MikroTik RouterOS - Traffic Dashboard` now uses dedicated map
+visualizations:
+
+- `mikrotik-geomap-src-v2`
+- `mikrotik-geomap-dst-v2`
+
+These two panels reference a separate saved object:
+
+- index pattern ID: `wazuh-mikrotik-geoip-clean`
+- pattern:
+  - `wazuh-alerts-4.x-*,-wazuh-alerts-4.x-2026.05.13,-wazuh-alerts-4.x-2026.05.14-proper-timestamp,-wazuh-alerts-4.x-2026.05.15`
+
+Reason:
+
+- `GeoLocation.location` conflicted because of historical object mappings in
+  `2026.05.14-proper-timestamp` and `2026.05.15`
+- `DestLocation.location` also conflicted for `2026.05.13`
+- excluding all three historical indexes makes both source and destination
+  location fields resolve as `geo_point` in the Dashboard UI
+
 Dashboard setup steps:
 1. Open https://10.251.151.14
-2. Wazuh → Modules → Security Events → Refresh index pattern
+2. Use index pattern saved object `wazuh-alerts-geoip` for GeoIP map visualizations
 3. Verify field `GeoLocation.location` appears as type "geo_point"
 4. Dashboard → Create visualization → Maps (Coordinate Map)
-5. Index pattern: `wazuh-alerts-4.x-*`
+5. Index pattern:
+   `wazuh-alerts-4.x-*,-wazuh-alerts-4.x-2026.05.14-proper-timestamp,-wazuh-alerts-4.x-2026.05.15`
 6. Metrics: Count | Buckets: Geo Coordinates on `GeoLocation.location`
 7. Filter: `exists GeoLocation.country_name`
 

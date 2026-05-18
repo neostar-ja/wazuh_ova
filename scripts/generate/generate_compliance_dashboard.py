@@ -387,6 +387,7 @@ def dashboard_object():
     refs = []
     for index, panel in enumerate(PANEL_LAYOUT, start=1):
         panel_index = str(index)
+        ref_name = f"panel_{panel_index}"
         panels.append(
             {
                 "panelIndex": panel_index,
@@ -397,11 +398,12 @@ def dashboard_object():
                     "h": panel["h"],
                     "i": panel_index,
                 },
-                "version": "7.10.2",
-                "type": panel["type"],
+                "version": "2.19.5",
+                "embeddableConfig": {"enhancements": {}},
+                "panelRefName": ref_name,
             }
         )
-        refs.append({"name": f"panel_{panel_index}", "type": panel["type"], "id": panel["id"]})
+        refs.append({"name": ref_name, "type": panel["type"], "id": panel["id"]})
 
     return {
         "type": "dashboard",

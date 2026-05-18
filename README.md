@@ -92,6 +92,8 @@ wazuh_ova/
 - **DB filename note**: Must be `GeoLite2-City-local.mmdb` — OpenSearch 2.19.5 reserves `GeoLite2-City.mmdb` for internal use
 - **Auto-update**: `/etc/cron.weekly/update-geoip` (sources key from `/etc/wazuh-indexer/geoip.env`)
 - **Bind address**: OpenSearch binds to `10.251.151.13:9200` (not localhost) — use IP in all API calls
+- **GeoIP dashboard index pattern**: `wazuh-alerts-geoip` excludes historical conflicting indexes `wazuh-alerts-4.x-2026.05.14-proper-timestamp` and `wazuh-alerts-4.x-2026.05.15` so `GeoLocation.location` remains usable as `geo_point` in Coordinate Map visualizations
+- **MikroTik GeoIP map pattern**: `wazuh-mikrotik-geoip-clean` excludes `wazuh-alerts-4.x-2026.05.13`, `wazuh-alerts-4.x-2026.05.14-proper-timestamp`, and `wazuh-alerts-4.x-2026.05.15` so both `GeoLocation.location` and `DestLocation.location` remain usable as `geo_point` in MikroTik source/destination map panels
 
 ### Compliance Dashboard
 

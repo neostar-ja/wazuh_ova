@@ -52,29 +52,29 @@ EXPECTED_QUERIES = {
 }
 
 EXPECTED_PANELS = [
-    {"x": 0, "y": 0, "w": 10, "h": 7, "type": "visualization"},
-    {"x": 10, "y": 0, "w": 10, "h": 7, "type": "visualization"},
-    {"x": 20, "y": 0, "w": 9, "h": 7, "type": "visualization"},
-    {"x": 29, "y": 0, "w": 9, "h": 7, "type": "visualization"},
-    {"x": 38, "y": 0, "w": 10, "h": 7, "type": "visualization"},
-    {"x": 0, "y": 7, "w": 24, "h": 10, "type": "visualization"},
-    {"x": 24, "y": 7, "w": 24, "h": 10, "type": "visualization"},
-    {"x": 0, "y": 17, "w": 16, "h": 13, "type": "visualization"},
-    {"x": 16, "y": 17, "w": 16, "h": 13, "type": "visualization"},
-    {"x": 32, "y": 17, "w": 16, "h": 13, "type": "visualization"},
-    {"x": 0, "y": 30, "w": 24, "h": 12, "type": "visualization"},
-    {"x": 24, "y": 30, "w": 24, "h": 12, "type": "visualization"},
-    {"x": 0, "y": 42, "w": 24, "h": 11, "type": "visualization"},
-    {"x": 24, "y": 42, "w": 24, "h": 11, "type": "visualization"},
-    {"x": 0, "y": 53, "w": 24, "h": 13, "type": "visualization"},
-    {"x": 24, "y": 53, "w": 24, "h": 13, "type": "visualization"},
-    {"x": 0, "y": 66, "w": 16, "h": 12, "type": "visualization"},
-    {"x": 16, "y": 66, "w": 32, "h": 12, "type": "visualization"},
-    {"x": 0, "y": 78, "w": 24, "h": 11, "type": "visualization"},
-    {"x": 24, "y": 78, "w": 24, "h": 11, "type": "visualization"},
-    {"x": 0, "y": 89, "w": 24, "h": 12, "type": "visualization"},
-    {"x": 24, "y": 89, "w": 24, "h": 12, "type": "visualization"},
-    {"x": 0, "y": 101, "w": 48, "h": 20, "type": "search"},
+    {"x": 0, "y": 0, "w": 10, "h": 7, "ref": "panel_1"},
+    {"x": 10, "y": 0, "w": 10, "h": 7, "ref": "panel_2"},
+    {"x": 20, "y": 0, "w": 9, "h": 7, "ref": "panel_3"},
+    {"x": 29, "y": 0, "w": 9, "h": 7, "ref": "panel_4"},
+    {"x": 38, "y": 0, "w": 10, "h": 7, "ref": "panel_5"},
+    {"x": 0, "y": 7, "w": 24, "h": 10, "ref": "panel_6"},
+    {"x": 24, "y": 7, "w": 24, "h": 10, "ref": "panel_7"},
+    {"x": 0, "y": 17, "w": 16, "h": 13, "ref": "panel_8"},
+    {"x": 16, "y": 17, "w": 16, "h": 13, "ref": "panel_9"},
+    {"x": 32, "y": 17, "w": 16, "h": 13, "ref": "panel_10"},
+    {"x": 0, "y": 30, "w": 24, "h": 12, "ref": "panel_11"},
+    {"x": 24, "y": 30, "w": 24, "h": 12, "ref": "panel_12"},
+    {"x": 0, "y": 42, "w": 24, "h": 11, "ref": "panel_13"},
+    {"x": 24, "y": 42, "w": 24, "h": 11, "ref": "panel_14"},
+    {"x": 0, "y": 53, "w": 24, "h": 13, "ref": "panel_15"},
+    {"x": 24, "y": 53, "w": 24, "h": 13, "ref": "panel_16"},
+    {"x": 0, "y": 66, "w": 16, "h": 12, "ref": "panel_17"},
+    {"x": 16, "y": 66, "w": 32, "h": 12, "ref": "panel_18"},
+    {"x": 0, "y": 78, "w": 24, "h": 11, "ref": "panel_19"},
+    {"x": 24, "y": 78, "w": 24, "h": 11, "ref": "panel_20"},
+    {"x": 0, "y": 89, "w": 24, "h": 12, "ref": "panel_21"},
+    {"x": 24, "y": 89, "w": 24, "h": 12, "ref": "panel_22"},
+    {"x": 0, "y": 101, "w": 48, "h": 20, "ref": "panel_23"},
 ]
 
 
@@ -136,13 +136,14 @@ def validate_artifact(objects):
 
     dashboard = next(obj for obj in objects if obj["type"] == "dashboard")
     panels = json.loads(dashboard["attributes"]["panelsJSON"])
+    refs_by_name = {ref["name"]: ref for ref in dashboard["references"]}
     simple_panels = [
         {
             "x": panel["gridData"]["x"],
             "y": panel["gridData"]["y"],
             "w": panel["gridData"]["w"],
             "h": panel["gridData"]["h"],
-            "type": panel["type"],
+            "ref": panel["panelRefName"],
         }
         for panel in panels
     ]
@@ -152,6 +153,11 @@ def validate_artifact(objects):
     assert_equal(dashboard["attributes"]["timeTo"], "now", "artifact dashboard timeTo")
     assert_equal(len(panels), 23, "artifact panel count")
     assert_equal(simple_panels, EXPECTED_PANELS, "artifact layout")
+    for panel in panels:
+        assert_equal(panel["version"], "2.19.5", "artifact panel version")
+        assert_equal(panel["embeddableConfig"], {"enhancements": {}}, "artifact embeddable config")
+        if panel["panelRefName"] not in refs_by_name:
+            raise AssertionError(f"artifact panel ref missing from references: {panel['panelRefName']}")
     print("[OK] Artifact validation passed")
 
 
@@ -172,13 +178,14 @@ def validate_live(objects):
 
     dashboard = next(obj for obj in objects if obj["type"] == "dashboard")
     panels = json.loads(dashboard["attributes"]["panelsJSON"])
+    refs_by_name = {ref["name"]: ref for ref in dashboard["references"]}
     simple_panels = [
         {
             "x": panel["gridData"]["x"],
             "y": panel["gridData"]["y"],
             "w": panel["gridData"]["w"],
             "h": panel["gridData"]["h"],
-            "type": panel["type"],
+            "ref": panel["panelRefName"],
         }
         for panel in panels
     ]
@@ -189,6 +196,11 @@ def validate_live(objects):
     assert_equal(len(panels), 23, "live panel count")
     assert_equal(simple_panels, EXPECTED_PANELS, "live layout")
     assert_equal(title_to_query, EXPECTED_QUERIES, "live title/query map")
+    for panel in panels:
+        assert_equal(panel["version"], "2.19.5", "live panel version")
+        assert_equal(panel["embeddableConfig"], {"enhancements": {}}, "live embeddable config")
+        if panel["panelRefName"] not in refs_by_name:
+            raise AssertionError(f"live panel ref missing from references: {panel['panelRefName']}")
     print("[OK] Live dashboard validation passed")
 
 
