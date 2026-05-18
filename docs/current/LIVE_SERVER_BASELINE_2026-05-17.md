@@ -205,3 +205,19 @@ Historical documents in `docs/archive/` may still mention:
 - **Fields enriched**: `GeoLocation.{country_name,city_name,region_name,location,ip}` and `DestLocation.*`
 - **Coverage**: All new alerts with `data.srcip` (FortiGate, Huawei USG, MikroTik, Infoblox) or `src_ip` (Suricata)
 - **OpenSearch bind address**: `10.251.151.13:9200` — not localhost; all API calls must use the IP
+
+## Compliance Dashboard (added 2026-05-18)
+
+- **Status**: Active
+- **Frameworks**: PCI DSS 3.2.1, HIPAA, GDPR, NIST 800-53, TSC (SOC2)
+- **Rules**: `1007-compliance-tags.xml` — 28 overlay rules, IDs 120001–120044 (on Master 10.251.151.11)
+- **Trigger mechanism**: `<if_group>` correlation rules (fire when preceding event belongs to specified group)
+- **XML format**: compliance tags in `<group>` as `pci_dss_X.X,` (NOT standalone XML elements — Wazuh 4.14.5 limitation)
+- **Dashboard**: `visualizations/compliance/compliance-overview-dashboard.ndjson` — 24 repo objects, 23 panels, ID: `wazuh-compliance-overview`
+- **Generator**: `scripts/generate/generate_compliance_dashboard.py`
+- **Validation**: `scripts/tests/test_compliance_dashboard.py`
+- **Primary data source**: built-in Wazuh compliance fields `rule.pci_dss`, `rule.hipaa`, `rule.gdpr`, `rule.nist_800_53`, `rule.tsc`
+- **Index-pattern note**: repo NDJSON excludes the shared `wazuh-alerts-*` saved object so imports do not overwrite live field metadata
+- **Dashboard URL**: https://10.251.151.14 → Dashboard → Compliance Overview
+- **Built-in module**: Dashboard → Modules → Regulatory Compliance (pre-existing)
+- **Pre-existing compliance data**: PCI 3.7M, HIPAA 3.7M, GDPR 3.9M, NIST 3.7M, TSC 51K alerts (built-in rules)

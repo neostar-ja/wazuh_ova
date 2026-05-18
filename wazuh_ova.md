@@ -44,6 +44,20 @@
 - `rules/1006-suricata-ids-rules.xml`
 - `rules/local_abuseipdb_rules.xml`
 - `rules/local_rules.xml`
+- `rules/1007-compliance-tags.xml`
+
+### Compliance Dashboard
+
+- dashboard หลักอยู่ที่ `visualizations/compliance/compliance-overview-dashboard.ndjson`
+- generator อยู่ที่ `scripts/generate/generate_compliance_dashboard.py`
+- test อยู่ที่ `scripts/tests/test_compliance_dashboard.py`
+- dashboard production ใช้ built-in compliance fields โดยตรง:
+  - `rule.pci_dss`
+  - `rule.hipaa`
+  - `rule.gdpr`
+  - `rule.nist_800_53`
+  - `rule.tsc`
+- repo artifact ตั้งใจไม่รวม saved object ของ index pattern `wazuh-alerts-*` เพื่อไม่ให้ทับ field metadata บน live dashboard
 
 ### Integrations แยกตาม node
 

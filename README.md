@@ -51,6 +51,8 @@ wazuh_ova/
 │   ├── remote_execution/
 │   └── archive/
 ├── visualizations/
+│   ├── fortigate/        ← FortiGate dashboards
+│   └── compliance/       ← Compliance dashboards (PCI/HIPAA/GDPR/NIST/TSC)
 ├── samples/
 ├── data/
 └── docs/
@@ -78,6 +80,7 @@ wazuh_ova/
 - `rules/1006-suricata-ids-rules.xml`
 - `rules/local_abuseipdb_rules.xml`
 - `rules/local_rules.xml`
+- `rules/1007-compliance-tags.xml` — compliance overlay rules (PCI DSS/HIPAA/GDPR/NIST 800-53/TSC), IDs 120001–120044
 
 ### OpenSearch configuration (Indexer Node 10.251.151.13)
 
@@ -89,6 +92,16 @@ wazuh_ova/
 - **DB filename note**: Must be `GeoLite2-City-local.mmdb` — OpenSearch 2.19.5 reserves `GeoLite2-City.mmdb` for internal use
 - **Auto-update**: `/etc/cron.weekly/update-geoip` (sources key from `/etc/wazuh-indexer/geoip.env`)
 - **Bind address**: OpenSearch binds to `10.251.151.13:9200` (not localhost) — use IP in all API calls
+
+### Compliance Dashboard
+
+- **Dashboard**: `visualizations/compliance/compliance-overview-dashboard.ndjson` — 23 panels (22 visualizations + 1 saved search), 5 frameworks
+- **Generator**: `scripts/generate/generate_compliance_dashboard.py` — regenerates the repo artifact to match the live dashboard
+- **Validation**: `scripts/tests/test_compliance_dashboard.py` — validates the generated NDJSON and the live dashboard via Saved Objects + OpenSearch APIs
+- **Dashboard ID**: `wazuh-compliance-overview` — https://10.251.151.14 → Dashboard → Compliance Overview
+- **Frameworks**: PCI DSS 3.2.1, HIPAA, GDPR, NIST 800-53, TSC (SOC2)
+- **Data source**: built-in Wazuh compliance fields `rule.pci_dss`, `rule.hipaa`, `rule.gdpr`, `rule.nist_800_53`, `rule.tsc`
+- **Import note**: repo NDJSON intentionally excludes the shared `wazuh-alerts-*` index-pattern saved object to avoid overwriting live field metadata
 
 ### Node-specific integrations
 
