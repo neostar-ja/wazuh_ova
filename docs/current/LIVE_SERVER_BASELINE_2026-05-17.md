@@ -210,8 +210,8 @@ Historical documents in `docs/archive/` may still mention:
 
 - **Status**: Active
 - **Frameworks**: PCI DSS 3.2.1, HIPAA, GDPR, NIST 800-53, TSC (SOC2)
-- **Rules**: `1007-compliance-tags.xml` — 28 overlay rules, IDs 120001–120044 (on Master 10.251.151.11)
-- **Trigger mechanism**: `<if_group>` correlation rules (fire when preceding event belongs to specified group)
+- **Rules**: `1007-compliance-tags.xml` — 44 overlay rules, IDs 120001–120074 (live on Master 10.251.151.11 and Worker 10.251.151.12)
+- **Trigger mechanism**: mixed overlay correlation using `<if_group>` and `<if_sid>`; DNS/Infoblox overlays added on `2026-05-18` use `if_sid` because this cluster did not fire same-event child rules reliably with `if_matched_group`
 - **XML format**: compliance tags in `<group>` as `pci_dss_X.X,` (NOT standalone XML elements — Wazuh 4.14.5 limitation)
 - **Dashboard**: `visualizations/compliance/compliance-overview-dashboard.ndjson` — 24 repo objects, 23 panels, ID: `wazuh-compliance-overview`
 - **Generator**: `scripts/generate/generate_compliance_dashboard.py`
@@ -221,3 +221,9 @@ Historical documents in `docs/archive/` may still mention:
 - **Dashboard URL**: https://10.251.151.14 → Dashboard → Compliance Overview
 - **Built-in module**: Dashboard → Modules → Regulatory Compliance (pre-existing)
 - **Pre-existing compliance data**: PCI 3.7M, HIPAA 3.7M, GDPR 3.9M, NIST 3.7M, TSC 51K alerts (built-in rules)
+- **DNS/Infoblox extension**: 16 additional overlay child rules were added on `2026-05-18`:
+  - DNS / RPZ / DNS Firewall: `120050–120057`
+  - DHCP: `120060–120062`
+  - Infoblox audit / config: `120070–120074`
+- **Live proof**: Tagged worker injections on `2026-05-18` produced `120050`, `120052`, `120070`, and `120073` alerts in OpenSearch with framework fields populated
+- **Reload note**: Worker-side event paths required a `wazuh-worker` restart after cluster sync before the new overlay rules were applied in runtime

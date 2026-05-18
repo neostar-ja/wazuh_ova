@@ -265,4 +265,145 @@
     <group>tsc_CC8.1,compliance,config_change,</group>
   </rule>
 
+  <!-- ==============================================================
+       DNS/INFOBLOX COMPLIANCE RULES — Added 2026-05-18
+       Rule IDs: 120050–120074
+       Covers: infoblox_threat, rpz_storm, dga_malware, dns_axfr,
+               dns_nxdomain, dns_update_denied, dns_denied, dns_firewall,
+               dhcp_flood, dhcp_pool_exhausted, dhcp_conflict,
+               infoblox_audit, dns_record_change
+  ============================================================== -->
+
+  <rule id="120050" level="9">
+    <if_sid>100430,100431,100432</if_sid>
+    <description>PCI 11.4 / NIST SI.4: DNS Firewall blocked malicious domain</description>
+    <group>pci_dss_11.4,nist_800_53_SI.4,tsc_CC7.1,compliance,dns,</group>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+  </rule>
+
+  <rule id="120051" level="12">
+    <if_sid>100433,100434</if_sid>
+    <description>PCI 10.6 / NIST SI.3 / GDPR Art 32: Infected host detected via repeated malicious DNS activity</description>
+    <group>pci_dss_10.6,nist_800_53_SI.3,gdpr_IV_32,tsc_CC7.2,compliance,malware,dns,</group>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+  </rule>
+
+  <rule id="120052" level="11">
+    <if_sid>100402,100403</if_sid>
+    <description>PCI 11.4 / NIST SC.5: DNS Zone Transfer attempt detected</description>
+    <group>pci_dss_11.4,nist_800_53_SC.5,compliance,recon,dns,</group>
+    <mitre>
+      <id>T1590.002</id>
+    </mitre>
+  </rule>
+
+  <rule id="120053" level="12">
+    <if_sid>100408</if_sid>
+    <description>NIST SI.3 / GDPR Art 32: DGA malware activity detected from NXDOMAIN flood</description>
+    <group>nist_800_53_SI.3,gdpr_IV_32,tsc_CC7.2,compliance,malware,dns,</group>
+    <mitre>
+      <id>T1568.002</id>
+    </mitre>
+  </rule>
+
+  <rule id="120054" level="6">
+    <if_sid>100407</if_sid>
+    <description>NIST SC.5 / TSC CC7.1: DNS NXDOMAIN response anomaly detected</description>
+    <group>nist_800_53_SC.5,tsc_CC7.1,compliance,dns,</group>
+  </rule>
+
+  <rule id="120055" level="8">
+    <if_sid>100404</if_sid>
+    <description>PCI 6.6 / NIST SC.5: DNS Dynamic Update denied</description>
+    <group>pci_dss_6.6,nist_800_53_SC.5,compliance,dns,</group>
+    <mitre>
+      <id>T1584</id>
+    </mitre>
+  </rule>
+
+  <rule id="120056" level="6">
+    <if_sid>100406</if_sid>
+    <description>NIST SC.5: Unauthorized DNS recursive query denied</description>
+    <group>nist_800_53_SC.5,compliance,dns,access_control,</group>
+  </rule>
+
+  <rule id="120057" level="10">
+    <if_sid>100426</if_sid>
+    <description>TSC CC6.7 / GDPR Art 32 / HIPAA 164.312: DNS Firewall threat category match detected</description>
+    <group>tsc_CC6.7,gdpr_IV_32,hipaa_164.312,compliance,dns,exfiltration,</group>
+    <mitre>
+      <id>T1071.004</id>
+    </mitre>
+  </rule>
+
+  <rule id="120060" level="11">
+    <if_sid>100418</if_sid>
+    <description>NIST SC.5 / TSC CC7.1: DHCP flood detected</description>
+    <group>nist_800_53_SC.5,tsc_CC7.1,compliance,dhcp,dos,</group>
+    <mitre>
+      <id>T1499</id>
+    </mitre>
+  </rule>
+
+  <rule id="120061" level="13">
+    <if_sid>100441,100442</if_sid>
+    <description>NIST SC.5 / TSC CC7.2: DHCP pool exhausted</description>
+    <group>nist_800_53_SC.5,tsc_CC7.2,compliance,dhcp,dos,critical,</group>
+    <mitre>
+      <id>T1499</id>
+    </mitre>
+  </rule>
+
+  <rule id="120062" level="9">
+    <if_sid>100417</if_sid>
+    <description>PCI 1.3 / NIST SC.5: DHCP IP conflict detected</description>
+    <group>pci_dss_1.3,nist_800_53_SC.5,compliance,dhcp,</group>
+    <mitre>
+      <id>T1557</id>
+    </mitre>
+  </rule>
+
+  <rule id="120070" level="8">
+    <if_sid>100422</if_sid>
+    <description>PCI 8.3 / NIST AC.3 / HIPAA 164.308: Infoblox admin login failed</description>
+    <group>pci_dss_8.3,nist_800_53_AC.3,hipaa_164.308,compliance,authentication,dns,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <rule id="120071" level="13">
+    <if_sid>100423</if_sid>
+    <description>PCI 8.3 / NIST AC.3 / HIPAA 164.308 / TSC CC6.1: Infoblox admin brute force detected</description>
+    <group>pci_dss_8.3,nist_800_53_AC.3,hipaa_164.308,tsc_CC6.1,compliance,brute_force,dns,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <rule id="120072" level="5">
+    <if_sid>100421</if_sid>
+    <description>PCI 10.2 / NIST AU.14: Infoblox admin login success</description>
+    <group>pci_dss_10.2,nist_800_53_AU.14,compliance,authentication,dns,</group>
+  </rule>
+
+  <rule id="120073" level="8">
+    <if_sid>100424</if_sid>
+    <description>PCI 10.6 / NIST CM.7 / GDPR Art 5 / TSC CC8.1: Infoblox DNS record changed</description>
+    <group>pci_dss_10.6,nist_800_53_CM.7,gdpr_IV_5,tsc_CC8.1,compliance,config_change,dns,</group>
+    <mitre>
+      <id>T1584.002</id>
+    </mitre>
+  </rule>
+
+  <rule id="120074" level="7">
+    <if_sid>100424</if_sid>
+    <description>NIST CM.7 / TSC CC8.1: Infoblox configuration change event</description>
+    <group>nist_800_53_CM.7,tsc_CC8.1,compliance,config_change,dns,</group>
+  </rule>
+
 </group>

@@ -109,3 +109,52 @@ The repo generator, saved-object artifact, live dashboard layout, and live data
 queries are now aligned. The previous repo version that described an 18-panel
 dashboard and relied on `rule.groups: "compliance"` as the base query is no
 longer authoritative.
+
+## DNS/Infoblox Compliance Overlay Update
+
+Verified on `2026-05-18` against the live cluster:
+
+- Updated file: `rules/1007-compliance-tags.xml`
+- Total overlay rules: `44`
+- New DNS/Infoblox overlay rules: `16`
+- New IDs: `120050–120057`, `120060–120062`, `120070–120074`
+
+### Coverage Added
+
+- `120050`: RPZ / DNS Firewall malicious-domain block
+- `120051`: RPZ storm / infected-host repeated malicious DNS
+- `120052`: DNS AXFR / IXFR reconnaissance
+- `120053`: DGA malware from NXDOMAIN flood
+- `120054`: DNS NXDOMAIN anomaly
+- `120055`: DNS dynamic update denied
+- `120056`: Unauthorized recursive DNS query denied
+- `120057`: DNS Firewall threat category match
+- `120060`: DHCP flood / starvation
+- `120061`: DHCP pool exhaustion
+- `120062`: DHCP IP conflict / spoofing
+- `120070`: Infoblox admin login failure
+- `120071`: Infoblox admin brute force
+- `120072`: Infoblox admin login success
+- `120073`: Infoblox DNS record change
+- `120074`: Infoblox configuration change
+
+### Runtime Notes
+
+- Wazuh `4.14.5` on this cluster does not accept standalone compliance XML elements such as `<pci_dss>` or `<nist_800_53>` in this custom rule file.
+- Compliance metadata must be expressed through `<group>` values like `pci_dss_11.4`, `nist_800_53_SC.5`, `hipaa_164.308`, `gdpr_IV_32`, and `tsc_CC7.1`.
+- Immediate child rules needed `if_sid` references to the Infoblox parent rules on this cluster; `if_matched_group` did not produce the expected child-rule firing for same-event overlays.
+- For events generated on `wazuh-worker`, a worker restart was required after cluster sync before live alerts began firing the new child rules.
+
+### Validation Results
+
+- `wazuh-logtest` on `wazuh-master` matched:
+  - RPZ block -> `120050`
+  - AXFR denied -> `120052`
+  - Admin login failure -> `120070`
+  - DNS record change -> `120073`
+- Tagged live injections on `wazuh-worker` generated the following alerts in OpenSearch:
+  - `120050` level `9`
+  - `120052` level `11`
+  - `120070` level `8`
+  - `120073` level `8`
+- Additional ambient DNS traffic also began producing `120054` NXDOMAIN compliance alerts after the worker reload.

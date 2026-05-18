@@ -80,7 +80,7 @@ wazuh_ova/
 - `rules/1006-suricata-ids-rules.xml`
 - `rules/local_abuseipdb_rules.xml`
 - `rules/local_rules.xml`
-- `rules/1007-compliance-tags.xml` — compliance overlay rules (PCI DSS/HIPAA/GDPR/NIST 800-53/TSC), IDs 120001–120044
+- `rules/1007-compliance-tags.xml` — compliance overlay rules (PCI DSS/HIPAA/GDPR/NIST 800-53/TSC), 44 rules total, IDs 120001–120074
 
 ### OpenSearch configuration (Indexer Node 10.251.151.13)
 
@@ -104,6 +104,12 @@ wazuh_ova/
 - **Frameworks**: PCI DSS 3.2.1, HIPAA, GDPR, NIST 800-53, TSC (SOC2)
 - **Data source**: built-in Wazuh compliance fields `rule.pci_dss`, `rule.hipaa`, `rule.gdpr`, `rule.nist_800_53`, `rule.tsc`
 - **Import note**: repo NDJSON intentionally excludes the shared `wazuh-alerts-*` index-pattern saved object to avoid overwriting live field metadata
+- **DNS/Infoblox overlay**: `rules/1007-compliance-tags.xml` now includes 16 DNS/Infoblox overlay child rules:
+  - `120050–120057` DNS / RPZ / DNS Firewall
+  - `120060–120062` DHCP
+  - `120070–120074` Infoblox audit / config change
+- **Implementation note**: On Wazuh `4.14.5`, compliance values must be embedded in `<group>` as `pci_dss_*`, `nist_800_53_*`, `hipaa_*`, `gdpr_*`, `tsc_*`; standalone XML elements like `<pci_dss>` are not accepted by the parser
+- **Live validation**: `wazuh-logtest` passed for RPZ block, AXFR denied, Infoblox admin login failure, and DNS record change; tagged live injections on `wazuh-worker` produced rule IDs `120050`, `120052`, `120070`, and `120073` in OpenSearch on `2026-05-18`
 
 ### Node-specific integrations
 

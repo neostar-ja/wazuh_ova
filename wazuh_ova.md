@@ -58,6 +58,12 @@
   - `rule.nist_800_53`
   - `rule.tsc`
 - repo artifact ตั้งใจไม่รวม saved object ของ index pattern `wazuh-alerts-*` เพื่อไม่ให้ทับ field metadata บน live dashboard
+- `rules/1007-compliance-tags.xml` ตอนนี้มี `44` overlay rules รวม DNS/Infoblox coverage แล้ว
+- DNS/Infoblox overlay IDs ที่เพิ่ม: `120050–120057`, `120060–120062`, `120070–120074`
+- บน Wazuh `4.14.5` compliance framework ต้อง encode ผ่าน `<group>` เช่น `pci_dss_11.4,` ไม่ใช่ `<pci_dss>` XML element
+- validation จริงบน live เมื่อ `2026-05-18`:
+  - `wazuh-logtest` ผ่าน `120050`, `120052`, `120070`, `120073`
+  - tagged worker injection ขึ้น OpenSearch เป็น `120050`, `120052`, `120070`, `120073`
 
 ### Integrations แยกตาม node
 
