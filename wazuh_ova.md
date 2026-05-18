@@ -67,8 +67,8 @@
 - worker network-anomaly Telegram script ก็ enforce `12+` เช่นกัน
 - แต่ rule network anomaly ชุด `100101-100108` ปัจจุบันยังเป็น level `7-8` จึงจะไม่ส่ง Telegram จนกว่าจะยกระดับ rule เอง
 - CDB source-IP ตอนนี้แยกเพิ่ม:
-  - `100300` คง `level 12` สำหรับกรณีปกติ/permit
-  - `100303` ลดเป็น `level 10` เมื่อ raw log เป็น `deny/block/drop/reset/close`
+  - `100300` คง `level 10` สำหรับกรณีปกติ/permit จึงไม่ส่งผ่าน generic Telegram
+  - `100303` คง `level 10` เมื่อ raw log เป็น `deny/block/drop/reset/close`
 
 ## โครงสร้าง repo ใหม่
 

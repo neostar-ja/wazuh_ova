@@ -99,8 +99,8 @@ Repo copies redact live secrets intentionally. Behavior and thresholds were sync
 - Worker network-anomaly Telegram script also enforces `12+`
 - Current network-anomaly rules `100101-100108` are still level `7-8`, so they are suppressed by Telegram until those rule levels are raised
 - CDB source-IP rule logic:
-  - `100300` stays `level 12` by default
-  - `100303` downgrades matched source-IP alerts to `level 10` when the raw log shows `deny/block/drop/reset/close`
+  - `100300` stays `level 10` by default, so generic Telegram suppresses it
+  - `100303` keeps matched source-IP deny/block/drop/reset/close events at `level 10`
 
 ## Current Documentation
 

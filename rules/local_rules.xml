@@ -26,7 +26,7 @@ IDs 100300-100302: CDB passive lookup (avoid conflict with 100070-100082 Huawei-
   <!-- ── CDB Passive Blocklist (100300-100302) ────────────────
        Fires on every alert matching field — no external API   -->
 
-  <rule id="100300" level="12">
+  <rule id="100300" level="10">
     <list field="srcip" lookup="match_key">etc/lists/malicious-ioc/malicious-ip</list>
     <description>CDB Blocklist: Source IP $(srcip) matches malicious-ip list</description>
     <group>cdb_intel,cdb_malicious_ip,attacks,pci_dss_11.4,</group>
