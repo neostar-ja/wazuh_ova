@@ -1,0 +1,76 @@
+<!--
+════════════════════════════════════════════════════════════════════════════════
+  WAZUH ALERT TUNING REGISTER
+  ไฟล์   : rules/1008-alert-tuning.xml
+  โหลดหลัง: 1007-compliance-tags.xml (load order ทำให้ override มีผล)
+  หน้าที่ : รวม rule level overrides ทั้งหมดไว้ที่เดียว
+  หลักการ :
+    1. ห้ามแก้ไขไฟล์ rule หลัก (1000-1007, local_rules.xml) โดยตรง
+    2. ทุก override ต้องใช้ overwrite="yes" ในไฟล์นี้เท่านั้น
+    3. ทุก override ต้องมี tuning log ครบถ้วน (ดู template ด้านล่าง)
+    4. Review date ต้องกรอกทุกครั้ง (แนะนำ 30-90 วัน)
+    5. ต้องคัดลอก compliance tags จาก rule เดิมทุกตัว
+  ผู้ดูแล : SOC Team
+════════════════════════════════════════════════════════════════════════════════
+
+  LEVEL GUIDE — ผลต่อ Telegram:
+    Level 15+    → 🔴 CRITICAL  ส่ง Telegram ทันที
+    Level 12-14  → 🟠 HIGH      ส่ง Telegram
+    Level 8-11   → 📋 MEDIUM    Dashboard + Compliance เท่านั้น (ไม่ส่ง Telegram)
+    Level 4-7    → 🔵 LOW       Dashboard เท่านั้น
+    Level 0-3    → ⚪ INFO      Archives เท่านั้น (ไม่ขึ้น Dashboard)
+
+  TUNING LOG TEMPLATE — คัดลอกและกรอกทุกครั้งที่เพิ่ม override ใหม่:
+
+    Date        : YYYY-MM-DD
+    Rule ID     : XXXXX
+    Rule Desc   : [description จาก rule เดิม]
+    Original    : level=XX
+    Tuned to    : level=YY
+    Reason      : [อธิบายว่าทำไม — false positive? noise? environment-specific?]
+    Requester   : [ชื่อหรือ role ของผู้ขอ]
+    Approved by : [ชื่อผู้อนุมัติ ถ้ามี]
+    Review date : YYYY-MM-DD [วันที่ควร review — แนะนำ 90 วัน]
+    Ticket/Ref  : [เลข ticket หรือ - ถ้าไม่มี]
+    Status      : active | expired | reverted
+
+════════════════════════════════════════════════════════════════════════════════
+-->
+
+<group name="tuned,">
+
+  <!-- ════════════════════════════════════════════════════════════
+       ACTIVE TUNING RULES
+       ════════════════════════════════════════════════════════════ -->
+
+  <!--
+    Date        : 2026-05-19
+    Rule ID     : 120061
+    Rule Desc   : NIST SC.5 / TSC CC7.2: DHCP pool exhausted
+    Original    : level=13 (ส่ง Telegram 🔴 CRITICAL)
+    Tuned to    : level=8  (Dashboard + Compliance เท่านั้น ไม่ส่ง Telegram)
+    Reason      : DHCP pool exhaustion เกิดจากจำนวน IP device ปกติใน network
+                  ไม่ใช่ DHCP starvation attack จริง เหตุการณ์เกิดซ้ำทุกวัน
+                  ยังต้องการ visibility ใน Dashboard และ Compliance แต่ไม่ต้องการ
+                  Telegram notification ที่รบกวน ควร review อีกครั้งถ้า network
+                  topology เปลี่ยน หรือถ้าเห็น DHCP conflict ร่วมด้วย
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-08-19
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="120061" level="8" overwrite="yes">
+    <if_sid>100441,100442</if_sid>
+    <description>NIST SC.5 / TSC CC7.2: DHCP pool exhausted (tuned: infra noise, not attack)</description>
+    <group>nist_800_53_SC.5,tsc_CC7.2,compliance,dhcp,dos,tuned,</group>
+  </rule>
+
+  <!-- ════════════════════════════════════════════════════════════
+       EXPIRED / REVERTED TUNING RULES
+       (เก็บไว้เป็น audit trail — ห้ามลบ)
+       ════════════════════════════════════════════════════════════ -->
+
+  <!-- [ยังไม่มี expired entries] -->
+
+</group>

@@ -139,11 +139,31 @@ Repo copies redact live secrets intentionally. Behavior and thresholds were sync
   - `100300` stays `level 10` by default, so generic Telegram suppresses it
   - `100303` keeps matched source-IP deny/block/drop/reset/close events at `level 10`
 
+### Alert Tuning System (added 2026-05-19)
+
+- `rules/1008-alert-tuning.xml` — Alert level overrides with full audit trail
+  - Load order: after all 1000-1007 files; `overwrite="yes"` takes effect last
+  - Active tuning: Rule 120061 (DHCP pool exhausted) level 13 → level 8, review 2026-08-19
+  - Full guide: `docs/current/ALERT_TUNING_GUIDE.md`
+  - Quick ref: `docs/current/ALERT_TUNING_QUICK_REF.md`
+  - **Rule format note (Wazuh 4.14.5):** compliance tags must be in `<group>` as `nist_800_53_SC.5,` — standalone elements `<nist_800_53>` cause parser error
+
+### Modules Enabled (ossec.conf on Master + Worker — added 2026-05-18)
+
+- **Syscollector**: package/OS/network/process inventory — every 1h
+- **Vulnerability Detection**: CVE scan via NVD feed update every 60 min, `<index-status>yes</index-status>`
+- **Security Config Assessment**: 3 CIS policies — CIS Amazon Linux 2 + CIS AL2023 + CIS Distro Independent Linux — every 12h, on startup
+- **SCA policy files**: `etc/shared/cis_amazon_linux_2.yml` + `etc/shared/sca_distro_independent_linux.yml`
+- **Doc**: `docs/current/VULN_SCA_SETUP.md`
+
 ## Current Documentation
 
 - `wazuh_ova.md` — Thai project index
 - `docs/current/LIVE_SERVER_BASELINE_2026-05-17.md` — verified live cluster inventory
 - `docs/current/REPO_LAYOUT.md` — how the reorganized repo is structured
+- `docs/current/VULN_SCA_SETUP.md` — Vulnerability Detection & SCA setup (2026-05-18)
+- `docs/current/ALERT_TUNING_GUIDE.md` — Alert Tuning System operational guide (2026-05-19)
+- `docs/current/ALERT_TUNING_QUICK_REF.md` — Alert Tuning quick reference card
 - `docs/integrations/` — vendor-specific deployment and operation guides
 
 ## Historical Material

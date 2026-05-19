@@ -227,3 +227,32 @@ Historical documents in `docs/archive/` may still mention:
   - Infoblox audit / config: `120070–120074`
 - **Live proof**: Tagged worker injections on `2026-05-18` produced `120050`, `120052`, `120070`, and `120073` alerts in OpenSearch with framework fields populated
 - **Reload note**: Worker-side event paths required a `wazuh-worker` restart after cluster sync before the new overlay rules were applied in runtime
+
+## Vulnerability Detection & SCA (added 2026-05-18)
+
+- **Status**: ✅ Active on wazuh-master (10.251.151.11) and wazuh-worker (10.251.151.12)
+- **Vulnerability Detection**: `<vulnerability-detection>` block in ossec.conf, feed-update-interval=60m, index-status=yes
+- **SCA**: `<sca>` block with 3 CIS policies — CIS Amazon Linux 2, CIS AL2023, CIS Distro Independent Linux — interval=12h, scan_on_start=yes
+- **Syscollector**: `<wodle name="syscollector">` packages=yes, os=yes, network=yes, interval=1h (was already enabled)
+- **SCA policy files added**: `etc/shared/cis_amazon_linux_2.yml` + `etc/shared/sca_distro_independent_linux.yml` (copied from `ruleset/sca/*.yml.disabled`)
+- **First scan**: 2026-05-18 08:47:55 UTC — completed in 20 seconds
+- **SCA results (today)**: 740 checks on Wazuh nodes — 658 passed, 1,126 failed, 76 not applicable
+- **SCA CIS tags**: 1,865 entries with `data.sca.check.compliance.cis` populated
+- **CVE alerts**: 227 total in `wazuh-alerts-4.x-*` — Critical: 4, High: 100, Medium: 98, Low: 24
+- **Worker ossec.conf fix**: merged duplicate `<ossec_config>` block (pre-existing issue from manual append)
+- **Backups**: `/var/ossec/etc/ossec.conf.bak.20260518` on both Master and Worker
+- **Doc**: `docs/current/VULN_SCA_SETUP.md`
+- **Known issue**: `IndexerConnector` logs WARNING for index `wazuh-states-vulnerabilities-wazuh` (actual index is `wazuh-states-vulnerabilities-wazuh-server`) — pre-existing name mismatch, not introduced by this change
+
+## Alert Tuning System (added 2026-05-19)
+
+- **File on Master**: `/var/ossec/etc/rules/1008-alert-tuning.xml`
+- **Local repo**: `rules/1008-alert-tuning.xml`
+- **Load order**: After 1000-1007, `overwrite="yes"` rules apply last — verified by `ls /var/ossec/etc/rules/*.xml | sort`
+- **Active tuning**:
+  - Rule 120061 (DHCP pool exhausted): level **13 → 8** | Reason: infra noise, not attack | Review: 2026-08-19
+- **Verification**: Wazuh API logtest confirmed level=8, `rule.nist_800_53: ['SC.5']`, `rule.tsc: ['CC7.2']`, `rule.groups` includes `tuned`
+- **Telegram effect**: Rule 120061 no longer triggers Telegram (level 8 < threshold 12)
+- **Format note**: Wazuh 4.14.5 requires compliance tags in `<group>` as `nist_800_53_SC.5,tsc_CC7.2,` — standalone XML elements cause parser error
+- **Docs**: `docs/current/ALERT_TUNING_GUIDE.md` + `docs/current/ALERT_TUNING_QUICK_REF.md`
+- **Dashboard filter**: `rule.groups: tuned` shows all tuned alerts
