@@ -1,0 +1,689 @@
+{
+  "meta": {
+    "type": "db",
+    "canSave": true,
+    "canEdit": true,
+    "canAdmin": true,
+    "canStar": true,
+    "canDelete": true,
+    "slug": "f09f96a7-network-asset-tracking",
+    "url": "/grafana/d/wazuh-asset-03/f09f96a7-network-asset-tracking",
+    "expires": "0001-01-01T00:00:00Z",
+    "created": "2026-05-19T06:30:29Z",
+    "updated": "2026-05-19T06:30:29Z",
+    "updatedBy": "Anonymous",
+    "createdBy": "Anonymous",
+    "version": 1,
+    "hasAcl": false,
+    "isFolder": false,
+    "apiVersion": "v0alpha1",
+    "folderId": 2981804990959616,
+    "folderUid": "wazuh-soc-folder",
+    "folderTitle": "Wazuh SOC",
+    "folderUrl": "/grafana/dashboards/f/wazuh-soc-folder/wazuh-soc",
+    "provisioned": false,
+    "provisionedExternalId": "",
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": true,
+        "canEdit": true,
+        "canDelete": true
+      }
+    }
+  },
+  "dashboard": {
+    "id": 2982077286354944,
+    "panels": [
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "DHCP Events",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"infoblox_dhcp\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🏠 DHCP Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Online Users",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"user_online\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "👤 User Online Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "id": 3,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "New Devices",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"new_device\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🆕 New Device Detections",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "purple",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "WiFi Auth",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"huawei_ac\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "📶 WiFi Auth Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 4
+        },
+        "id": 5,
+        "options": {
+          "legend": {
+            "calcs": [
+              "sum"
+            ],
+            "displayMode": "table",
+            "placement": "right"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "alias": "DHCP Activity",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"infoblox_dhcp\"",
+            "refId": "A",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "WiFi Auth",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"huawei_ac\"",
+            "refId": "B",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "New Devices",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"new_device\"",
+            "refId": "C",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📈 Network Asset Activity Timeline",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        },
+        "id": 6,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "data.dhcp_mac.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "20"
+                },
+                "type": "terms"
+              },
+              {
+                "field": "data.dhcp_hostname.keyword",
+                "id": "3",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "1"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"infoblox_dhcp\" AND data.dhcp_action:\"DHCPACK\"",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🖥️ Top Devices (DHCP MAC → Hostname)",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        },
+        "id": 7,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "data.dstuser.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "20"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"huawei_ac\" AND data.dstuser:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "👥 Top WiFi Users",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        },
+        "id": 8,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "settings": {
+                  "limit": "50"
+                },
+                "type": "raw_data"
+              }
+            ],
+            "query": "rule.groups:\"new_device\"",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🆕 New Device Detection Events",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        },
+        "id": 9,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "data.ap_mac.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"huawei_ac\" AND data.ap_mac:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📡 Top Access Points (by Events)",
+        "type": "table"
+      }
+    ],
+    "refresh": "1m",
+    "schemaVersion": 38,
+    "tags": [
+      "wazuh",
+      "soc",
+      "network",
+      "asset"
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "🖧 Network Asset Tracking",
+    "uid": "wazuh-asset-03",
+    "version": 1
+  }
+}

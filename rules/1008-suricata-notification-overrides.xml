@@ -1,0 +1,19 @@
+<!-- Late overrides to preserve operational Suricata notifications after
+     compliance overlay rules have reclassified the final alert.
+     Loaded after 1007-compliance-tags.xml on the manager.
+-->
+<group name="suricata,ids,notifications,">
+
+  <!-- Restore the final Suricata brute-force alert so the dedicated
+       custom-suricata-telegram integration still sees level>=12 + group=suricata. -->
+  <rule id="200090" level="12">
+    <if_sid>120003,120004,120030,120040,120042</if_sid>
+    <field name="alert.signature" type="pcre2">^LOCAL SSH brute force(?: attempt)?$</field>
+    <description>Suricata: SSH brute force on Wazuh cluster from $(src_ip)</description>
+    <group>suricata,ids,brute_force,ssh,authentication_failed,local,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+</group>

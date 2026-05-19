@@ -9,6 +9,17 @@ Sends alerts for level >= 12 only:
 import sys
 import json
 import requests
+from datetime import datetime
+
+DEBUG_LOG = "/var/ossec/logs/telegram_generic_debug.log"
+
+
+def log_debug(message: str) -> None:
+    try:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as handle:
+            handle.write(f"{datetime.now().isoformat()} - {message}\n")
+    except Exception:
+        pass
 
 if len(sys.argv) < 4:
     sys.exit(0)
@@ -32,11 +43,13 @@ SKIP_GROUPS = {
     "abuseipdb_malicious", "abuseipdb_suspicious",
 }
 if SKIP_GROUPS & set(groups):
+    log_debug(f"Skipping rule_id={rule.get('id')} due to dedicated integration groups={groups}")
     sys.exit(0)
 
 MIN_ALERT_LEVEL = 12
 level = int(rule.get("level", 0))
 if level < MIN_ALERT_LEVEL:
+    log_debug(f"Skipping rule_id={rule.get('id')} level={level} below minimum {MIN_ALERT_LEVEL}")
     sys.exit(0)
 
 if level >= 15:
@@ -56,10 +69,14 @@ msg += f"\U0001f5a5️ *Agent:* {aname}\n"
 msg += f"\U0001f194 *Rule ID:* {rid}\n"
 
 try:
-    requests.post(hook_url, json={
+    log_debug(
+        f"Sending rule_id={rid} level={level} agent={aname} chat_id={chat_id}"
+    )
+    response = requests.post(hook_url, json={
         "chat_id": chat_id,
         "text": msg,
         "parse_mode": "Markdown",
     }, timeout=10)
+    log_debug(f"Telegram status={response.status_code} body={response.text[:200]}")
 except Exception:
-    pass
+    log_debug(f"Telegram send error for rule_id={rid}")

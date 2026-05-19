@@ -1,0 +1,685 @@
+{
+  "meta": {
+    "type": "db",
+    "canSave": true,
+    "canEdit": true,
+    "canAdmin": true,
+    "canStar": true,
+    "canDelete": true,
+    "slug": "f09f9ba1-efb88f-soc-overview",
+    "url": "/grafana/d/wazuh-soc-02/f09f9ba1-efb88f-soc-overview",
+    "expires": "0001-01-01T00:00:00Z",
+    "created": "2026-05-19T04:52:48Z",
+    "updated": "2026-05-19T06:30:28Z",
+    "updatedBy": "apirak",
+    "createdBy": "apirak.ja",
+    "version": 3,
+    "hasAcl": false,
+    "isFolder": false,
+    "apiVersion": "v0alpha1",
+    "folderId": 2981804990959616,
+    "folderUid": "wazuh-soc-folder",
+    "folderTitle": "Wazuh SOC",
+    "folderUrl": "/grafana/dashboards/f/wazuh-soc-folder/wazuh-soc",
+    "provisioned": false,
+    "provisionedExternalId": "",
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": true,
+        "canEdit": true,
+        "canDelete": true
+      }
+    }
+  },
+  "dashboard": {
+    "id": 2957496045469696,
+    "panels": [
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Critical",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.level:[15 TO *]",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🔴 Critical Alerts (lvl 15+)",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "orange",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "High",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.level:[12 TO 14]",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🟠 High Alerts (lvl 12–14)",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 100
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "id": 3,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Medium",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.level:[7 TO 11]",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🟡 Medium Alerts (lvl 7–11)",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Total",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "📊 Total Alerts (24h)",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 4
+        },
+        "id": 5,
+        "options": {
+          "legend": {
+            "calcs": [
+              "sum"
+            ],
+            "displayMode": "table",
+            "placement": "right"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "alias": "Critical (15+)",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.level:>=15",
+            "refId": "A",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "High (12-14)",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.level:[12 TO 14]",
+            "refId": "B",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "Medium (7-11)",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.level:[7 TO 11]",
+            "refId": "C",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📈 Alert Timeline by Severity",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        },
+        "id": 6,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.description.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.level:>=7",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🔝 Top Alert Rules",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        },
+        "id": 7,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "settings": {
+                  "limit": "50"
+                },
+                "type": "raw_data"
+              }
+            ],
+            "query": "rule.level:>=12",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🚨 Recent High/Critical Events",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        },
+        "id": 8,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.groups.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "10"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.level:>=7",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📦 Alerts by Integration Source",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        },
+        "id": 9,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "GeoLocation.country_name.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "GeoLocation.country_name:* AND rule.level:>=7",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🌍 Top Threat Source Countries",
+        "type": "table"
+      }
+    ],
+    "refresh": "1m",
+    "schemaVersion": 38,
+    "tags": [
+      "wazuh",
+      "soc",
+      "overview"
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "🛡️ SOC Overview",
+    "uid": "wazuh-soc-02",
+    "version": 3
+  }
+}

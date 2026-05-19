@@ -1,0 +1,850 @@
+{
+  "meta": {
+    "type": "db",
+    "canSave": true,
+    "canEdit": true,
+    "canAdmin": true,
+    "canStar": true,
+    "canDelete": true,
+    "slug": "f09f938b-compliance-executive",
+    "url": "/grafana/d/wazuh-comp-05/f09f938b-compliance-executive",
+    "expires": "0001-01-01T00:00:00Z",
+    "created": "2026-05-19T06:30:29Z",
+    "updated": "2026-05-19T06:30:29Z",
+    "updatedBy": "Anonymous",
+    "createdBy": "Anonymous",
+    "version": 1,
+    "hasAcl": false,
+    "isFolder": false,
+    "apiVersion": "v0alpha1",
+    "folderId": 2981804990959616,
+    "folderUid": "wazuh-soc-folder",
+    "folderTitle": "Wazuh SOC",
+    "folderUrl": "/grafana/dashboards/f/wazuh-soc-folder/wazuh-soc",
+    "provisioned": false,
+    "provisionedExternalId": "",
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": true,
+        "canEdit": true,
+        "canDelete": true
+      }
+    }
+  },
+  "dashboard": {
+    "id": 2982079102488576,
+    "panels": [
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "PCI DSS",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.pci_dss:*",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "💳 PCI DSS Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 5,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "HIPAA",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.hipaa:*",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🏥 HIPAA Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "purple",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 10,
+          "y": 0
+        },
+        "id": 3,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "GDPR",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.gdpr:*",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🇪🇺 GDPR Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "orange",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 15,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "NIST 800-53",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.nist_800_53:*",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🏛️ NIST 800-53 Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "yellow",
+                  "value": null
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 20,
+          "y": 0
+        },
+        "id": 5,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "TSC",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.tsc:*",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "📊 TSC (SOC2) Events",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 4
+        },
+        "id": 6,
+        "options": {
+          "legend": {
+            "calcs": [
+              "sum"
+            ],
+            "displayMode": "table",
+            "placement": "right"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "alias": "PCI DSS",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1d",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.pci_dss:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "HIPAA",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1d",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.hipaa:*",
+            "refId": "B",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "GDPR",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1d",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.gdpr:*",
+            "refId": "C",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "NIST 800-53",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1d",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.nist_800_53:*",
+            "refId": "D",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "TSC",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1d",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.tsc:*",
+            "refId": "E",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📈 Compliance Events Timeline (7 Days)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 12
+        },
+        "id": 7,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.pci_dss.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.pci_dss:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "💳 Top PCI DSS Requirements",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 12
+        },
+        "id": 8,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.hipaa.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.hipaa:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🏥 Top HIPAA Controls",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 12
+        },
+        "id": 9,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.nist_800_53.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.nist_800_53:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🏛️ Top NIST 800-53 Controls",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        },
+        "id": 10,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.gdpr.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.gdpr:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🇪🇺 Top GDPR Articles",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        },
+        "id": 11,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.tsc.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.tsc:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📊 Top TSC (SOC2) Criteria",
+        "type": "table"
+      }
+    ],
+    "refresh": "5m",
+    "schemaVersion": 38,
+    "tags": [
+      "wazuh",
+      "soc",
+      "compliance",
+      "pci",
+      "hipaa",
+      "gdpr",
+      "nist"
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-7d",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "📋 Compliance Executive",
+    "uid": "wazuh-comp-05",
+    "version": 1
+  }
+}

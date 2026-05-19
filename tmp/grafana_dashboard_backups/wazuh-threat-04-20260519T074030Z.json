@@ -1,0 +1,714 @@
+{
+  "meta": {
+    "type": "db",
+    "canSave": true,
+    "canEdit": true,
+    "canAdmin": true,
+    "canStar": true,
+    "canDelete": true,
+    "slug": "e29a94-efb88f-threat-overview",
+    "url": "/grafana/d/wazuh-threat-04/e29a94-efb88f-threat-overview",
+    "expires": "0001-01-01T00:00:00Z",
+    "created": "2026-05-19T06:30:29Z",
+    "updated": "2026-05-19T06:30:29Z",
+    "updatedBy": "Anonymous",
+    "createdBy": "Anonymous",
+    "version": 1,
+    "hasAcl": false,
+    "isFolder": false,
+    "apiVersion": "v0alpha1",
+    "folderId": 2981804990959616,
+    "folderUid": "wazuh-soc-folder",
+    "folderTitle": "Wazuh SOC",
+    "folderUrl": "/grafana/dashboards/f/wazuh-soc-folder/wazuh-soc",
+    "provisioned": false,
+    "provisionedExternalId": "",
+    "annotationsPermissions": {
+      "dashboard": {
+        "canAdd": true,
+        "canEdit": true,
+        "canDelete": true
+      }
+    }
+  },
+  "dashboard": {
+    "id": 2982078213296128,
+    "panels": [
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "id": 1,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "IDS Critical",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"suricata\" AND rule.level:>=12",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🚨 IDS Critical Alerts",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "id": 2,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Malicious IPs",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"otx_malicious\" OR rule.groups:\"abuseipdb\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "☠️ Malicious IP Hits (OTX/AbuseIPDB)",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        },
+        "id": 3,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Malware",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"malware\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "🦠 Malware Detections",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "orange",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        },
+        "id": 4,
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "targets": [
+          {
+            "alias": "Brute Force",
+            "bucketAggs": [
+              {
+                "type": "date_histogram",
+                "id": "2",
+                "field": "@timestamp",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count",
+                "settings": {}
+              }
+            ],
+            "query": "rule.groups:\"brute_force\"",
+            "refId": "A",
+            "timeField": "@timestamp",
+            "queryType": "lucene"
+          }
+        ],
+        "title": "💥 Brute Force Attempts",
+        "type": "stat"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 4
+        },
+        "id": 5,
+        "options": {
+          "legend": {
+            "calcs": [
+              "sum"
+            ],
+            "displayMode": "table",
+            "placement": "right"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "targets": [
+          {
+            "alias": "Suricata IDS",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"suricata\"",
+            "refId": "A",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "Malicious IPs",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"otx_malicious\" OR rule.groups:\"abuseipdb\"",
+            "refId": "B",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "Brute Force",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"brute_force\"",
+            "refId": "C",
+            "timeField": "@timestamp"
+          },
+          {
+            "alias": "Malware",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "1h",
+                  "min_doc_count": "0",
+                  "trimEdges": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"malware\"",
+            "refId": "D",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "📈 Threat Activity Timeline",
+        "type": "timeseries"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        },
+        "id": 6,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "GeoLocation.country_name.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "20"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "(rule.groups:\"suricata\" OR rule.groups:\"otx_malicious\" OR rule.groups:\"abuseipdb\") AND GeoLocation.country_name:*",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🌍 Top Threat Source Countries",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        },
+        "id": 7,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "data.srcip.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "20"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"otx_malicious\" OR rule.groups:\"abuseipdb\"",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "☠️ Top Malicious Source IPs",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        },
+        "id": 8,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "rule.description.keyword",
+                "id": "2",
+                "settings": {
+                  "min_doc_count": "1",
+                  "order": "desc",
+                  "orderBy": "1",
+                  "size": "15"
+                },
+                "type": "terms"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "type": "count"
+              }
+            ],
+            "query": "rule.groups:\"suricata\" AND rule.level:>=12",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "🚨 Top Suricata Alert Signatures",
+        "type": "table"
+      },
+      {
+        "datasource": {
+          "type": "grafana-opensearch-datasource",
+          "uid": "dfmhsi3iylzb4d"
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        },
+        "id": 9,
+        "options": {
+          "footer": {
+            "show": false
+          },
+          "showHeader": true
+        },
+        "targets": [
+          {
+            "alias": "",
+            "bucketAggs": [
+              {
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": "0"
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "metrics": [
+              {
+                "id": "1",
+                "settings": {
+                  "limit": "50"
+                },
+                "type": "raw_data"
+              }
+            ],
+            "query": "rule.groups:\"suricata\" AND rule.level:>=14",
+            "refId": "A",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "💀 Latest Critical IDS Events",
+        "type": "table"
+      }
+    ],
+    "refresh": "1m",
+    "schemaVersion": 38,
+    "tags": [
+      "wazuh",
+      "soc",
+      "threat",
+      "ids"
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "⚔️ Threat Overview",
+    "uid": "wazuh-threat-04",
+    "version": 1
+  }
+}
