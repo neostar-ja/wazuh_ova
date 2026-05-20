@@ -256,3 +256,45 @@ Historical documents in `docs/archive/` may still mention:
 - **Format note**: Wazuh 4.14.5 requires compliance tags in `<group>` as `nist_800_53_SC.5,tsc_CC7.2,` — standalone XML elements cause parser error
 - **Docs**: `docs/current/ALERT_TUNING_GUIDE.md` + `docs/current/ALERT_TUNING_QUICK_REF.md`
 - **Dashboard filter**: `rule.groups: tuned` shows all tuned alerts
+
+## Hardware Inventory Fix (added 2026-05-20)
+
+- **Symptom**: Wazuh Dashboard → Endpoints page showed "Not enough hardware or operating system information" for all agents
+- **Root cause**: Three compounding misconfigurations in `<indexer>` block of `/var/ossec/etc/ossec.conf` on both master and worker:
+  1. `<host>` pointed to `https://127.0.0.1:9200` — no OpenSearch runs locally on those nodes (OpenSearch is on `10.251.151.13`)
+  2. `<certificate>` used `/etc/filebeat/certs/wazuh-server.pem` — OpenSearch rejects this cert (TLS alert: certificate unknown)
+  3. Wazuh keystore had no `indexer` credentials (`username`/`password`) configured
+- **How we diagnosed**:
+  - `wazuh-states-inventory-*` indices existed at `10.251.151.13:9200` but had `docs.count = 0`
+  - Wazuh API (`/syscollector/{id}/hardware`) returned correct data (SQLite DB was fine)
+  - `ossec.log` showed `IndexerConnector initialization failed for index 'wazuh-states-inventory-hardware-wazuh'` — retrying loop
+  - `ss -tlnp | grep 9200` on master: nothing listening on port 9200
+  - `curl --cert filebeat.pem https://10.251.151.13:9200/` → HTTP 401 (TLS ok); with `wazuh-server.pem` → TLS rejected
+- **Fix applied on master (10.251.151.11) and worker (10.251.151.12)**:
+  - `sed -i 's|https://127.0.0.1:9200|https://10.251.151.13:9200|g' /var/ossec/etc/ossec.conf`
+  - `sed -i 's|wazuh-server.pem|filebeat.pem|g' /var/ossec/etc/ossec.conf`
+  - `sed -i 's|wazuh-server-key.pem|filebeat-key.pem|g' /var/ossec/etc/ossec.conf`
+  - `echo 'admin' | /var/ossec/bin/wazuh-keystore -f indexer -k username`
+  - `echo 'admin' | /var/ossec/bin/wazuh-keystore -f indexer -k password`
+  - `sudo /var/ossec/bin/wazuh-control restart` (both nodes)
+- **Backups**: `/var/ossec/etc/ossec.conf.bak.20260520_*` on master and worker
+- **Post-fix result**: `IndexerConnector initialized successfully` for all 14 inventory indices; `wazuh-states-inventory-hardware-wazuh` = 5 docs, `wazuh-states-vulnerabilities-wazuh` = 6,645 docs
+- **Cleanup**: 14 orphaned empty `*-wazuh-server` indices deleted from OpenSearch (pre-created by Dashboard setup, never written to)
+- **Correct `<indexer>` block** (both master and worker):
+  ```xml
+  <indexer>
+    <enabled>yes</enabled>
+    <hosts>
+      <host>https://10.251.151.13:9200</host>
+    </hosts>
+    <ssl>
+      <certificate_authorities>
+        <ca>/etc/filebeat/certs/root-ca.pem</ca>
+      </certificate_authorities>
+      <certificate>/etc/filebeat/certs/filebeat.pem</certificate>
+      <key>/etc/filebeat/certs/filebeat-key.pem</key>
+    </ssl>
+  </indexer>
+  ```
+- **Diagnostic script**: `scripts/maintenance/diagnose_hardware_inventory.sh`
+- **Note on `wazuh-server.pem`**: This cert (dated 2026-04-16) is distinct from `filebeat.pem` (dated 2026-05-10). Only `filebeat.pem` is trusted by the OpenSearch security plugin. Do not use `wazuh-server.pem` for the `<indexer>` block.
