@@ -75,7 +75,7 @@ obj_search = {
             "data.dstport",
             "data.service",
             "data.app",
-            "data.policyname",
+            "data.policyid",
             "data.srcintf",
             "data.dstintf",
             "data.srccountry",
@@ -263,11 +263,12 @@ vis_objects = [
         query=TRAFFIC_QUERY, top=10
     ),
 
-    # Panel 4: Top Policies (Donut)
+    # Panel 4: Top Policy IDs (Donut)
+    # Note: FortiGate logs include policyid (numeric) but not policyname
     make_pie(
         "fgt-adv-top-policy",
-        "FortiGate — Top Policies",
-        "data.policyname",
+        "FortiGate — Top Policy IDs",
+        "data.policyid",
         query=TRAFFIC_QUERY, top=10
     ),
 
