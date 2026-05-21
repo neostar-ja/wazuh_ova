@@ -6,7 +6,7 @@ from datetime import datetime
 
 from ..routers.auth import get_current_user
 from ..models.database import get_db, CustomIOC
-from ..services import enrichment_service
+from ..services import enrichment_service, opensearch_service
 
 router = APIRouter(prefix="/ioc", tags=["ioc"])
 
@@ -34,6 +34,23 @@ async def search(q: str = Query(...), current_user=Depends(get_current_user), db
             "added_at": custom.added_at,
         } if custom else None,
         "feeds": feed_results.get("sources", {}),
+    }
+
+
+@router.get("/history")
+async def history(
+    q: str = Query(...),
+    time_range: str = Query("30d"),
+    limit: int = Query(100, le=500),
+    current_user=Depends(get_current_user),
+):
+    events = await enrichment_service.search_ioc(q)
+    matched_alerts = await opensearch_service.get_ioc_history(q, time_range=time_range, limit=limit)
+    return {
+        "value": q,
+        "feed_summary": events.get("sources", {}),
+        "matches": matched_alerts,
+        "count": len(matched_alerts),
     }
 
 

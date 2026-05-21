@@ -58,6 +58,8 @@ export const investigateApi = {
 
 export const iocApi = {
   search: q => api.get(`/ioc/search?q=${encodeURIComponent(q)}`),
+  history: (q, timeRange = '30d', limit = 100) =>
+    api.get(`/ioc/history?q=${encodeURIComponent(q)}&time_range=${timeRange}&limit=${limit}`),
   listCustom: () => api.get('/ioc/custom'),
   addCustom: data => api.post('/ioc/custom', data),
   deleteCustom: id => api.delete(`/ioc/custom/${id}`),
@@ -71,6 +73,9 @@ export const complianceApi = {
 
 export const assetsApi = {
   devices: (timeRange = '7d') => api.get(`/assets/devices?time_range=${timeRange}`),
+  detail: (identifier, timeRange = '30d') =>
+    api.get(`/assets/devices/${encodeURIComponent(identifier)}?time_range=${timeRange}`),
+  stats: (timeRange = '7d') => api.get(`/assets/stats?time_range=${timeRange}`),
   dhcp: (timeRange = '7d') => api.get(`/assets/dhcp?time_range=${timeRange}`),
   sessions: (timeRange = '7d') => api.get(`/assets/sessions?time_range=${timeRange}`),
 }
@@ -81,16 +86,26 @@ export const kpiApi = {
 }
 
 export const adminApi = {
+  // Rules
   listRules: () => api.get('/admin/rules'),
   getRule: filename => api.get(`/admin/rules/${filename}`),
   saveRule: (filename, content) =>
     api.put(`/admin/rules/${filename}`, content, { headers: { 'Content-Type': 'text/plain' } }),
   deploy: () => api.post('/admin/deploy'),
+  // Alert Tuning
   listTuning: () => api.get('/admin/tuning'),
   addTuning: data => api.post('/admin/tuning', data),
+  updateTuningStatus: (id, status) => api.patch(`/admin/tuning/${id}`, { status }),
+  deleteTuning: id => api.delete(`/admin/tuning/${id}`),
+  // Users
   listUsers: () => api.get('/admin/users'),
   createUser: data => api.post('/admin/users', data),
-  auditLog: () => api.get('/admin/audit'),
+  updateUser: (id, data) => api.patch(`/admin/users/${id}`, data),
+  // Config
+  getConfig: () => api.get('/admin/config'),
+  saveConfig: data => api.put('/admin/config', data),
+  // Audit
+  auditLog: (limit = 100) => api.get(`/admin/audit?limit=${limit}`),
 }
 
 export default api

@@ -64,6 +64,15 @@ class AlertTuning(Base):
     status = Column(String(20), default="active")  # active|expired|reverted
 
 
+class AlertConfig(Base):
+    __tablename__ = "alert_config"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(String(50), nullable=True)
+
+
 def get_db():
     db = SessionLocal()
     try:

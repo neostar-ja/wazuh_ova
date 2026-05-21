@@ -36,12 +36,25 @@ async def get_agents():
 
 
 async def get_rules_files():
-    return await wazuh_get("/rules/files?limit=100")
+    return await wazuh_get("/rules/files?limit=500")
 
 
 async def get_rule_file(filename: str) -> str:
-    data = await wazuh_get(f"/rules/files/{filename}?raw=true")
-    return data if isinstance(data, str) else str(data)
+    token = await get_token()
+    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+        r = await c.get(
+            f"{BASE}/rules/files/{filename}?raw=true",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        # ?raw=true returns XML text directly (Content-Type: application/xml or text/xml)
+        ct = r.headers.get("content-type", "")
+        if r.status_code == 200 and ("xml" in ct or "text" in ct):
+            return r.text
+        # Fallback: JSON response with error
+        try:
+            return r.json().get("data", {}).get("affected_items", [{}])[0].get("content", "")
+        except Exception:
+            return r.text
 
 
 async def put_rule_file(filename: str, content: str) -> dict:

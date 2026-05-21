@@ -7,15 +7,21 @@ router = APIRouter(prefix="/assets", tags=["assets"])
 
 @router.get("/devices")
 async def devices(time_range: str = Query("7d"), current_user=Depends(get_current_user)):
-    buckets = await opensearch_service.get_asset_devices(time_range)
-    return [
-        {
-            "ip": b.get("key", {}).get("ip", ""),
-            "mac": b.get("key", {}).get("mac", ""),
-            "count": b.get("doc_count", 0),
-        }
-        for b in buckets
-    ]
+    return await opensearch_service.get_asset_devices(time_range)
+
+
+@router.get("/stats")
+async def stats(time_range: str = Query("7d"), current_user=Depends(get_current_user)):
+    return await opensearch_service.get_asset_stats(time_range)
+
+
+@router.get("/devices/{identifier}")
+async def device_detail(
+    identifier: str,
+    time_range: str = Query("30d"),
+    current_user=Depends(get_current_user),
+):
+    return await opensearch_service.get_device_detail(identifier, time_range)
 
 
 @router.get("/dhcp")

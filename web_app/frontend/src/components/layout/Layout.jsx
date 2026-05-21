@@ -1,26 +1,51 @@
+/**
+ * Enhanced Modern Layout Components
+ * Professional SOC Center UI with Responsive Design & Dark/Light Mode Support
+ */
+
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { Box, useTheme, useMediaQuery } from '@mui/material'
+import { Box } from '@mui/material'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
-const DRAWER_WIDTH = 240
+const DRAWER_WIDTH = 220
 
 export default function Layout() {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleDrawerToggle = () => setMobileOpen(o => !o)
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box
+      className="layout-container"
+      sx={{
+        display: 'flex',
+        height: '100vh',
+        overflow: 'hidden',
+        bgcolor: 'background.default',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          background: `
+            radial-gradient(circle at 12% 18%, rgba(59,130,246,0.08) 0, transparent 28%),
+            radial-gradient(circle at 84% 10%, rgba(99,102,241,0.06) 0, transparent 24%),
+            linear-gradient(180deg, rgba(13,24,37,0.55) 0%, rgba(6,12,23,0) 24%)
+          `,
+          pointerEvents: 'none',
+        },
+      }}
+    >
+      {/* Sidebar */}
       <Sidebar
         drawerWidth={DRAWER_WIDTH}
         mobileOpen={mobileOpen}
         onClose={handleDrawerToggle}
-        isMobile={isMobile}
       />
+
+      {/* Main content area */}
       <Box
         component="main"
         sx={{
@@ -28,12 +53,31 @@ export default function Layout() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          ml: isMobile ? 0 : `${DRAWER_WIDTH}px`,
+          // Margin only on desktop
+          ml: { xs: 0, md: `${DRAWER_WIDTH}px` },
+          transition: 'margin 300ms ease',
         }}
       >
-        <Topbar onMenuClick={handleDrawerToggle} drawerWidth={DRAWER_WIDTH} isMobile={isMobile} />
-        <Box sx={{ flexGrow: 1, overflow: 'auto', p: { xs: 1.5, sm: 2.5 } }}>
-          <Outlet />
+        {/* Top navigation bar */}
+        <Topbar
+          onMenuClick={handleDrawerToggle}
+          drawerWidth={DRAWER_WIDTH}
+        />
+
+        {/* Page content with scroll */}
+        <Box
+          className="layout-main"
+          sx={{
+            flexGrow: 1,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+          }}
+        >
+          <Box className="layout-content content-width" sx={{ position: 'relative', zIndex: 1 }}>
+            <Outlet />
+          </Box>
         </Box>
       </Box>
     </Box>
