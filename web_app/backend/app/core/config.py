@@ -1,0 +1,44 @@
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+
+class Settings(BaseSettings):
+    app_name: str = "SOC Center"
+    app_env: str = "production"
+    app_base_path: str = "/wazuh"
+    secret_key: str = "changeme"
+    access_token_expire_minutes: int = 480
+    database_url: str = "sqlite:////app/data/soc_center.db"
+
+    wazuh_api_host: str = "10.251.151.11"
+    wazuh_api_port: int = 55000
+    wazuh_api_user: str = "wazuh-wui"
+    wazuh_api_pass: str = "MyS3cr37P450r.*-"
+    wazuh_verify_ssl: bool = False
+
+    opensearch_host: str = "10.251.151.13"
+    opensearch_port: int = 9200
+    opensearch_user: str = "admin"
+    opensearch_pass: str = "admin"
+    opensearch_verify_ssl: bool = False
+    opensearch_index: str = "wazuh-alerts-4.x-*"
+
+    grafana_url: str = ""
+    grafana_ds_uid: str = "dfmhsi3iylzb4d"
+    grafana_token: str = ""
+
+    abuseipdb_key: str = ""
+    otx_key: str = ""
+    shodan_key: str = ""
+    virustotal_key: str = ""
+
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
+    class Config:
+        env_file = "/opt/code/wazuh_ova/web_app/.env"
+        case_sensitive = False
+        extra = "ignore"
+
+
+settings = Settings()

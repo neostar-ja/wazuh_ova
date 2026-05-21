@@ -1,0 +1,73 @@
+name: wazuhweb
+
+services:
+
+  wazuhweb_backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: wazuhweb_backend
+    restart: unless-stopped
+    env_file: /opt/code/wazuh_ova/web_app/.env
+    volumes:
+      - wazuhweb_db_data:/app/data
+    networks:
+      - wazuhweb_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  wazuhweb_frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: wazuhweb_frontend
+    restart: unless-stopped
+    networks:
+      - wazuhweb_net
+    depends_on:
+      wazuhweb_backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  wazuhweb_nginx:
+    build:
+      context: ../nginx
+      dockerfile: Dockerfile
+    container_name: wazuhweb_nginx
+    restart: unless-stopped
+    ports:
+      - "3348:3348"
+    volumes:
+      - /opt/code/wazuh_ova/web_app/nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - wazuhweb_net
+    depends_on:
+      - wazuhweb_frontend
+      - wazuhweb_backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  wazuhweb_db_data:
+    name: wazuhweb_db_data
+
+networks:
+  wazuhweb_net:
+    external: true
+    name: wazuhweb_net

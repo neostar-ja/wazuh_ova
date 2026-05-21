@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root {
+    height: 100%;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .level-badge-critical { @apply bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded; }
+  .level-badge-high     { @apply bg-amber-500 text-white text-xs font-semibold px-2 py-0.5 rounded; }
+  .level-badge-medium   { @apply bg-blue-500 text-white text-xs font-semibold px-2 py-0.5 rounded; }
+  .level-badge-low      { @apply bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded; }
+}
