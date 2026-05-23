@@ -13,68 +13,132 @@ function AppFooter() {
   const year = new Date().getFullYear()
 
   return (
-    <Box component="footer" sx={{
-      flexShrink: 0,
-      borderTop: '1px solid',
-      borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.1)',
-      bgcolor: isDark ? 'rgba(12,8,20,0.7)' : 'rgba(250,248,255,0.9)',
-      backdropFilter: 'blur(12px)',
-      px: { xs: 2, sm: 3 },
-      py: 1.25,
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
-
-        {/* Left */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box sx={{
-            width: 22, height: 22, borderRadius: '6px', flexShrink: 0,
-            background: 'linear-gradient(135deg,#7B5BA4,#5A3E85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <SecurityRoundedIcon sx={{ fontSize: 13, color: '#fff' }} />
-          </Box>
-          <Typography sx={{ fontSize: 11.5, fontWeight: 500,
-            color: isDark ? 'rgba(237,233,250,0.45)' : 'rgba(26,16,51,0.45)' }}>
-            <Box component="span" sx={{ fontWeight: 700, color: isDark ? 'rgba(237,233,250,0.7)' : '#5A3E85' }}>
-              SOC Center
-            </Box>{' '}v2.0 · Powered by{' '}
-            <Box component="span" sx={{ fontWeight: 600, color: '#7B5BA4' }}>Wazuh SIEM</Box>
-          </Typography>
-          <Box sx={{ width: 1, height: 12, bgcolor: 'rgba(123,91,164,0.2)', display: { xs: 'none', sm: 'block' } }} />
-          <Typography sx={{ fontSize: 11, display: { xs: 'none', sm: 'block' },
-            color: isDark ? 'rgba(237,233,250,0.3)' : 'rgba(26,16,51,0.35)' }}>
-            © {year} มหาวิทยาลัยวลัยลักษณ์
-          </Typography>
-        </Box>
-
-        {/* Center — system status */}
-        <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 2 }}>
-          {['Wazuh Manager', 'OpenSearch', 'API'].map(s => (
-            <Box key={s} sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
-              <Box sx={{
-                width: 6, height: 6, borderRadius: '50%', bgcolor: '#22C55E',
-                boxShadow: '0 0 6px rgba(34,197,94,0.8)',
-                animation: 'pulseGlow 3s ease-in-out infinite',
-              }} />
-              <Typography sx={{ fontSize: 11, color: isDark ? 'rgba(237,233,250,0.4)' : 'rgba(26,16,51,0.4)' }}>{s}</Typography>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Right */}
-        <Chip
-          size="small"
-          label="hospital.wu.ac.th"
-          icon={<ShieldRoundedIcon sx={{ fontSize: '13px !important' }} />}
+    <Box
+      component="footer"
+      sx={{
+        flexShrink: 0,
+        position: 'relative',
+        borderTop: '1px solid',
+        borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.12)',
+        bgcolor: isDark ? 'rgba(10, 12, 24, 0.86)' : 'rgba(251, 249, 255, 0.92)',
+        backdropFilter: 'blur(16px)',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          background: isDark
+            ? 'radial-gradient(circle at top left, rgba(123,91,164,0.22), transparent 42%), radial-gradient(circle at top right, rgba(34,197,94,0.12), transparent 34%)'
+            : 'radial-gradient(circle at top left, rgba(123,91,164,0.12), transparent 42%), radial-gradient(circle at top right, rgba(34,197,94,0.08), transparent 34%)',
+          pointerEvents: 'none',
+        },
+      }}
+    >
+      <Box sx={{ position: 'relative', px: { xs: 2, sm: 3, md: 4 }, py: { xs: 1.5, md: 2 }, maxWidth: 1600, mx: 'auto' }}>
+        <Box
           sx={{
-            display: { xs: 'none', md: 'flex' },
-            height: 24, fontSize: 11, fontWeight: 600,
-            bgcolor: isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.07)',
-            color: isDark ? '#9B7DC4' : '#7B5BA4',
-            border: '1px solid', borderColor: isDark ? 'rgba(123,91,164,0.2)' : 'rgba(123,91,164,0.12)',
-            '& .MuiChip-icon': { color: 'inherit' },
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr auto' },
+            alignItems: 'center',
+            gap: { xs: 1.5, md: 2 },
           }}
-        />
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: '10px',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg,#7B5BA4 0%, #5A3E85 55%, #2F7CF6 100%)',
+                boxShadow: '0 12px 28px rgba(90,62,133,0.28)',
+              }}
+            >
+              <SecurityRoundedIcon sx={{ fontSize: 18, color: '#fff' }} />
+            </Box>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.3, color: isDark ? '#F2ECFF' : '#2B2046' }}>
+                SOC Center
+              </Typography>
+              <Typography
+                sx={{
+                  mt: 0.25,
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: isDark ? 'rgba(237,233,250,0.55)' : 'rgba(26,16,51,0.55)',
+                }}
+              >
+                Operational intelligence platform powered by Wazuh SIEM for security monitoring and incident response.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: { xs: 'flex-start', md: 'center' },
+              gap: 1,
+            }}
+          >
+            {['Wazuh Manager', 'OpenSearch', 'API'].map((service) => (
+              <Chip
+                key={service}
+                size="small"
+                label={service}
+                sx={{
+                  height: 26,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 0.2,
+                  bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
+                  color: isDark ? '#D8C8F2' : '#5A3E85',
+                  border: '1px solid',
+                  borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.14)',
+                  '& .MuiChip-label': { px: 1.1 },
+                }}
+              />
+            ))}
+            <Box sx={{ display: { xs: 'none', lg: 'flex' }, alignItems: 'center', gap: 0.8, ml: 0.5 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: '#22C55E',
+                  boxShadow: '0 0 10px rgba(34,197,94,0.85)',
+                  animation: 'pulseGlow 3s ease-in-out infinite',
+                }}
+              />
+              <Typography sx={{ fontSize: 11, color: isDark ? 'rgba(237,233,250,0.48)' : 'rgba(26,16,51,0.48)' }}>
+                All core services are online
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+            <Chip
+              size="small"
+              label={`© ${year} มหาวิทยาลัยวลัยลักษณ์`}
+              icon={<ShieldRoundedIcon sx={{ fontSize: '13px !important' }} />}
+              sx={{
+                height: 28,
+                fontSize: 11,
+                fontWeight: 700,
+                bgcolor: isDark ? 'rgba(47,124,246,0.12)' : 'rgba(47,124,246,0.08)',
+                color: isDark ? '#A7C7FF' : '#1F4F9A',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(47,124,246,0.2)' : 'rgba(47,124,246,0.14)',
+                '& .MuiChip-icon': { color: 'inherit' },
+              }}
+            />
+          </Box>
+        </Box>
       </Box>
     </Box>
   )
