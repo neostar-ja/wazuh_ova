@@ -91,70 +91,121 @@ interface MetricHeroProps {
 }
 
 function MetricHero({ stats, isLoading, tl, navigate }: MetricHeroProps) {
+  const { palette } = useTheme()
+  const isDark = palette.mode === 'dark'
+
   const metrics = [
-    { key: 'total',    label: 'รวมทั้งหมด', color: B.purple,  bg: 'rgba(123,91,164,0.12)' },
-    { key: 'critical', label: 'Critical',   color: B.red,     bg: 'rgba(239,68,68,0.1)'   },
-    { key: 'high',     label: 'High',       color: B.orange,  bg: 'rgba(241,116,34,0.1)'  },
-    { key: 'medium',   label: 'Medium',     color: B.yellow,  bg: 'rgba(234,179,8,0.08)'  },
-    { key: 'low',      label: 'Low',        color: B.green,   bg: 'rgba(34,197,94,0.08)'  },
+    { key: 'total',    label: 'Total Alerts', labelTh: 'รวมทั้งหมด', color: B.purple,  icon: '∑' },
+    { key: 'critical', label: 'Critical',     labelTh: 'วิกฤต',       color: B.red,     icon: '⚡' },
+    { key: 'high',     label: 'High',         labelTh: 'สูง',          color: B.orange,  icon: '▲' },
+    { key: 'medium',   label: 'Medium',       labelTh: 'กลาง',         color: B.yellow,  icon: '◆' },
+    { key: 'low',      label: 'Low',          labelTh: 'ต่ำ',          color: B.green,   icon: '●' },
   ] as const
   const total = (stats?.critical||0)+(stats?.high||0)+(stats?.medium||0)+(stats?.low||0)
-  const vals: Record<string, number>  = { total, critical: stats?.critical||0, high: stats?.high||0, medium: stats?.medium||0, low: stats?.low||0 }
+  const vals: Record<string, number> = {
+    total,
+    critical: stats?.critical||0, high: stats?.high||0,
+    medium: stats?.medium||0, low: stats?.low||0,
+  }
   const navLevel = { critical: 15, high: 12, medium: 7, low: 1 } as const
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 rounded-2xl overflow-hidden"
-      style={{ border: '1px solid rgba(123,91,164,0.18)' }}>
-      {metrics.map((m, i) => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {metrics.map((m) => (
         <Box
           key={m.key}
           onClick={() => {
-            if (m.key !== 'total') {
-              navigate(`/alerts?level=${navLevel[m.key]}`)
-            } else {
-              navigate('/alerts')
-            }
+            if (m.key !== 'total') navigate(`/alerts?level=${navLevel[m.key as keyof typeof navLevel]}`)
+            else navigate('/alerts')
           }}
-          className="relative overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
           sx={{
-            p: { xs: '12px 10px', sm: '14px 16px', md: '16px 18px' },
-            bgcolor: m.bg,
-            borderLeft: i > 0 ? '1px solid rgba(123,91,164,0.12)' : 'none',
-            borderTop: { xs: i >= 2 ? '1px solid rgba(123,91,164,0.12)' : 'none', sm: i >= 3 ? '1px solid rgba(123,91,164,0.12)' : 'none', lg: 'none' },
-            borderTopWidth: { lg: 0 },
-            '&::after': {
-              content: '""', position: 'absolute', top: 0, left: 0, right: 0,
-              height: '3px', background: m.color,
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: 'pointer',
+            borderRadius: '16px',
+            p: { xs: '14px 14px 12px', md: '18px 18px 14px' },
+            border: `1px solid ${m.color}28`,
+            background: isDark
+              ? `linear-gradient(145deg, ${m.color}1A 0%, rgba(16,12,32,0.9) 60%)`
+              : `linear-gradient(145deg, ${m.color}0E 0%, rgba(255,255,255,0.95) 60%)`,
+            backdropFilter: isDark ? 'blur(20px)' : 'none',
+            boxShadow: isDark
+              ? `0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)`
+              : `0 2px 12px ${m.color}14, 0 1px 3px rgba(0,0,0,0.06)`,
+            transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+            '&::before': {
+              content: '""',
+              position: 'absolute', top: 0, left: 0, right: 0,
+              height: '4px',
+              background: `linear-gradient(90deg, ${m.color} 0%, ${m.color}80 100%)`,
+              boxShadow: `0 0 12px ${m.color}70`,
             },
-            '&:hover': { bgcolor: m.bg.replace('0.1', '0.18').replace('0.12', '0.2').replace('0.08', '0.14') },
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              border: `1px solid ${m.color}50`,
+              boxShadow: isDark
+                ? `0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px ${m.color}20, inset 0 1px 0 rgba(255,255,255,0.06)`
+                : `0 10px 28px ${m.color}22, 0 2px 6px rgba(0,0,0,0.08)`,
+            },
           }}
         >
-          {/* BG watermark */}
+          {/* Large watermark number */}
           <Box sx={{
-            position: 'absolute', bottom: -10, right: -6,
-            fontSize: 48, opacity: 0.06, color: m.color,
+            position: 'absolute', bottom: -14, right: -8,
+            fontSize: { xs: 60, md: 72 }, opacity: 0.07, color: m.color,
             fontWeight: 900, lineHeight: 1, userSelect: 'none',
+            fontFamily: '"IBM Plex Mono", monospace',
           }}>
-            {m.key === 'total' ? '∑' : m.label[0]}
+            {m.icon}
           </Box>
 
-          <Typography sx={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: m.color, mb: 0.5, position: 'relative', zIndex: 1 }}>
-            {m.label}
-          </Typography>
+          {/* Label row */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, position: 'relative', zIndex: 1 }}>
+            <Typography sx={{
+              fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
+              letterSpacing: '0.12em', color: m.color,
+              textShadow: isDark ? `0 0 12px ${m.color}60` : 'none',
+            }}>
+              {m.label}
+            </Typography>
+            <Box sx={{
+              width: 22, height: 22, borderRadius: '7px',
+              bgcolor: `${m.color}18`,
+              border: `1px solid ${m.color}30`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Typography sx={{ fontSize: 11, color: m.color, fontWeight: 800 }}>{m.icon}</Typography>
+            </Box>
+          </Box>
 
+          {/* Value */}
           {isLoading ? (
-            <Skeleton width={56} height={34} />
+            <Skeleton width={72} height={40} sx={{ borderRadius: '8px', bgcolor: `${m.color}15` }} />
           ) : (
-            <Typography sx={{ fontSize: { xs: '1.4rem', sm: '1.6rem', md: '1.8rem' }, fontWeight: 900, color: m.color, lineHeight: 1, letterSpacing: '-0.03em', position: 'relative', zIndex: 1 }}>
+            <Typography sx={{
+              fontSize: { xs: '1.75rem', sm: '2rem', md: '2.2rem' },
+              fontWeight: 900,
+              color: m.color,
+              lineHeight: 1,
+              letterSpacing: '-0.04em',
+              position: 'relative', zIndex: 1,
+              fontFamily: '"IBM Plex Mono", monospace',
+              textShadow: isDark ? `0 0 20px ${m.color}40` : 'none',
+            }}>
               {N(vals[m.key])}
             </Typography>
           )}
 
-          <Box className="flex items-end justify-between mt-1.5">
-            <Typography sx={{ fontSize: 9, color: 'text.disabled' }}>
-              {m.key !== 'total' && total > 0 ? `${((vals[m.key]/total)*100).toFixed(1)}%` : 'alerts'}
-            </Typography>
-            {!isLoading && <Spark data={tl} color={m.color} w={60} h={22} />}
+          {/* Bottom row: percent + sparkline */}
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 1.25, position: 'relative', zIndex: 1 }}>
+            <Box>
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 500 }}>
+                {m.key !== 'total' && total > 0
+                  ? `${((vals[m.key]/total)*100).toFixed(1)}% ของทั้งหมด`
+                  : 'แจ้งเตือนทั้งหมด'}
+              </Typography>
+            </Box>
+            {!isLoading && <Spark data={tl} color={m.color} w={64} h={24} />}
           </Box>
         </Box>
       ))}
@@ -170,19 +221,25 @@ interface TimelineProps {
 }
 
 function Timeline({ data = [], isLoading, isDark }: TimelineProps) {
-  if (isLoading) return <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
+  if (isLoading) return <Skeleton variant="rectangular" height={240} sx={{ borderRadius: '12px' }} />
   if (!data.length) return (
-    <Box className="flex flex-col items-center justify-center h-56 gap-2">
-      <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>ยังไม่มีข้อมูล Timeline</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 240, gap: 2 }}>
+      <Box sx={{ width: 56, height: 56, borderRadius: '16px', bgcolor: 'rgba(123,91,164,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(123,91,164,0.15)' }}>
+        <svg viewBox="0 0 24 24" width="24" height="24" fill={B.purple} opacity="0.5"><path d="M3.5 18.5l6-6 4 4 7-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </Box>
+      <Box sx={{ textAlign: 'center' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: 13, fontWeight: 600 }}>ยังไม่มีข้อมูล Timeline</Typography>
+        <Typography sx={{ color: 'text.disabled', fontSize: 11, mt: 0.5 }}>ลองเปลี่ยนช่วงเวลา หรือรอข้อมูลใหม่</Typography>
+      </Box>
     </Box>
   )
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={data} margin={{ top: 4, right: 2, left: -26, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={240}>
+      <AreaChart data={data} margin={{ top: 8, right: 4, left: -22, bottom: 0 }}>
         <defs>
           {[
-            ['gt', B.purple, 0.18], ['gc', B.red, 0.45],
-            ['gh', B.orange, 0.35], ['gm', B.yellow, 0.25],
+            ['gt', B.purple, 0.22], ['gc', B.red, 0.50],
+            ['gh', B.orange, 0.38], ['gm', B.yellow, 0.28],
           ].map(([id, c, o]) => (
             <linearGradient key={id as string} id={id as string} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"   stopColor={c as string} stopOpacity={o as number} />
@@ -190,11 +247,11 @@ function Timeline({ data = [], isLoading, isDark }: TimelineProps) {
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(123,91,164,0.08)' : 'rgba(123,91,164,0.07)'} vertical={false} />
-        <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
+        <CartesianGrid strokeDasharray="2 4" stroke={isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.08)'} vertical={false} />
+        <XAxis dataKey="time" tick={{ fontSize: 10, fill: isDark ? '#6B5F8A' : '#9B90B5' }} axisLine={false} tickLine={false}
           tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return '' } }}
           interval="preserveStartEnd" />
-        <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={N} />
+        <YAxis tick={{ fontSize: 10, fill: isDark ? '#6B5F8A' : '#9B90B5' }} axisLine={false} tickLine={false} tickFormatter={N} width={44} />
         <RechartTip contentStyle={TIP} formatter={(v, n) => [N(v as number), n]}
           labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
         <Area type="monotone" dataKey="total"    name="Total"    stroke={B.purple} strokeWidth={2.5} fill="url(#gt)" dot={false} />
@@ -249,39 +306,62 @@ interface HBarProps {
 }
 
 function HBar({ items = [], isLoading, limit = 8, colorFn, mono }: HBarProps) {
-  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
+  if (isLoading) return (
+    <div className="flex flex-col gap-2.5">
+      {Array.from({length:5}).map((_,i) => (
+        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Skeleton height={28} sx={{ flex: 1, borderRadius: '8px' }} />
+        </Box>
+      ))}
+    </div>
+  )
   if (!items.length) return (
-    <Box className="flex flex-col items-center justify-center py-6 gap-1">
-      <GppBadRoundedIcon sx={{ fontSize: 28, color: 'text.disabled', opacity: 0.3 }} />
-      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 5, gap: 1.5 }}>
+      <Box sx={{ width: 44, height: 44, borderRadius: '12px', bgcolor: 'rgba(123,91,164,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <GppBadRoundedIcon sx={{ fontSize: 22, color: 'text.disabled', opacity: 0.5 }} />
+      </Box>
+      <Typography sx={{ fontSize: 12, color: 'text.disabled', fontWeight: 500 }}>ยังไม่มีข้อมูล</Typography>
     </Box>
   )
   const max = Math.max(...items.map(i => i.count), 1)
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       {items.slice(0, limit).map((item, i) => {
         const pct = Math.round((item.count / max) * 100)
         const color = colorFn ? colorFn(i, item) : B.purple
         return (
-          <div key={item.name || i}>
-            <div className="flex items-center justify-between mb-1">
-              <Typography sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '78%',
-                fontFamily: mono ? '"IBM Plex Mono",monospace' : 'inherit', fontSize: mono ? 10.5 : 11 }}>
-                {item.name || 'Unknown'}
-              </Typography>
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color, ml: 1, flexShrink: 0 }}>
+          <Box key={item.name || i} sx={{
+            p: '7px 10px',
+            borderRadius: '10px',
+            bgcolor: `${color}08`,
+            border: `1px solid ${color}15`,
+            transition: 'all 0.2s ease',
+            '&:hover': { bgcolor: `${color}12`, border: `1px solid ${color}28` },
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
+                <Typography sx={{
+                  color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  fontFamily: mono ? '"IBM Plex Mono",monospace' : 'inherit',
+                  fontSize: mono ? 11 : 11.5, fontWeight: 500,
+                }}>
+                  {item.name || 'Unknown'}
+                </Typography>
+              </Box>
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color, ml: 1, flexShrink: 0, fontFamily: '"IBM Plex Mono",monospace' }}>
                 {N(item.count)}
               </Typography>
-            </div>
-            <Box sx={{ height: 5, borderRadius: 3, bgcolor: `${color}18`, overflow: 'hidden' }}>
+            </Box>
+            <Box sx={{ height: 6, borderRadius: '6px', bgcolor: `${color}15`, overflow: 'hidden' }}>
               <Box sx={{
-                height: '100%', width: `${pct}%`, borderRadius: 3,
-                background: `linear-gradient(90deg, ${color} 0%, ${color}90 100%)`,
-                transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)',
-                boxShadow: `0 0 8px ${color}50`,
+                height: '100%', width: `${pct}%`, borderRadius: '6px',
+                background: `linear-gradient(90deg, ${color} 0%, ${color}B0 100%)`,
+                transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+                boxShadow: `0 0 10px ${color}60`,
               }} />
             </Box>
-          </div>
+          </Box>
         )
       })}
     </div>
@@ -295,11 +375,14 @@ interface SourceDonutProps {
 }
 
 function SourceDonut({ data = [], isLoading }: SourceDonutProps) {
-  if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+  if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius: '12px' }} />
   if (!data.length) return (
-    <Box className="flex flex-col items-center justify-center h-48 gap-2">
-      <RouterRoundedIcon sx={{ fontSize: 32, color: 'text.disabled', opacity: 0.3 }} />
-      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ยังไม่มีข้อมูล Log Source</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 180, gap: 1.5 }}>
+      <Box sx={{ width: 52, height: 52, borderRadius: '14px', bgcolor: 'rgba(123,91,164,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(123,91,164,0.15)' }}>
+        <RouterRoundedIcon sx={{ fontSize: 24, color: B.purple, opacity: 0.5 }} />
+      </Box>
+      <Typography sx={{ fontSize: 12, color: 'text.disabled', fontWeight: 500 }}>ยังไม่มีข้อมูล Log Source</Typography>
+      <Typography sx={{ fontSize: 11, color: 'text.disabled', opacity: 0.6 }}>ตรวจสอบการส่ง log จาก agent</Typography>
     </Box>
   )
   const pd = data.slice(0, 7).map(s => ({ name: s.name?.split('-')[0] || s.name || '?', value: s.count }))
@@ -307,23 +390,23 @@ function SourceDonut({ data = [], isLoading }: SourceDonutProps) {
     <div>
       <ResponsiveContainer width="100%" height={160}>
         <PieChart>
-          <Pie data={pd} dataKey="value" cx="50%" cy="50%" outerRadius={65} innerRadius={32} paddingAngle={3}>
+          <Pie data={pd} dataKey="value" cx="50%" cy="50%" outerRadius={68} innerRadius={36} paddingAngle={3}>
             {pd.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} stroke="transparent" />)}
           </Pie>
           <RechartTip contentStyle={TIP} formatter={(v) => [N(v as number), 'alerts']} />
         </PieChart>
       </ResponsiveContainer>
-      <div className="flex flex-col gap-1.5 mt-1">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1.5 }}>
         {pd.map((item, i) => (
-          <div key={item.name} className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: PIE[i%PIE.length], flexShrink: 0 }} />
-              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{item.name}</Typography>
-            </div>
-            <Typography sx={{ fontSize: 10, fontWeight: 700, color: PIE[i%PIE.length] }}>{N(item.value)}</Typography>
-          </div>
+          <Box key={item.name} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.5, borderRadius: '7px', '&:hover': { bgcolor: `${PIE[i%PIE.length]}0A` }, transition: 'background 0.15s' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: PIE[i%PIE.length], flexShrink: 0, boxShadow: `0 0 6px ${PIE[i%PIE.length]}60` }} />
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontWeight: 500 }}>{item.name}</Typography>
+            </Box>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: PIE[i%PIE.length], fontFamily: '"IBM Plex Mono",monospace' }}>{N(item.value)}</Typography>
+          </Box>
         ))}
-      </div>
+      </Box>
     </div>
   )
 }
@@ -358,18 +441,25 @@ function MitreTactics({ data = [], isLoading }: MitreTacticsProps) {
         const color = TACTIC_COLORS[item.name.toLowerCase()] || B.purple
         const pct = Math.round((item.count/max)*100)
         return (
-          <div key={item.name}>
-            <div className="flex items-center justify-between mb-0.5">
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 5px ${color}90`, flexShrink: 0 }} />
-                <Typography sx={{ fontSize: 11, color: 'text.secondary', textTransform: 'capitalize' }}>{item.name}</Typography>
+          <Box key={item.name} sx={{
+            p: '6px 10px',
+            borderRadius: '9px',
+            bgcolor: `${color}08`,
+            border: `1px solid ${color}18`,
+            transition: 'all 0.18s ease',
+            '&:hover': { bgcolor: `${color}12` },
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.6 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '3px', bgcolor: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
+                <Typography sx={{ fontSize: 11, color: 'text.secondary', textTransform: 'capitalize', fontWeight: 500 }}>{item.name}</Typography>
               </Box>
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color }}>{N(item.count)}</Typography>
-            </div>
-            <Box sx={{ height: 4, borderRadius: 2, bgcolor: `${color}18` }}>
-              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 2, bgcolor: color, transition: 'width 0.6s ease', boxShadow: `0 0 6px ${color}50` }} />
+              <Typography sx={{ fontSize: 10.5, fontWeight: 800, color, fontFamily: '"IBM Plex Mono",monospace' }}>{N(item.count)}</Typography>
             </Box>
-          </div>
+            <Box sx={{ height: 5, borderRadius: '4px', bgcolor: `${color}18`, overflow: 'hidden' }}>
+              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: '4px', bgcolor: color, transition: 'width 0.7s ease', boxShadow: `0 0 8px ${color}60` }} />
+            </Box>
+          </Box>
         )
       })}
     </div>
@@ -399,21 +489,42 @@ function ClusterStatus({ cluster }: ClusterStatusProps) {
     </Box>
   )
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       {nodes.map((node, i) => {
         const ok = (node?.status||'active') === 'active'
+        const col = ok ? B.green : B.red
         return (
-          <Box key={node?.name||i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-            sx={{ bgcolor: ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)', border: `1px solid ${ok ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-            <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: ok ? B.green : B.red, flexShrink: 0,
-              boxShadow: `0 0 8px ${ok ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)'}`,
-              animation: ok ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>{node?.name||`Node ${i+1}`}</Typography>
-              <Typography sx={{ fontSize: 10, color: 'text.disabled', textTransform: 'capitalize' }}>{node?.type||'worker'}</Typography>
+          <Box key={node?.name||i} sx={{
+            display: 'flex', alignItems: 'center', gap: 2,
+            px: 2, py: 1.5, borderRadius: '12px',
+            bgcolor: `${col}08`,
+            border: `1px solid ${col}25`,
+            background: `linear-gradient(90deg, ${col}0C 0%, transparent 80%)`,
+            transition: 'all 0.2s ease',
+            '&:hover': { bgcolor: `${col}12`, border: `1px solid ${col}40` },
+          }}>
+            {/* Status indicator */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '10px', bgcolor: `${col}15`, flexShrink: 0, border: `1px solid ${col}25` }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: col,
+                boxShadow: `0 0 10px ${col}`,
+                animation: ok ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
             </Box>
-            <Chip label={ok?'Active':'Down'} size="small" color={ok?'success':'error'}
-              sx={{ height: 18, fontSize: 9, fontWeight: 700, '& .MuiChip-label':{px:0.75} }} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.2, color: 'text.primary' }}>
+                {node?.name||`Node ${i+1}`}
+              </Typography>
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', textTransform: 'capitalize', mt: 0.2 }}>
+                {node?.type||'worker'} node
+              </Typography>
+            </Box>
+            <Box sx={{
+              px: 1.25, py: 0.35, borderRadius: '20px',
+              bgcolor: `${col}18`, border: `1px solid ${col}30`,
+            }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: col }}>
+                {ok ? 'ACTIVE' : 'DOWN'}
+              </Typography>
+            </Box>
           </Box>
         )
       })}
@@ -482,12 +593,20 @@ function RecentAlerts({ alerts = [], isLoading }: RecentAlertsProps) {
   const navigate = useNavigate()
   const { enqueueSnackbar } = useSnackbar()
   const top = alerts.filter(a => Number(a['rule.level']||a?.rule?.level||0) >= 12).slice(0,12)
-  if (isLoading) return <div className="flex flex-col gap-1.5">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={44} sx={{borderRadius:1.5}}/>)}</div>
+  if (isLoading) return (
+    <div className="flex flex-col gap-2">
+      {Array.from({length:6}).map((_,i) => <Skeleton key={i} height={40} sx={{ borderRadius: '9px' }} />)}
+    </div>
+  )
   if (!top.length) return (
-    <Box className="flex flex-col items-center justify-center py-8 gap-2">
-      <CheckCircleRoundedIcon sx={{ fontSize: 36, color: B.green, opacity: 0.7 }} />
-      <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary' }}>ระบบปลอดภัย</Typography>
-      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีการแจ้งเตือนระดับสูงในช่วงนี้</Typography>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 6, gap: 2 }}>
+      <Box sx={{ width: 56, height: 56, borderRadius: '16px', bgcolor: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(34,197,94,0.2)' }}>
+        <CheckCircleRoundedIcon sx={{ fontSize: 28, color: B.green }} />
+      </Box>
+      <Box sx={{ textAlign: 'center' }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 700, color: B.green }}>ระบบปลอดภัย</Typography>
+        <Typography sx={{ fontSize: 11.5, color: 'text.disabled', mt: 0.5 }}>ไม่มีการแจ้งเตือนระดับสูงในช่วงนี้</Typography>
+      </Box>
     </Box>
   )
   return (
@@ -495,9 +614,13 @@ function RecentAlerts({ alerts = [], isLoading }: RecentAlertsProps) {
       <Table size="small" stickyHeader>
         <TableHead>
           <TableRow>
-            {['เวลา','Lv','คำอธิบาย','Source IP','Agent'].map(h => (
-              <TableCell key={h} sx={{ fontSize: 9, fontWeight: 800, py: 0.85, color: 'text.disabled',
-                textTransform: 'uppercase', letterSpacing: '0.07em', bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>{h}</TableCell>
+            {['เวลา','ระดับ','คำอธิบาย','Source IP','Agent'].map(h => (
+              <TableCell key={h} sx={{
+                fontSize: 9.5, fontWeight: 800, py: 1, color: 'text.disabled',
+                textTransform: 'uppercase', letterSpacing: '0.08em',
+                bgcolor: 'rgba(123,91,164,0.06)', whiteSpace: 'nowrap',
+                borderBottom: '1px solid rgba(123,91,164,0.15)',
+              }}>{h}</TableCell>
             ))}
           </TableRow>
         </TableHead>
@@ -509,23 +632,23 @@ function RecentAlerts({ alerts = [], isLoading }: RecentAlertsProps) {
             return (
               <TableRow key={i} hover onClick={() => navigate('/alerts')} sx={{
                 cursor: 'pointer',
-                borderLeft: `3px solid ${lv >= 15 ? B.red : B.orange}`,
+                borderLeft: `3px solid ${clr}`,
                 bgcolor: lv >= 15 ? 'rgba(239,68,68,0.04)' : 'transparent',
-                '&:hover': { bgcolor: 'rgba(123,91,164,0.06)' },
+                transition: 'background 0.15s',
+                '&:hover': { bgcolor: 'rgba(123,91,164,0.07)' },
               }}>
-                <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1, color: 'text.secondary' }}>
+                <TableCell sx={{ fontSize: 10.5, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1.1, color: 'text.secondary' }}>
                   {a['@timestamp'] ? format(new Date(a['@timestamp']), 'HH:mm:ss') : '—'}
                 </TableCell>
-                <TableCell sx={{ py: 1 }}>
-                  <Chip label={`${lv} ${LL(lv)}`} size="small" sx={{
-                    height: 19, fontSize: 9, fontWeight: 800,
-                    bgcolor: `${clr}20`, color: clr, border: `1px solid ${clr}35`,
-                    '& .MuiChip-label': { px: 0.75 },
-                    animation: lv >= 15 && i === 0 ? 'pulse-critical 2.5s ease-in-out infinite' : 'none',
-                  }} />
+                <TableCell sx={{ py: 1.1 }}>
+                  <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 0.9, py: 0.3, borderRadius: '6px', bgcolor: `${clr}18`, border: `1px solid ${clr}35` }}>
+                    <Typography sx={{ fontSize: 9.5, fontWeight: 900, color: clr, fontFamily: '"IBM Plex Mono",monospace' }}>
+                      {lv} {LL(lv)}
+                    </Typography>
+                  </Box>
                 </TableCell>
-                <TableCell sx={{ py: 1, maxWidth: 280 }}>
-                  <Typography sx={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                <TableCell sx={{ py: 1.1, maxWidth: 280 }}>
+                  <Typography sx={{ fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
                     {a['rule.description']||a?.rule?.description||'—'}
                   </Typography>
                 </TableCell>
@@ -644,7 +767,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <Box className="page-enter flex flex-col gap-3 md:gap-4">
+    <Box className="page-enter flex flex-col gap-4 md:gap-5">
 
       {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
       <PageHeader

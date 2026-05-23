@@ -46,17 +46,17 @@ const createSOCTheme = (mode: 'light' | 'dark' = 'dark'): Theme => {
       error:   { main: '#EF4444', light: '#F87171', dark: '#DC2626', contrastText: '#fff' },
       info:    { main: '#38BDF8', light: '#7DD3FC', dark: '#0EA5E9', contrastText: '#fff' },
       background: {
-        default: '#0C0A14',
-        paper:   '#16122A',
-        card:    '#1E1935',
-        elevated:'#261F3D',
+        default: '#080612',
+        paper:   '#120E24',
+        card:    '#1A1530',
+        elevated:'#221C3A',
       },
       text: {
         primary:   '#EDE9FA',
         secondary: '#9A90BF',
-        disabled:  '#5A5278',
+        disabled:  '#4E4470',
       },
-      divider: 'rgba(123,91,164,0.15)',
+      divider: 'rgba(123,91,164,0.18)',
       action: {
         active:            BRAND.purple,
         hover:             'rgba(123,91,164,0.08)',
