@@ -20,8 +20,8 @@ if [[ -z $(git status -s) ]]; then
     
     # Still attempt to push any committed but unpushed changes
     CURRENT_BRANCH=$(git branch --show-current)
-    echo "🚀 Pushing local commits to GitHub (branch: $CURRENT_BRANCH)..."
-    git push origin "$CURRENT_BRANCH"
+    echo "🚀 Pushing local commits to GitHub (branch: main)..."
+    git push origin "$CURRENT_BRANCH:main"
     exit 0
 fi
 
@@ -37,8 +37,8 @@ git commit -m "$COMMIT_MSG"
 # Get current branch name
 CURRENT_BRANCH=$(git branch --show-current)
 
-echo "🚀 Pushing to GitHub (origin/$CURRENT_BRANCH)..."
-git push origin "$CURRENT_BRANCH"
+echo "🚀 Pushing to GitHub (origin/main)..."
+git push origin "$CURRENT_BRANCH:main"
 
 if [ $? -eq 0 ]; then
     echo "=========================================================="
