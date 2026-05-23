@@ -1,1003 +1,596 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box, Card, CardContent, Typography, TextField, Button, Grid,
-  Chip, Table, TableBody, TableCell, TableHead, TableRow,
-  FormControl, Select, MenuItem, Alert, CircularProgress,
-  IconButton, Tooltip, LinearProgress, Divider, Avatar, Collapse,
-  InputAdornment, useTheme,
+  Box,
+  Button,
+  Chip,
+  Grid,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
 } from '@mui/material'
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
-import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
-import RouterRoundedIcon from '@mui/icons-material/RouterRounded'
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded'
-import WifiRoundedIcon from '@mui/icons-material/WifiRounded'
-import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
-import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
-import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded'
-import HubRoundedIcon from '@mui/icons-material/HubRounded'
-import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded'
-import SecurityRoundedIcon from '@mui/icons-material/SecurityRounded'
-import NetworkCheckRoundedIcon from '@mui/icons-material/NetworkCheckRounded'
-import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded'
-import WarningRoundedIcon from '@mui/icons-material/WarningRounded'
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
-import InfoRoundedIcon from '@mui/icons-material/InfoRounded'
-import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTooltip, ResponsiveContainer,
-} from 'recharts'
-import { investigateApi } from '../../services/api'
-import { format } from 'date-fns'
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded'
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
+import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded'
+import DataObjectRoundedIcon from '@mui/icons-material/DataObjectRounded'
+import HistoryEduRoundedIcon from '@mui/icons-material/HistoryEduRounded'
 import { useSnackbar } from 'notistack'
+import PageHeader from '../ui/PageHeader'
+import SectionCard from '../ui/SectionCard'
+import MetricCard from '../ui/MetricCard'
+import EmptyState, { ErrorState } from '../ui/EmptyState'
+import { DetailPanel } from '../common/CommonComponents'
+import {
+  detectInvestigationQueryType,
+  exportInvestigationEvidence,
+  investigate,
+} from '../../services/investigateApi'
+import type {
+  InvestigationDirection,
+  InvestigationQueryType,
+  InvestigationRange,
+  InvestigationRequest,
+  InvestigationSeverity,
+  TimelineEvent,
+  InvestigationAlert,
+} from '../../types'
+import InvestigationSearchHero from './InvestigationSearchHero'
+import EntityProfileCard from './EntityProfileCard'
+import RiskScoreCard from './RiskScoreCard'
+import InvestigationTimeline from './InvestigationTimeline'
+import RelatedAlertsTable from './RelatedAlertsTable'
+import ThreatIntelPanel from './ThreatIntelPanel'
+import HostContextPanel from './HostContextPanel'
+import MitrePanel from './MitrePanel'
+import CompliancePanel from './CompliancePanel'
+import RelatedEntitiesPanel from './RelatedEntitiesPanel'
+import RawEvidencePanel from './RawEvidencePanel'
+import SuggestedActionsPanel from './SuggestedActionsPanel'
+import { MonoValue, formatTimestamp, jsonToDisplay } from './utils'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
-const ChartTip = {
-  background: 'rgba(22,18,42,0.97)',
-  border: '1px solid rgba(123,91,164,0.3)',
-  borderRadius: 8, fontSize: 12, color: '#EDE9FA',
+type InvestigationTab =
+  | 'timeline'
+  | 'alerts'
+  | 'threat-intel'
+  | 'host-context'
+  | 'mitre'
+  | 'compliance'
+  | 'related-entities'
+  | 'raw-evidence'
+
+const RECENT_KEY = 'wazuh-investigation-recent'
+
+function getRecentSearches(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
 }
 
-const LEVEL_COLOR = (lv: number): string => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? BRAND.purple : '#22C55E'
-const LEVEL_LABEL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
-
-const ENTITY_TYPE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
-  ip:   { icon: <RouterRoundedIcon />,      label: 'IP Address',   color: BRAND.purple },
-  mac:  { icon: <FingerprintRoundedIcon />, label: 'MAC Address',  color: '#38BDF8' },
-  user: { icon: <PersonRoundedIcon />,      label: 'Username',     color: BRAND.orange },
-  host: { icon: <DnsRoundedIcon />,         label: 'Hostname',     color: '#22C55E' },
-  auto: { icon: <SearchRoundedIcon />,      label: 'Auto-detect',  color: BRAND.purple },
+function saveRecentSearch(query: string) {
+  const next = [query, ...getRecentSearches().filter((entry) => entry !== query)].slice(0, 8)
+  localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  return next
 }
 
-const STATUS_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-  online:  { color: '#22C55E', label: 'Online',  icon: <CheckCircleRoundedIcon sx={{ fontSize: 13 }} /> },
-  stale:   { color: BRAND.orange, label: 'Stale', icon: <WarningRoundedIcon sx={{ fontSize: 13 }} /> },
-  offline: { color: '#5A5278', label: 'Offline', icon: <InfoRoundedIcon sx={{ fontSize: 13 }} /> },
+function parseRange(value: string | null): InvestigationRange {
+  return value === '1h' || value === '6h' || value === '24h' || value === '7d' || value === '30d' || value === '90d' ? value : '30d'
 }
 
-const RECENT_KEY = 'soc_inv_recent'
-const MAX_RECENT = 8
-const getRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] } }
-const saveRecent = (v: string) => {
-  const p = getRecent().filter(x => x !== v)
-  localStorage.setItem(RECENT_KEY, JSON.stringify([v, ...p].slice(0, MAX_RECENT)))
+function parseDirection(value: string | null): InvestigationDirection {
+  return value === 'source' || value === 'destination' || value === 'both' ? value : 'both'
 }
 
-// ── Utility components ────────────────────────────────────────────────────────
-interface CopyBtnProps {
-  text: string;
-  sx?: any;
+function parseSeverity(value: string | null): InvestigationSeverity {
+  return value === 'critical' || value === 'high' || value === 'medium' || value === 'low' || value === 'info' || value === 'all' ? value : 'all'
 }
 
-function CopyBtn({ text, sx = {} }: CopyBtnProps) {
+function parseQueryType(value: string | null): InvestigationQueryType | 'auto' {
+  return value === 'ip' ||
+    value === 'hostname' ||
+    value === 'agent' ||
+    value === 'user' ||
+    value === 'mac' ||
+    value === 'domain' ||
+    value === 'hash' ||
+    value === 'rule' ||
+    value === 'cve' ||
+    value === 'unknown'
+    ? value
+    : 'auto'
+}
+
+function validateQuery(query: string, type: InvestigationQueryType | 'auto'): string | null {
+  const trimmed = query.trim()
+  if (!trimmed) return 'กรุณาระบุคำค้นหาก่อนเริ่ม investigation'
+  if (type === 'ip' && detectInvestigationQueryType(trimmed) !== 'ip') return 'รูปแบบ IP ไม่ถูกต้อง'
+  if (type === 'mac' && detectInvestigationQueryType(trimmed) !== 'mac') return 'รูปแบบ MAC Address ไม่ถูกต้อง'
+  if (type === 'hash' && detectInvestigationQueryType(trimmed) !== 'hash') return 'รูปแบบ hash ไม่ถูกต้อง'
+  if (type === 'cve' && detectInvestigationQueryType(trimmed) !== 'cve') return 'รูปแบบ CVE ไม่ถูกต้อง'
+  if (type === 'rule' && detectInvestigationQueryType(trimmed) !== 'rule') return 'Rule ID ต้องเป็นตัวเลข 3-6 หลัก'
+  return null
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+export default function InvestigatePage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { enqueueSnackbar } = useSnackbar()
-  return (
-    <Tooltip title="คัดลอก">
-      <IconButton size="small" onClick={() => { navigator.clipboard.writeText(text); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info', autoHideDuration: 1500 }) }}
-        sx={{ opacity: 0.45, '&:hover': { opacity: 1 }, p: 0.4, ...sx }}>
-        <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
-      </IconButton>
-    </Tooltip>
-  )
-}
 
-interface SectionLabelProps {
-  children: React.ReactNode;
-  count?: number | string;
-}
+  const initialQuery = searchParams.get('q')?.trim() ?? ''
+  const initialRange = parseRange(searchParams.get('range'))
+  const initialDirection = parseDirection(searchParams.get('direction'))
+  const initialSeverity = parseSeverity(searchParams.get('severity'))
+  const initialType = parseQueryType(searchParams.get('type'))
 
-function SectionLabel({ children, count }: SectionLabelProps) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'text.disabled' }}>
-        {children}
-      </Typography>
-      {count !== undefined && (
-        <Chip label={count} size="small" sx={{ height: 16, fontSize: 9, fontWeight: 700, bgcolor: 'rgba(123,91,164,0.12)', color: BRAND.purpleLight, '& .MuiChip-label': { px: 0.7 } }} />
-      )}
-    </Box>
-  )
-}
+  const [query, setQuery] = useState(initialQuery)
+  const [selectedType, setSelectedType] = useState<InvestigationQueryType | 'auto'>(initialType)
+  const [range, setRange] = useState<InvestigationRange>(initialRange)
+  const [direction, setDirection] = useState<InvestigationDirection>(initialDirection)
+  const [severity, setSeverity] = useState<InvestigationSeverity>(initialSeverity)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [queryError, setQueryError] = useState<string | null>(null)
+  const [recentSearches, setRecentSearches] = useState<string[]>(getRecentSearches())
+  const [activeTab, setActiveTab] = useState<InvestigationTab>('timeline')
+  const [techniqueFilter, setTechniqueFilter] = useState<string | null>(null)
+  const [selectedEvidence, setSelectedEvidence] = useState<{
+    title: string
+    subtitle?: string
+    raw?: unknown
+    notes?: string[]
+  } | null>(null)
 
-interface LevelChipProps {
-  level: string | number;
-}
+  const initialSubmittedRequest = initialQuery
+    ? {
+        query: initialQuery,
+        type: initialType === 'auto' ? detectInvestigationQueryType(initialQuery) : initialType,
+        range: initialRange,
+        direction: initialDirection,
+        severity: initialSeverity,
+      }
+    : null
 
-function LevelChip({ level }: LevelChipProps) {
-  const lv = Number(level || 0)
-  return (
-    <Chip label={`${lv} ${LEVEL_LABEL(lv)}`} size="small" sx={{
-      height: 18, fontSize: 9, fontWeight: 800,
-      bgcolor: `${LEVEL_COLOR(lv)}20`, color: LEVEL_COLOR(lv),
-      '& .MuiChip-label': { px: 0.75 },
-      animation: lv >= 15 ? 'pulse-critical 2.5s ease-in-out infinite' : 'none',
-    }} />
-  )
-}
+  const [submittedRequest, setSubmittedRequest] = useState<InvestigationRequest | null>(initialSubmittedRequest)
 
-// ── Risk Score Gauge ──────────────────────────────────────────────────────────
-interface RiskGaugeProps {
-  score?: number;
-}
+  const detectedType = detectInvestigationQueryType(query)
+  const effectiveType = selectedType === 'auto' ? detectedType : selectedType
 
-function RiskGauge({ score = 0 }: RiskGaugeProps) {
-  const color = score >= 7.5 ? '#EF4444' : score >= 5 ? BRAND.orange : score >= 2.5 ? '#EAB308' : '#22C55E'
-  const pct = Math.round((score / 10) * 100)
-  const circ = 2 * Math.PI * 36
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <Box sx={{ position: 'relative', width: 88, height: 88 }}>
-        <svg width="88" height="88" viewBox="0 0 88 88">
-          <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(123,91,164,0.12)" strokeWidth="7" />
-          <circle cx="44" cy="44" r="36" fill="none" stroke={color} strokeWidth="7"
-            strokeDasharray={circ} strokeDashoffset={circ - (pct / 100) * circ}
-            strokeLinecap="round" transform="rotate(-90 44 44)"
-            style={{ transition: 'stroke-dashoffset 0.8s ease', filter: `drop-shadow(0 0 5px ${color}70)` }}
-          />
-          <text x="44" y="39" textAnchor="middle" fill={color} fontSize="17" fontWeight="800" fontFamily="IBM Plex Sans Thai,sans-serif">{score}</text>
-          <text x="44" y="53" textAnchor="middle" fill="rgba(237,233,250,0.45)" fontSize="8" fontFamily="IBM Plex Sans Thai,sans-serif">/10 Risk</text>
-        </svg>
-      </Box>
-      <Chip label={score >= 7.5 ? 'HIGH RISK' : score >= 5 ? 'MEDIUM' : score >= 2.5 ? 'LOW RISK' : 'CLEAN'}
-        size="small" sx={{ height: 18, fontSize: 9, fontWeight: 800, bgcolor: `${color}18`, color, border: `1px solid ${color}40`, mt: 0.5 }} />
-    </Box>
-  )
-}
-
-// ── Entity Identity Card ──────────────────────────────────────────────────────
-interface EntityCardProps {
-  query: string;
-  data: any;
-  enrichData: any;
-  onClose: () => void;
-}
-
-function EntityCard({ query, data, enrichData, onClose }: EntityCardProps) {
-  const identity   = data.identity || {}
-  const levelDist  = data.level_dist || {}
-  const entityType = data.type || 'auto'
-  const typeConf   = ENTITY_TYPE_CONFIG[entityType] || ENTITY_TYPE_CONFIG.auto
-  const statusConf = STATUS_CONFIG[identity.status] || STATUS_CONFIG.offline
-  const isPrivate  = enrichData?.is_private
-  const abuseScore = enrichData?.feeds?.abuseipdb?.abuseConfidenceScore
-
-  return (
-    <Card sx={{
-      mb: 2, border: `1px solid ${typeConf.color}30`, position: 'relative', overflow: 'hidden',
-      background: `linear-gradient(135deg, ${typeConf.color}08 0%, transparent 60%)`,
-    }}>
-      <Box sx={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: '50%',
-        background: `radial-gradient(circle, ${typeConf.color}12 0%, transparent 70%)`, pointerEvents: 'none' }} />
-      <CardContent sx={{ p: '18px 22px !important' }}>
-        <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {/* Avatar */}
-          <Avatar sx={{ width: 54, height: 54, background: `linear-gradient(135deg, ${typeConf.color} 0%, ${BRAND.purpleDark} 100%)`, flexShrink: 0 }}>
-            {typeConf.icon}
-          </Avatar>
-
-          {/* Main info */}
-          <Box sx={{ flex: 1, minWidth: 200 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontFamily: '"IBM Plex Mono",monospace', fontSize: 17, fontWeight: 800, wordBreak: 'break-all' }}>
-                {query}
-              </Typography>
-              <CopyBtn text={query} />
-              <Chip label={typeConf.label} size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: `${typeConf.color}18`, color: typeConf.color, border: `1px solid ${typeConf.color}30` }} />
-              <Chip
-                icon={statusConf.icon as React.ReactElement}
-                label={statusConf.label}
-                size="small"
-                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: `${statusConf.color}15`, color: statusConf.color,
-                  '& .MuiChip-icon': { color: statusConf.color }, border: `1px solid ${statusConf.color}30` }}
-              />
-              {isPrivate && <Chip label="Private IP" size="small" color="info" sx={{ height: 20, fontSize: 10 }} />}
-            </Box>
-
-            {/* Key identifiers row */}
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
-              {[
-                ['IP', identity.ip], ['MAC', identity.mac], ['Host', identity.hostname],
-                ['User', identity.user], ['Agent', identity.agent],
-              ].filter(([, v]) => v && v !== query).map(([k, v]) => (
-                <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase' }}>{k}:</Typography>
-                  <Typography sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', color: 'text.secondary' }}>{v}</Typography>
-                  <CopyBtn text={v} />
-                </Box>
-              ))}
-            </Box>
-
-            {/* Stats row */}
-            <Grid container spacing={1}>
-              {[
-                { label: 'Events',    value: data.count || 0,          color: BRAND.purple },
-                { label: 'Critical',  value: levelDist.critical || 0,  color: '#EF4444' },
-                { label: 'High',      value: levelDist.high || 0,      color: BRAND.orange },
-                { label: 'Medium',    value: levelDist.medium || 0,    color: '#EAB308' },
-                { label: 'First Seen',value: identity.first_seen ? format(new Date(identity.first_seen), 'dd/MM HH:mm') : '—', isText: true },
-                { label: 'Last Seen', value: identity.last_seen ? format(new Date(identity.last_seen), 'dd/MM HH:mm') : '—', isText: true },
-              ].map(({ label, value, color, isText }) => (
-                <Grid item xs={6} sm={4} md={2} key={label}>
-                  <Box sx={{ px: 1.25, py: 0.85, bgcolor: 'rgba(123,91,164,0.05)', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(123,91,164,0.1)' }}>
-                    <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', mb: 0.25 }}>
-                      {label}
-                    </Typography>
-                    <Typography sx={{ fontSize: isText ? 11 : 18, fontWeight: 800, color: color || 'text.primary', lineHeight: 1.1, fontFamily: isText ? '"IBM Plex Mono",monospace' : 'inherit' }}>
-                      {isText ? value : Number(value).toLocaleString()}
-                    </Typography>
-                  </Box>
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-
-          {/* Risk gauge + threat score */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-            <RiskGauge score={identity.risk_score || 0} />
-            {abuseScore !== undefined && !isPrivate && (
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.25 }}>AbuseIPDB</Typography>
-                <Typography sx={{ fontSize: 14, fontWeight: 800,
-                  color: abuseScore >= 75 ? '#EF4444' : abuseScore >= 30 ? BRAND.orange : '#22C55E' }}>
-                  {abuseScore}%
-                </Typography>
-              </Box>
-            )}
-          </Box>
-
-          <IconButton size="small" onClick={onClose} sx={{ alignSelf: 'flex-start' }}>
-            <CloseRoundedIcon sx={{ fontSize: 17 }} />
-          </IconButton>
-        </Box>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Activity Section ──────────────────────────────────────────────────────────
-interface ActivitySectionProps {
-  data: any;
-}
-
-function ActivitySection({ data }: ActivitySectionProps) {
-  const events  = data.events || []
-  const hourly  = data.hourly || []
-  const [expanded, setExpanded] = useState(true)
-  const [filterLevel, setFilterLevel] = useState(0)
-  const [filterSrc, setFilterSrc]     = useState('')
-
-  const filtered = events.filter((e: any) => {
-    const lv = Number(e.rule?.level || 0)
-    if (filterLevel && lv < filterLevel) return false
-    if (filterSrc && e.predecoder?.program_name !== filterSrc) return false
-    return true
+  const investigationQuery = useQuery({
+    queryKey: [
+      'investigate',
+      submittedRequest?.query ?? '',
+      submittedRequest?.type ?? 'unknown',
+      submittedRequest?.range ?? '30d',
+      submittedRequest?.direction ?? 'both',
+      submittedRequest?.severity ?? 'all',
+    ],
+    queryFn: () => investigate(submittedRequest as InvestigationRequest),
+    enabled: Boolean(submittedRequest?.query),
+    retry: 1,
+    staleTime: 20000,
   })
 
-  const allSources: string[] = [...new Set(events.map((e: any) => e.predecoder?.program_name).filter(Boolean))] as string[]
+  const result = investigationQuery.data
+
+  const metrics = useMemo(() => {
+    if (!result) return []
+    return [
+      { title: 'Total Related Alerts', value: result.summary.totalAlerts, color: '#7B5BA4', subtitle: 'ในช่วงเวลาที่เลือก' },
+      { title: 'Critical / High', value: `${result.summary.criticalAlerts}/${result.summary.highAlerts}`, color: '#EF4444', subtitle: 'priority queue' },
+      { title: 'First Seen', value: formatTimestamp(result.profile.firstSeen), color: '#38BDF8', subtitle: 'first telemetry' },
+      { title: 'Last Seen', value: formatTimestamp(result.profile.lastSeen), color: '#22C55E', subtitle: 'latest telemetry' },
+      { title: 'Related Agents', value: result.summary.relatedAgents, color: '#F17422', subtitle: 'linked agents' },
+      { title: 'Related Rules', value: result.summary.relatedRules, color: '#EAB308', subtitle: 'linked rule ids' },
+    ]
+  }, [result])
+
+  const riskFactors = useMemo(() => {
+    if (!result) return []
+    const factors: string[] = []
+    if ((result.profile.riskScore ?? 0) >= 8) factors.push('risk score สูงกว่า 8/10')
+    if (result.summary.criticalAlerts > 0) factors.push(`มี critical alerts ${result.summary.criticalAlerts} รายการ`)
+    if ((result.hostContext?.criticalCves ?? 0) > 0) factors.push(`มี critical CVEs ${result.hostContext?.criticalCves}`)
+    if ((result.hostContext?.scaFailed ?? 0) > 0) factors.push(`มี failed SCA checks ${result.hostContext?.scaFailed}`)
+    if ((result.threatIntel ?? []).some((item) => item.status === 'available' && (item.score ?? 0) >= 70)) {
+      factors.push('Threat intelligence ให้คะแนนเสี่ยงสูงจาก external feed')
+    }
+    return factors.slice(0, 5)
+  }, [result])
+
+  const topRelatedAgent = useMemo(
+    () => result?.relatedEntities?.find((entity) => entity.type === 'agent'),
+    [result],
+  )
+  const topRelatedRule = useMemo(
+    () => result?.relatedEntities?.find((entity) => entity.type === 'rule'),
+    [result],
+  )
+  const topRelatedSource = useMemo(
+    () => result?.relatedEntities?.find((entity) => entity.type === 'ip' || entity.type === 'source'),
+    [result],
+  )
+  const topRelatedDestination = useMemo(
+    () => result?.relatedEntities?.find((entity) => entity.type === 'destination'),
+    [result],
+  )
+
+  const handleSearch = (overrideQuery?: string, overrideType?: InvestigationQueryType | 'auto') => {
+    const nextQuery = (overrideQuery ?? query).trim()
+    const nextTypeMode = overrideType ?? selectedType
+    const error = validateQuery(nextQuery, nextTypeMode)
+
+    setQuery(nextQuery)
+    setSelectedType(nextTypeMode)
+
+    if (error) {
+      setQueryError(error)
+      return
+    }
+
+    const request: InvestigationRequest = {
+      query: nextQuery,
+      type: nextTypeMode === 'auto' ? detectInvestigationQueryType(nextQuery) : nextTypeMode,
+      range,
+      direction,
+      severity,
+    }
+
+    setQueryError(null)
+    setTechniqueFilter(null)
+    setActiveTab('timeline')
+    setSubmittedRequest(request)
+    setRecentSearches(saveRecentSearch(nextQuery))
+
+    const nextParams = new URLSearchParams()
+    nextParams.set('q', request.query)
+    nextParams.set('type', nextTypeMode)
+    nextParams.set('range', request.range)
+    nextParams.set('direction', request.direction ?? 'both')
+    nextParams.set('severity', request.severity ?? 'all')
+    setSearchParams(nextParams, { replace: false })
+  }
+
+  const handleInvestigateEntity = (value: string, type?: InvestigationQueryType) => {
+    setQuery(value)
+    handleSearch(value, type ?? 'auto')
+  }
+
+  const handleCopySummary = () => {
+    if (!result) return
+    const summaryLines = [
+      `Investigation: ${result.profile.displayName}`,
+      `Type: ${result.profile.type}`,
+      `Total alerts: ${result.summary.totalAlerts}`,
+      `Critical: ${result.summary.criticalAlerts}`,
+      `High: ${result.summary.highAlerts}`,
+      `First seen: ${formatTimestamp(result.profile.firstSeen)}`,
+      `Last seen: ${formatTimestamp(result.profile.lastSeen)}`,
+      `Top related rule: ${topRelatedRule?.value ?? '—'}`,
+      `Top related agent: ${topRelatedAgent?.value ?? '—'}`,
+    ]
+    navigator.clipboard.writeText(summaryLines.join('\n'))
+    enqueueSnackbar('คัดลอก investigation summary แล้ว', { variant: 'info', autoHideDuration: 1600 })
+  }
+
+  const handleExport = async () => {
+    if (!submittedRequest) return
+    const blob = await exportInvestigationEvidence(submittedRequest.query, submittedRequest.range, submittedRequest.type)
+    downloadBlob(blob, `investigation-${submittedRequest.query.replace(/\s+/g, '_')}-${submittedRequest.range}.json`)
+  }
+
+  const openEvidence = (item: TimelineEvent | InvestigationAlert) => {
+    if ('ruleLevel' in item) {
+      setSelectedEvidence({
+        title: item.description,
+        subtitle: `${item.ruleId} · ${item.agentName ?? item.decoder ?? 'Wazuh alert'}`,
+        raw: item.raw,
+        notes: [
+          `Timestamp: ${formatTimestamp(item.timestamp)}`,
+          `Severity: ${item.severity}`,
+          `Source: ${item.sourceIp ?? '—'}`,
+          `Destination: ${item.destinationIp ?? '—'}`,
+        ],
+      })
+      return
+    }
+
+    setSelectedEvidence({
+      title: item.title,
+      subtitle: item.description,
+      raw: item.raw,
+      notes: [
+        `Timestamp: ${formatTimestamp(item.timestamp)}`,
+        `Severity: ${item.severity}`,
+        `Rule ID: ${item.ruleId ?? '—'}`,
+        `Agent: ${item.agentName ?? '—'}`,
+      ],
+    })
+  }
 
   return (
-    <Card sx={{ mb: 2 }}>
-      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        cursor: 'pointer', '&:hover': { bgcolor: 'rgba(123,91,164,0.03)' } }}
-        onClick={() => setExpanded(o => !o)}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TimelineRoundedIcon sx={{ fontSize: 16, color: BRAND.purple }} />
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>กิจกรรม &amp; Event Log</Typography>
-          <Chip label={events.length} size="small" color="primary" sx={{ height: 18, fontSize: 10, '& .MuiChip-label': { px: 0.7 } }} />
-        </Box>
-        <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>{expanded ? 'ซ่อน' : 'แสดง'}</Typography>
-      </Box>
+    <Box className="space-y-6">
+      <PageHeader
+        title="วิเคราะห์เหตุการณ์"
+        subtitle="ค้นหาและเชื่อมโยง IP, Host, User, IOC และ Alert จาก Wazuh / OpenSearch เพื่อทำ investigation แบบ end-to-end"
+        status="live"
+        statusLabel="INVESTIGATION READY"
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshRoundedIcon />}
+              onClick={() => investigationQuery.refetch()}
+              disabled={!submittedRequest || investigationQuery.isFetching}
+            >
+              Refresh
+            </Button>
+            <Button variant="outlined" startIcon={<DownloadRoundedIcon />} onClick={handleExport} disabled={!submittedRequest}>
+              Export Evidence
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<NotificationsActiveRoundedIcon />}
+              onClick={() => setActiveTab('alerts')}
+              disabled={!submittedRequest}
+            >
+              Open Alerts
+            </Button>
+          </>
+        }
+      />
 
-      <Collapse in={expanded}>
-        <Divider />
-        <CardContent sx={{ p: '14px 16px !important' }}>
-          {/* Timeline chart */}
-          {hourly.length > 1 && (
-            <Box sx={{ mb: 2 }}>
-              <Typography sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 600, mb: 1 }}>Activity Timeline (รายชั่วโมง)</Typography>
-              <ResponsiveContainer width="100%" height={110}>
-                <AreaChart data={hourly} margin={{ top: 2, right: 0, left: -35, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="invGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor={BRAND.purple} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={BRAND.purple} stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.1)" />
-                  <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} />
-                  <RechartTooltip contentStyle={ChartTip} formatter={v => [v, 'Events']} />
-                  <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={2} fill="url(#invGrad)" dot={false}
-                    activeDot={{ r: 3, fill: BRAND.purple, strokeWidth: 0 }} />
-                </AreaChart>
-              </ResponsiveContainer>
+      <InvestigationSearchHero
+        query={query}
+        detectedType={detectedType}
+        selectedType={selectedType}
+        range={range}
+        direction={direction}
+        severity={severity}
+        advancedOpen={advancedOpen}
+        error={queryError}
+        recentSearches={recentSearches}
+        searching={investigationQuery.isFetching}
+        onQueryChange={setQuery}
+        onSelectedTypeChange={setSelectedType}
+        onRangeChange={setRange}
+        onDirectionChange={setDirection}
+        onSeverityChange={setSeverity}
+        onToggleAdvanced={() => setAdvancedOpen((current) => !current)}
+        onSearch={() => handleSearch()}
+        onUseQuery={(value) => handleInvestigateEntity(value)}
+      />
+
+      {!submittedRequest ? (
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <SectionCard title="Entity Correlation" subtitle="เชื่อมโยง alert, asset, IOC และ host posture" icon={<InsightsRoundedIcon />} accent="#7B5BA4">
+              <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.8 }}>
+                หน้าใหม่นี้ออกแบบให้ analyst เริ่มจาก query เดียว แล้วเห็น profile, timeline, alerts, MITRE และ compliance ในบริบทเดียวกัน
+              </Typography>
+            </SectionCard>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <SectionCard title="Threat Intel" subtitle="รองรับ external intelligence แบบ multi-source" icon={<HistoryEduRoundedIcon />} accent="#38BDF8">
+              <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.8 }}>
+                ถ้า backend ยังไม่มี API key ระบบจะระบุชัดว่า not configured แทนการแสดงคะแนนปลอม
+              </Typography>
+            </SectionCard>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <SectionCard title="Raw Evidence Safe View" subtitle="เปิด JSON ได้แบบปลอดภัย" icon={<DataObjectRoundedIcon />} accent="#22C55E">
+              <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.8 }}>
+                raw evidence จะถูกแสดงเป็น text/json เท่านั้น ไม่มีการ render HTML จาก backend และสามารถ copy/download ต่อได้
+              </Typography>
+            </SectionCard>
+          </Grid>
+        </Grid>
+      ) : investigationQuery.isLoading ? (
+        <SectionCard title="Loading Investigation" subtitle="กำลังรวบรวมข้อมูลจาก Wazuh / OpenSearch / Compliance / IOC" icon={<InsightsRoundedIcon />} accent="#7B5BA4" loading>
+          <Box />
+        </SectionCard>
+      ) : investigationQuery.isError ? (
+        <SectionCard
+          title="Investigation Error"
+          subtitle="ไม่สามารถโหลด investigation result ได้"
+          icon={<InsightsRoundedIcon />}
+          accent="#EF4444"
+          error={<ErrorState message="เกิดข้อผิดพลาดระหว่างโหลด investigation data กรุณาตรวจสอบ backend และลองใหม่อีกครั้ง" onRetry={() => investigationQuery.refetch()} />}
+        >
+          <Box />
+        </SectionCard>
+      ) : result ? (
+        <>
+          <Grid container spacing={1.5}>
+            {metrics.map((metric) => (
+              <Grid key={metric.title} item xs={12} sm={6} md={4} xl={2}>
+                <MetricCard
+                  title={metric.title}
+                  value={metric.value}
+                  subtitle={metric.subtitle}
+                  color={metric.color}
+                  accent
+                  compact={metric.title !== 'First Seen' && metric.title !== 'Last Seen'}
+                />
+              </Grid>
+            ))}
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} xl={8.5}>
+              <Stack spacing={2}>
+                <EntityProfileCard profile={result.profile} />
+
+                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                  <Tabs
+                    value={activeTab}
+                    onChange={(_, value: InvestigationTab) => setActiveTab(value)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                  >
+                    <Tab value="timeline" label={`Timeline (${result.timeline.length})`} />
+                    <Tab value="alerts" label={`Alerts (${result.alerts.length})`} />
+                    <Tab value="threat-intel" label="Threat Intel" />
+                    <Tab value="host-context" label="Host Context" />
+                    <Tab value="mitre" label="MITRE" />
+                    <Tab value="compliance" label="Compliance" />
+                    <Tab value="related-entities" label="Related Entities" />
+                    <Tab value="raw-evidence" label="Raw Evidence" />
+                  </Tabs>
+                </Box>
+
+                {activeTab === 'timeline' && (
+                  <InvestigationTimeline timeline={result.timeline} onSelectEvent={openEvidence} />
+                )}
+
+                {activeTab === 'alerts' && (
+                  <RelatedAlertsTable
+                    alerts={result.alerts}
+                    onSelectAlert={openEvidence}
+                    techniqueFilter={techniqueFilter}
+                    onClearTechniqueFilter={() => setTechniqueFilter(null)}
+                  />
+                )}
+
+                {activeTab === 'threat-intel' && <ThreatIntelPanel results={result.threatIntel} />}
+                {activeTab === 'host-context' && <HostContextPanel hostContext={result.hostContext} />}
+                {activeTab === 'mitre' && (
+                  <MitrePanel
+                    summary={result.mitreSummary}
+                    onFilterTechnique={(technique) => {
+                      setTechniqueFilter(technique)
+                      setActiveTab('alerts')
+                    }}
+                  />
+                )}
+                {activeTab === 'compliance' && <CompliancePanel summary={result.complianceSummary} />}
+                {activeTab === 'related-entities' && (
+                  <RelatedEntitiesPanel
+                    entities={result.relatedEntities}
+                    history={recentSearches}
+                    onSelectEntity={(value, type) => handleInvestigateEntity(value, type)}
+                  />
+                )}
+                {activeTab === 'raw-evidence' && (
+                  <RawEvidencePanel
+                    raw={result.raw}
+                    filename={`investigation-${result.profile.displayName.replace(/\s+/g, '_')}.json`}
+                  />
+                )}
+              </Stack>
+            </Grid>
+
+            <Grid item xs={12} xl={3.5}>
+              <Stack spacing={2}>
+                <RiskScoreCard profile={result.profile} riskFactors={riskFactors} />
+
+                <SectionCard title="Insight Rail" subtitle="บริบทสรุปที่ analyst ใช้ตัดสินใจต่อได้เร็ว" icon={<InsightsRoundedIcon />} accent="#38BDF8">
+                  <Stack spacing={1.5}>
+                    <Box sx={{ p: 1.5, borderRadius: '16px', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <Typography sx={{ fontSize: 10.5, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                        Overview
+                      </Typography>
+                      <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 0.8, lineHeight: 1.75 }}>
+                        {result.summary.overview}
+                      </Typography>
+                    </Box>
+
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                      {result.threatIntel?.some((item) => item.status === 'not_configured') ? (
+                        <Chip label="Threat Intel feed ยังไม่ครบ" color="warning" />
+                      ) : null}
+                      {!result.hostContext ? <Chip label="Host context จำกัด" color="default" /> : null}
+                      {!result.complianceSummary ? <Chip label="Compliance context จำกัด" color="default" /> : null}
+                    </Stack>
+
+                    <Box>
+                      <Typography sx={{ fontSize: 10.5, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.12em', mb: 0.6 }}>
+                        Top Related Rule
+                      </Typography>
+                      <MonoValue value={topRelatedRule?.value ?? '—'} />
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: 10.5, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.12em', mb: 0.6 }}>
+                        Top Related Agent
+                      </Typography>
+                      <MonoValue value={topRelatedAgent?.value ?? '—'} />
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontSize: 10.5, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.12em', mb: 0.6 }}>
+                        Top Source / Destination
+                      </Typography>
+                      <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+                        SRC: {topRelatedSource?.value ?? '—'}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mt: 0.4 }}>
+                        DST: {topRelatedDestination?.value ?? '—'}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </SectionCard>
+
+                <SuggestedActionsPanel
+                  profile={result.profile}
+                  sourceIp={topRelatedSource?.value}
+                  destinationIp={topRelatedDestination?.value}
+                  onInvestigate={(value) => handleInvestigateEntity(value)}
+                  onExport={handleExport}
+                  onCopySummary={handleCopySummary}
+                  onOpenAlerts={() => setActiveTab('alerts')}
+                />
+              </Stack>
+            </Grid>
+          </Grid>
+        </>
+      ) : (
+        <EmptyState title="พร้อมเริ่ม investigation" description="กรอก entity ด้านบนเพื่อเริ่มค้นหาและเชื่อมโยงข้อมูลจาก Wazuh/OpenSearch" />
+      )}
+
+      <DetailPanel
+        open={Boolean(selectedEvidence)}
+        onClose={() => setSelectedEvidence(null)}
+        title={selectedEvidence?.title ?? 'Evidence'}
+        subtitle={selectedEvidence?.subtitle}
+        width={620}
+      >
+        <Stack spacing={1.5}>
+          {selectedEvidence?.notes?.map((note) => (
+            <Box key={note} sx={{ p: 1.2, borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.04)' }}>
+              <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>{note}</Typography>
             </Box>
-          )}
+          ))}
 
-          {/* Level distribution bar */}
-          {data.level_dist && (
-            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-              {[['Critical', '#EF4444', data.level_dist.critical], ['High', BRAND.orange, data.level_dist.high],
-                ['Medium', '#EAB308', data.level_dist.medium], ['Low', '#22C55E', data.level_dist.low]].map(([l, c, n]) => (
-                Number(n) > 0 && (
-                  <Box key={String(l)} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.4, borderRadius: '7px', bgcolor: `${c}14`, border: `1px solid ${c}25` }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: String(c), boxShadow: `0 0 5px ${c}80` }} />
-                    <Typography sx={{ fontSize: 10, fontWeight: 700, color: String(c) }}>{String(n)}</Typography>
-                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{String(l)}</Typography>
-                  </Box>
-                )
-              ))}
-            </Box>
-          )}
-
-          {/* Filters */}
-          <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 110 }}>
-              <Select value={filterLevel} onChange={e => setFilterLevel(Number(e.target.value))} displayEmpty sx={{ fontSize: 12 }}>
-                <MenuItem value={0}>ทุก Level</MenuItem>
-                <MenuItem value={15}>Critical (15+)</MenuItem>
-                <MenuItem value={12}>High (12+)</MenuItem>
-                <MenuItem value={7}>Medium (7+)</MenuItem>
-              </Select>
-            </FormControl>
-            {allSources.length > 1 && (
-              <FormControl size="small" sx={{ minWidth: 130 }}>
-                <Select value={filterSrc} onChange={e => setFilterSrc(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
-                  <MenuItem value="">ทุก Source</MenuItem>
-                  {allSources.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                </Select>
-              </FormControl>
-            )}
-            <Typography sx={{ fontSize: 11, color: 'text.disabled', alignSelf: 'center', ml: 0.5 }}>
-              แสดง {filtered.length} / {events.length} events
+          <Box sx={{ p: 2, borderRadius: '18px', bgcolor: 'rgba(10,16,28,0.72)', border: '1px solid rgba(56,189,248,0.16)' }}>
+            <Typography
+              component="pre"
+              sx={{
+                m: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontSize: 12,
+                lineHeight: 1.7,
+                color: '#d8e4ff',
+              }}
+            >
+              {jsonToDisplay(selectedEvidence?.raw ?? {})}
             </Typography>
           </Box>
-
-          {/* Events table */}
-          <Box sx={{ maxHeight: 340, overflow: 'auto' }} className="scrollbar-thin">
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {['เวลา', 'Level', 'รายละเอียด', 'Source', 'Src IP', 'Dst IP', 'Agent'].map(h => (
-                    <TableCell key={h} sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em', py: 0.75, whiteSpace: 'nowrap' }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} sx={{ textAlign: 'center', py: 3, color: 'text.disabled', fontSize: 12 }}>ไม่มีข้อมูล</TableCell></TableRow>
-                ) : filtered.slice(0, 200).map((e: any, i: number) => {
-                  const lv = Number(e.rule?.level || 0)
-                  const groups: string[] = e.rule?.groups || []
-                  const mitreTags = groups.filter(g => g.startsWith('attack.') || g.startsWith('mitre'))
-                  return (
-                    <TableRow key={i} hover sx={{ bgcolor: lv >= 15 ? 'rgba(239,68,68,0.04)' : 'transparent' }}>
-                      <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.9 }}>
-                        {e['@timestamp'] ? format(new Date(e['@timestamp']), 'dd/MM HH:mm:ss') : '-'}
-                      </TableCell>
-                      <TableCell sx={{ py: 0.9 }}><LevelChip level={lv} /></TableCell>
-                      <TableCell sx={{ py: 0.9, maxWidth: 260 }}>
-                        <Typography sx={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
-                          {e.rule?.description || '-'}
-                        </Typography>
-                        {mitreTags.length > 0 && (
-                          <Box sx={{ display: 'flex', gap: 0.3, mt: 0.3, flexWrap: 'wrap' }}>
-                            {mitreTags.slice(0, 3).map(t => (
-                              <Chip key={t} label={t.replace('attack.', '')} size="small"
-                                sx={{ height: 14, fontSize: 8, bgcolor: 'rgba(123,91,164,0.15)', color: BRAND.purpleLight, '& .MuiChip-label': { px: 0.5 } }} />
-                            ))}
-                          </Box>
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ py: 0.9 }}>
-                        <Chip label={e.predecoder?.program_name || '-'} size="small" variant="outlined"
-                          sx={{ height: 16, fontSize: 9, borderColor: 'rgba(123,91,164,0.2)', color: 'text.secondary' }} />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', py: 0.9 }}>{e.data?.srcip || '-'}</TableCell>
-                      <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', py: 0.9 }}>{e.data?.dstip || '-'}</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.9 }}>{e.agent?.name || '-'}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Box>
-        </CardContent>
-      </Collapse>
-    </Card>
-  )
-}
-
-// ── Network Section (DHCP + WiFi) ─────────────────────────────────────────────
-interface NetworkSectionProps {
-  data: any;
-}
-
-function NetworkSection({ data }: NetworkSectionProps) {
-  const dhcp = data.dhcp || []
-  const wifi = data.wifi || []
-  const [tab, setTab] = useState(0)
-  const hasDHCP = dhcp.length > 0
-  const hasWiFi = wifi.length > 0
-
-  if (!hasDHCP && !hasWiFi) return null
-
-  return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel count={dhcp.length + wifi.length}>เครือข่าย (DHCP &amp; WiFi)</SectionLabel>
-        <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
-          {hasDHCP && (
-            <Button size="small" startIcon={<NetworkCheckRoundedIcon sx={{ fontSize: 14 }} />}
-              onClick={() => setTab(0)}
-              sx={{ borderRadius: '8px', fontSize: 11, py: 0.5,
-                bgcolor: tab === 0 ? 'rgba(123,91,164,0.15)' : 'transparent',
-                color: tab === 0 ? BRAND.purpleLight : 'text.secondary' }}>
-              DHCP ({dhcp.length})
-            </Button>
-          )}
-          {hasWiFi && (
-            <Button size="small" startIcon={<WifiRoundedIcon sx={{ fontSize: 14 }} />}
-              onClick={() => setTab(1)}
-              sx={{ borderRadius: '8px', fontSize: 11, py: 0.5,
-                bgcolor: tab === 1 ? 'rgba(123,91,164,0.15)' : 'transparent',
-                color: tab === 1 ? BRAND.purpleLight : 'text.secondary' }}>
-              WiFi ({wifi.length})
-            </Button>
-          )}
-        </Box>
-
-        <Box sx={{ maxHeight: 280, overflow: 'auto' }} className="scrollbar-thin">
-          {tab === 0 && hasDHCP && (
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {['เวลา', 'Action', 'IP Address', 'MAC Address', 'Hostname', 'Agent'].map(h => (
-                    <TableCell key={h} sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', textTransform: 'uppercase', py: 0.75 }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dhcp.map((e: any, i: number) => (
-                  <TableRow key={i} hover>
-                    <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.9 }}>
-                      {e['@timestamp'] ? format(new Date(e['@timestamp']), 'dd/MM HH:mm') : '-'}
-                    </TableCell>
-                    <TableCell sx={{ py: 0.9 }}>
-                      <Chip label={e.data?.dhcp_action || '-'} size="small"
-                        color={e.data?.dhcp_action === 'ACK' ? 'success' : e.data?.dhcp_action === 'RELEASE' ? 'warning' : 'default'}
-                        sx={{ height: 18, fontSize: 9, fontWeight: 700 }} />
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: '"IBM Plex Mono"', fontSize: 11, py: 0.9 }}>{e.data?.dhcp_ip || '-'}</TableCell>
-                    <TableCell sx={{ fontFamily: '"IBM Plex Mono"', fontSize: 10, py: 0.9 }}>{e.data?.dhcp_mac || '-'}</TableCell>
-                    <TableCell sx={{ fontSize: 11, py: 0.9 }}>{e.data?.dhcp_hostname || '-'}</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.9 }}>{e.agent?.name || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {tab === 1 && hasWiFi && (
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  {['เวลา', 'Event', 'IP Address', 'MAC', 'User', 'AP MAC', 'Agent'].map(h => (
-                    <TableCell key={h} sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', textTransform: 'uppercase', py: 0.75 }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {wifi.map((e: any, i: number) => (
-                  <TableRow key={i} hover>
-                    <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.9 }}>
-                      {e['@timestamp'] ? format(new Date(e['@timestamp']), 'dd/MM HH:mm') : '-'}
-                    </TableCell>
-                    <TableCell sx={{ py: 0.9 }}>
-                      <Chip label={e.data?.ac_msg_type || '-'} size="small" variant="outlined"
-                        sx={{ height: 16, fontSize: 9, borderColor: 'rgba(56,189,248,0.35)', color: '#38BDF8' }} />
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: '"IBM Plex Mono"', fontSize: 11, py: 0.9 }}>{e.data?.srcip || '-'}</TableCell>
-                    <TableCell sx={{ fontFamily: '"IBM Plex Mono"', fontSize: 10, py: 0.9 }}>{e.data?.mac || '-'}</TableCell>
-                    <TableCell sx={{ fontSize: 11, py: 0.9 }}>{e.data?.dstuser || '-'}</TableCell>
-                    <TableCell sx={{ fontFamily: '"IBM Plex Mono"', fontSize: 10, py: 0.9 }}>{e.data?.ap_mac || '-'}</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.9 }}>{e.agent?.name || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Box>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Threat Intel Section ──────────────────────────────────────────────────────
-interface ThreatIntelSectionProps {
-  enrichData: any;
-  entityType: string;
-}
-
-function ThreatIntelSection({ enrichData, entityType }: ThreatIntelSectionProps) {
-  if (entityType !== 'ip' && entityType !== 'auto') return null
-  if (!enrichData) return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel>Threat Intelligence</SectionLabel>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CircularProgress size={16} sx={{ color: BRAND.purple }} />
-          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>กำลังโหลดข้อมูล Threat Intelligence...</Typography>
-        </Box>
-      </CardContent>
-    </Card>
-  )
-
-  if (enrichData.is_private) return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel>Threat Intelligence</SectionLabel>
-        <Alert severity="info" sx={{ fontSize: 12 }}>Private IP — ไม่ตรวจสอบใน external threat feeds</Alert>
-      </CardContent>
-    </Card>
-  )
-
-  const feeds = enrichData.feeds || {}
-  const abuse = feeds.abuseipdb || {}
-  const otx   = feeds.otx || {}
-  const shodan = feeds.shodan || {}
-  const vt    = feeds.virustotal || {}
-
-  const feedCards = [
-    {
-      name: 'ABUSEIPDB', color: '#EF4444', available: abuse.available,
-      main: abuse.abuseConfidenceScore ?? '—',
-      mainLabel: 'Confidence %',
-      rows: [
-        ['Country', abuse.countryName || abuse.countryCode],
-        ['ISP', abuse.isp],
-        ['Reports', abuse.totalReports],
-        ['Domain', abuse.domain],
-        ['Usage', abuse.usageType],
-        ['Whitelisted', abuse.isWhitelisted ? 'Yes' : 'No'],
-      ] as [string, any][],
-      bar: abuse.abuseConfidenceScore,
-      barColor: (abuse.abuseConfidenceScore || 0) >= 75 ? '#EF4444' : (abuse.abuseConfidenceScore || 0) >= 30 ? BRAND.orange : '#22C55E',
-    },
-    {
-      name: 'ALIENVAULT OTX', color: '#FF7A00', available: otx.available,
-      main: otx.pulse_count ?? '—',
-      mainLabel: 'Pulses',
-      rows: [
-        ['Country', otx.country_name],
-        ['ASN', otx.asn],
-        ['Malware', otx.malware_count],
-        ['City', otx.city],
-      ] as [string, any][],
-      extra: otx.pulse_refs?.length > 0 ? otx.pulse_refs.slice(0, 3).map((p: any) => p.name) : null,
-    },
-    {
-      name: 'SHODAN', color: '#CC0000', available: shodan.available,
-      main: shodan.ports?.length ?? '—',
-      mainLabel: 'Open Ports',
-      rows: [
-        ['Org', shodan.org],
-        ['Country', shodan.country_name],
-        ['ASN', shodan.asn],
-        ['CVEs', shodan.vulns?.length],
-      ] as [string, any][],
-      ports: shodan.ports?.slice(0, 12) as number[],
-      vulns: shodan.vulns?.slice(0, 5) as string[],
-    },
-    {
-      name: 'VIRUSTOTAL', color: '#395BA9', available: vt.available,
-      main: vt.found ? `${vt.malicious || 0}/${vt.total || 0}` : '—',
-      mainLabel: 'Detections',
-      rows: [
-        ['Country', vt.country],
-        ['AS Owner', vt.as_owner],
-        ['Suspicious', vt.suspicious],
-        ['Harmless', vt.harmless],
-      ] as [string, any][],
-      engines: vt.malicious_engines?.slice(0, 3) as { engine: string; result: string }[],
-    },
-  ]
-
-  return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel>Threat Intelligence (4 แหล่ง)</SectionLabel>
-        <Grid container spacing={1.5}>
-          {feedCards.map(fc => (
-            <Grid item xs={12} sm={6} lg={3} key={fc.name}>
-              <Box sx={{
-                p: 1.5, borderRadius: '12px', height: '100%',
-                border: `1px solid ${fc.available ? `${fc.color}28` : 'rgba(123,91,164,0.1)'}`,
-                bgcolor: fc.available ? `${fc.color}06` : 'rgba(123,91,164,0.03)',
-              }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography sx={{ fontSize: 9, fontWeight: 800, color: fc.available ? fc.color : 'text.disabled', letterSpacing: '0.07em' }}>
-                    {fc.name}
-                  </Typography>
-                  {!fc.available && <Chip label="N/A" size="small" sx={{ height: 14, fontSize: 8, opacity: 0.5 }} />}
-                </Box>
-                {fc.available ? (
-                  <>
-                    <Typography sx={{ fontSize: 22, fontWeight: 900, color: fc.barColor || fc.color, lineHeight: 1, mb: 0.25 }}>
-                      {fc.main}
-                    </Typography>
-                    <Typography sx={{ fontSize: 9, color: 'text.disabled', mb: fc.bar !== undefined ? 0.75 : 1 }}>{fc.mainLabel}</Typography>
-                    {fc.bar !== undefined && (
-                      <LinearProgress variant="determinate" value={fc.bar || 0} sx={{
-                        height: 4, borderRadius: 2, mb: 1,
-                        bgcolor: `${fc.color}15`,
-                        '& .MuiLinearProgress-bar': { bgcolor: fc.barColor, borderRadius: 2 },
-                      }} />
-                    )}
-                    {fc.rows.filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== 0).slice(0, 4).map(([k, v]) => (
-                      <Box key={k} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.3 }}>
-                        <Typography sx={{ fontSize: 9, color: 'text.disabled', textTransform: 'uppercase' }}>{k}</Typography>
-                        <Typography sx={{ fontSize: 10, fontWeight: 600, color: 'text.secondary', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                          {String(v)}
-                        </Typography>
-                      </Box>
-                    ))}
-                    {fc.ports && fc.ports.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography sx={{ fontSize: 9, color: 'text.disabled', mb: 0.3, textTransform: 'uppercase' }}>Ports</Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3 }}>
-                          {fc.ports.map(p => (
-                            <Chip key={p} label={p} size="small" sx={{
-                              height: 15, fontSize: 8, fontFamily: '"IBM Plex Mono"',
-                              bgcolor: [22, 23, 3389, 4444, 6379].includes(p) ? 'rgba(239,68,68,0.15)' : 'rgba(123,91,164,0.1)',
-                              color: [22, 23, 3389, 4444, 6379].includes(p) ? '#EF4444' : 'text.secondary',
-                              '& .MuiChip-label': { px: 0.5 },
-                            }} />
-                          ))}
-                        </Box>
-                      </Box>
-                    )}
-                    {fc.vulns && fc.vulns.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography sx={{ fontSize: 9, color: '#EF4444', textTransform: 'uppercase', fontWeight: 700, mb: 0.3 }}>CVEs</Typography>
-                        {fc.vulns.map(v => (
-                          <Chip key={v} label={v} size="small" sx={{ height: 14, fontSize: 8, mr: 0.3, mb: 0.2, bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444', '& .MuiChip-label': { px: 0.5 } }} />
-                        ))}
-                      </Box>
-                    )}
-                    {fc.extra && fc.extra.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography sx={{ fontSize: 9, color: 'text.disabled', textTransform: 'uppercase', mb: 0.3 }}>Threat Pulses</Typography>
-                        {fc.extra.map((p: string, i: number) => (
-                          <Typography key={i} sx={{ fontSize: 9, color: 'text.secondary', lineHeight: 1.4 }} className="line-clamp-2">{p}</Typography>
-                        ))}
-                      </Box>
-                    )}
-                    {fc.engines && fc.engines.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography sx={{ fontSize: 9, color: '#EF4444', textTransform: 'uppercase', fontWeight: 700, mb: 0.3 }}>Detected by</Typography>
-                        {fc.engines.map((eng, i) => (
-                          <Typography key={i} sx={{ fontSize: 9, color: '#EF4444' }}>{eng.engine}: {eng.result}</Typography>
-                        ))}
-                      </Box>
-                    )}
-                  </>
-                ) : (
-                  <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
-                )}
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── MITRE ATT&CK Section ──────────────────────────────────────────────────────
-interface MitreSectionProps {
-  mitre?: any;
-}
-
-function MitreSection({ mitre = {} }: MitreSectionProps) {
-  const tactics: string[]    = mitre.tactics || []
-  const techniques: string[] = mitre.techniques || []
-  if (!tactics.length && !techniques.length) return null
-
-  return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel>MITRE ATT&amp;CK Mapping</SectionLabel>
-        {tactics.length > 0 && (
-          <Box sx={{ mb: 1.5 }}>
-            <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.75 }}>Tactics</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {tactics.map(t => (
-                <Chip key={t} label={t} size="small"
-                  sx={{ height: 20, fontSize: 10, fontWeight: 600, bgcolor: 'rgba(239,68,68,0.12)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)' }} />
-              ))}
-            </Box>
-          </Box>
-        )}
-        {techniques.length > 0 && (
-          <Box>
-            <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.75 }}>Techniques</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {techniques.map(t => (
-                <Chip key={t} label={t} size="small" variant="outlined"
-                  sx={{ height: 20, fontSize: 10, borderColor: 'rgba(123,91,164,0.35)', color: BRAND.purpleLight }} />
-              ))}
-            </Box>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Correlation Section ───────────────────────────────────────────────────────
-interface CorrelationSectionProps {
-  data: any;
-}
-
-function CorrelationSection({ data }: CorrelationSectionProps) {
-  const corr    = data.correlation || {}
-  const sources = data.top_sources || []
-  const relIPs  = (corr.related_ips || []).filter((x: any) => x.value) as { value: string; count: number }[]
-  const relMACs = (corr.related_macs || []).filter((x: any) => x.value) as { value: string; count: number }[]
-  const relUsers = (corr.related_users || []).filter((x: any) => x.value) as { value: string; count: number }[]
-  const relAgents = (corr.related_agents || []).filter((x: any) => x.value) as { value: string; count: number }[]
-  const topRules  = corr.top_rules || []
-  const conflicts = corr.ip_conflicts || {}
-
-  return (
-    <Card sx={{ mb: 2 }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <SectionLabel>ความสัมพันธ์ &amp; Correlation</SectionLabel>
-        <Grid container spacing={2}>
-          {/* Related entities */}
-          <Grid item xs={12} md={5}>
-            {[
-              { label: 'IP ที่เกี่ยวข้อง', items: relIPs, color: BRAND.purple, mono: true },
-              { label: 'MAC ที่เกี่ยวข้อง', items: relMACs, color: '#38BDF8', mono: true },
-              { label: 'ผู้ใช้ที่เกี่ยวข้อง', items: relUsers, color: BRAND.orange },
-              { label: 'Agents', items: relAgents, color: '#22C55E' },
-            ].filter(g => g.items.length > 0).map(g => (
-              <Box key={g.label} sx={{ mb: 1.5 }}>
-                <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.5 }}>{g.label}</Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {g.items.slice(0, 10).map(({ value, count }) => (
-                    <Tooltip key={value} title={`${count} events`}>
-                      <Chip label={value} size="small"
-                        sx={{ height: 20, fontSize: 10, cursor: 'default', fontFamily: g.mono ? '"IBM Plex Mono"' : 'inherit',
-                          bgcolor: `${g.color}15`, color: g.color, border: `1px solid ${g.color}25` }} />
-                    </Tooltip>
-                  ))}
-                </Box>
-              </Box>
-            ))}
-
-            {/* IP conflicts */}
-            {Object.keys(conflicts).length > 0 && (
-              <Alert severity="warning" sx={{ fontSize: 11, mb: 1 }}>
-                <b>IP Conflict:</b> พบ IP ที่ใช้ MAC หลายค่า
-                {Object.entries(conflicts).map(([ip, macs]: any) => (
-                  <Box key={ip} sx={{ mt: 0.5 }}>
-                    <Typography sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }}>{ip}: {macs.join(', ')}</Typography>
-                  </Box>
-                ))}
-              </Alert>
-            )}
-          </Grid>
-
-          {/* Top rules */}
-          <Grid item xs={12} md={4}>
-            <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.75 }}>Top Rules Triggered</Typography>
-            <Box sx={{ maxHeight: 250, overflow: 'auto' }} className="scrollbar-thin">
-              {topRules.length === 0 ? (
-                <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
-              ) : topRules.map((r: any) => (
-                <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75,
-                  p: 0.75, borderRadius: '8px', bgcolor: 'rgba(123,91,164,0.04)' }}>
-                  <Typography sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight, minWidth: 48, fontWeight: 700 }}>
-                    {r.id}
-                  </Typography>
-                  <Typography sx={{ fontSize: 10, color: 'text.secondary', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.description}
-                  </Typography>
-                  <Chip label={r.count} size="small" color="primary" sx={{ height: 16, fontSize: 9, minWidth: 24, '& .MuiChip-label': { px: 0.7 } }} />
-                </Box>
-              ))}
-            </Box>
-          </Grid>
-
-          {/* Top sources chart */}
-          {sources.length > 0 && (
-            <Grid item xs={12} md={3}>
-              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', mb: 0.75 }}>Log Sources</Typography>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={sources.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <XAxis type="number" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#9A90BF' }} width={80} axisLine={false} tickLine={false} />
-                  <RechartTooltip contentStyle={ChartTip} />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} fill={BRAND.purple} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Grid>
-          )}
-        </Grid>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Main Investigate Page ─────────────────────────────────────────────────────
-export default function InvestigatePage() {
-  const [searchParams] = useSearchParams()
-  const initialQ = searchParams.get('q') || ''
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const [query,      setQuery]     = useState(initialQ)
-  const [entityType, setEntityType]= useState('auto')
-  const [timeRange,  setTimeRange] = useState('30d')
-  const [loading,    setLoading]   = useState(false)
-  const [error,      setError]     = useState('')
-  const [result,     setResult]    = useState<any>(null)
-  const [enrichData, setEnrich]    = useState<any>(null)
-  const [recent,     setRecent]    = useState<string[]>(getRecent)
-
-  const doSearch = useCallback(async (q?: string, type = entityType, tr = timeRange) => {
-    const val = (q || query).trim()
-    if (!val) return
-    setQuery(val)
-    setLoading(true)
-    setError('')
-    setResult(null)
-    setEnrich(null)
-    try {
-      const r = await investigateApi.search(val, type, tr)
-      setResult(r.data)
-      saveRecent(val)
-      setRecent(getRecent())
-      // Fetch enrich if entity is IP
-      const detectedType = r.data.type
-      if (detectedType === 'ip' || detectedType === 'auto') {
-        investigateApi.enrich(val).then(e => setEnrich(e.data)).catch(() => {})
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'เกิดข้อผิดพลาดในการค้นหา')
-    } finally {
-      setLoading(false)
-    }
-  }, [query, entityType, timeRange])
-
-  // Auto-search from URL param
-  useEffect(() => { if (initialQ) doSearch(initialQ) }, [initialQ, doSearch])
-
-  const clearResult = () => { setResult(null); setEnrich(null); setQuery(''); setError(''); inputRef.current?.focus() }
-
-  return (
-    <Box className="page-enter">
-      {/* ── Header ── */}
-      <Box sx={{ mb: 2.5 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>วิเคราะห์เหตุการณ์</Typography>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
-          Forensic Investigation — IP · MAC · Username · Hostname · Alert Correlation
-        </Typography>
-      </Box>
-
-      {/* ── Hero Search ── */}
-      <Card sx={{
-        mb: 2.5, overflow: 'hidden', position: 'relative',
-        border: '1px solid rgba(123,91,164,0.2)',
-        background: 'linear-gradient(135deg, rgba(123,91,164,0.07) 0%, rgba(241,116,34,0.03) 100%)',
-      }}>
-        <Box sx={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(123,91,164,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
-        <CardContent sx={{ p: '20px 24px !important', position: 'relative', zIndex: 1 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', mb: 2 }}>
-            ค้นหาและวิเคราะห์ Entity
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <TextField
-              inputRef={inputRef}
-              placeholder="เช่น 192.168.1.100 · aa:bb:cc:dd:ee:ff · johndoe · PC-NURSE-01"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && doSearch()}
-              size="small" sx={{ flex: 1, minWidth: 260 }}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ color: BRAND.purple, fontSize: 20 }} /></InputAdornment>,
-                endAdornment: query && <InputAdornment position="end"><IconButton size="small" onClick={() => { setQuery(''); setResult(null) }}><CloseRoundedIcon sx={{ fontSize: 16 }} /></IconButton></InputAdornment>,
-                sx: { fontSize: 14, fontFamily: '"IBM Plex Mono",monospace' },
-              }}
-            />
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-              <Select value={entityType} onChange={e => setEntityType(e.target.value)} sx={{ fontSize: 12 }}>
-                <MenuItem value="auto">อัตโนมัติ</MenuItem>
-                <MenuItem value="ip">IP Address</MenuItem>
-                <MenuItem value="mac">MAC Address</MenuItem>
-                <MenuItem value="user">Username</MenuItem>
-                <MenuItem value="host">Hostname</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 100 }}>
-              <Select value={timeRange} onChange={e => setTimeRange(e.target.value)} sx={{ fontSize: 12 }}>
-                {['7d', '14d', '30d', '90d'].map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Button variant="contained" startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SearchRoundedIcon />}
-              onClick={() => doSearch()} disabled={loading || !query.trim()}
-              sx={{ py: 0.95, px: 2.5, borderRadius: '10px', minWidth: 120, whiteSpace: 'nowrap' }}>
-              {loading ? 'กำลังค้นหา...' : 'ค้นหา'}
-            </Button>
-          </Box>
-
-          {recent.length > 0 && !result && (
-            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 600, flexShrink: 0 }}>ค้นหาล่าสุด:</Typography>
-              {recent.map((r, i) => (
-                <Chip key={i} label={r} size="small" onClick={() => doSearch(r)}
-                  sx={{ height: 20, fontSize: 10, fontFamily: '"IBM Plex Mono"', cursor: 'pointer',
-                    bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary',
-                    '&:hover': { bgcolor: 'rgba(123,91,164,0.18)', color: BRAND.purpleLight } }} />
-              ))}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Error */}
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-
-      {/* Loading */}
-      {loading && (
-        <Box sx={{ py: 8, textAlign: 'center' }}>
-          <CircularProgress sx={{ color: BRAND.purple, mb: 2 }} size={40} />
-          <Typography sx={{ fontSize: 14, color: 'text.secondary' }}>กำลังวิเคราะห์เหตุการณ์ใน Wazuh...</Typography>
-          <Typography sx={{ fontSize: 11, color: 'text.disabled', mt: 0.5 }}>ค้นหาใน OpenSearch · DHCP · WiFi · Correlation</Typography>
-        </Box>
-      )}
-
-      {/* Empty state */}
-      {!loading && !result && !error && (
-        <Card sx={{ textAlign: 'center', py: 8, border: '1px dashed', borderColor: 'rgba(123,91,164,0.2)', bgcolor: 'transparent' }}>
-          <SecurityRoundedIcon sx={{ fontSize: 56, color: 'rgba(123,91,164,0.3)', mb: 1.5 }} />
-          <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.secondary' }}>พร้อมวิเคราะห์เหตุการณ์</Typography>
-          <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.5 }}>ใส่ IP, MAC, Username หรือ Hostname แล้วกด Enter</Typography>
-          <Box sx={{ mt: 2.5, display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
-            {[
-              { icon: <RouterRoundedIcon sx={{ fontSize: 16 }} />, label: 'IP Address', ex: '192.168.1.100' },
-              { icon: <FingerprintRoundedIcon sx={{ fontSize: 16 }} />, label: 'MAC Address', ex: 'aa:bb:cc:11:22:33' },
-              { icon: <PersonRoundedIcon sx={{ fontSize: 16 }} />, label: 'Username', ex: 'john.doe' },
-              { icon: <DnsRoundedIcon sx={{ fontSize: 16 }} />, label: 'Hostname', ex: 'PC-WARD-01' },
-            ].map(({ icon, label, ex }) => (
-              <Box key={label} sx={{ textAlign: 'center', cursor: 'pointer', opacity: 0.65, '&:hover': { opacity: 1 } }}
-                onClick={() => { setQuery(ex); inputRef.current?.focus() }}>
-                <Box sx={{ width: 44, height: 44, borderRadius: '12px', bgcolor: 'rgba(123,91,164,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 0.75, color: BRAND.purpleLight }}>
-                  {icon}
-                </Box>
-                <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>{label}</Typography>
-                <Typography sx={{ fontSize: 10, color: 'text.disabled', fontFamily: '"IBM Plex Mono"' }}>{ex}</Typography>
-              </Box>
-            ))}
-          </Box>
-        </Card>
-      )}
-
-      {/* Results */}
-      {!loading && result && (
-        <>
-          <EntityCard query={result.query || query} data={result} enrichData={enrichData} onClose={clearResult} />
-          <ActivitySection data={result} />
-          <NetworkSection data={result} />
-          <ThreatIntelSection enrichData={enrichData} entityType={result.type} />
-          <MitreSection mitre={result.mitre} />
-          <CorrelationSection data={result} />
-        </>
-      )}
+        </Stack>
+      </DetailPanel>
     </Box>
   )
 }
