@@ -1,4 +1,5 @@
 export type SeverityName = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'unknown';
 
 export interface AgentInfo {
   id: string;
@@ -60,11 +61,20 @@ export interface AlertFilters {
   limit?: number;
   sort?: string;
   order?: 'asc' | 'desc';
+  q?: string;
+  severity?: AlertSeverity | 'all';
+  sourceIp?: string;
+  destinationIp?: string;
+  decoder?: string;
+  group?: string;
+  framework?: 'pci_dss' | 'gdpr' | 'hipaa' | 'nist_800_53' | 'cis' | 'all';
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface AlertStats {
   total: number;
-  by_level: Record<number, number>;
+  by_level: Record<string, number>;
   by_severity: Record<SeverityName, number>;
   timeline: {
     timestamp: string;
@@ -75,4 +85,43 @@ export interface AlertStats {
   by_mitre?: { name: string; count: number }[];
   by_srcip?: { name: string; count: number }[];
   by_source?: { name: string; count: number }[];
+}
+
+export interface WazuhAlertItem {
+  id: string;
+  timestamp: string;
+  ruleId?: string;
+  ruleLevel: number;
+  severity: AlertSeverity;
+  description: string;
+  agentId?: string;
+  agentName?: string;
+  agentIp?: string;
+  managerName?: string;
+  decoderName?: string;
+  location?: string;
+  sourceIp?: string;
+  sourcePort?: string | number;
+  destinationIp?: string;
+  destinationPort?: string | number;
+  protocol?: string;
+  mitreTactics?: string[];
+  mitreTechniques?: string[];
+  groups?: string[];
+  pciDss?: string[];
+  gdpr?: string[];
+  hipaa?: string[];
+  nist80053?: string[];
+  cis?: string[];
+  fullLog?: string;
+  countryName?: string;
+  raw?: unknown;
+}
+
+export interface PaginatedAlertsResponse {
+  items: WazuhAlertItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  stats?: AlertStats;
 }

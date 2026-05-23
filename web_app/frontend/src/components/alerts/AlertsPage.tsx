@@ -33,7 +33,7 @@ import { alertsApi, investigateApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
-import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName } from '../../types/alert'
+import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters } from '../../types/alert'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND  = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
@@ -64,6 +64,99 @@ const TIME_OPTS = [
   { value: '7d',  label: '7 วัน' },
   { value: '30d', label: '30 วัน' },
 ]
+
+function mapLevelToSeverity(level: number): AlertSeverity {
+  if (level >= 15) return 'critical';
+  if (level >= 12) return 'high';
+  if (level >= 7) return 'medium';
+  if (level >= 1) return 'low';
+  return 'info';
+}
+
+export function normalizeWazuhAlert(raw: any): WazuhAlertItem {
+  const rule = raw.rule || {};
+  const data = raw.data || {};
+  const agent = raw.agent || {};
+  const geo = raw.GeoLocation || {};
+  const pre = raw.predecoder || {};
+  const decoder = raw.decoder || {};
+
+  const level = Number(rule.level || 0);
+  const id = raw.id || raw._id || `${raw['@timestamp'] || ''}-${rule.id || ''}-${agent.id || ''}`;
+
+  return {
+    id,
+    timestamp: raw['@timestamp'] || raw.timestamp || new Date().toISOString(),
+    ruleId: rule.id,
+    ruleLevel: level,
+    severity: mapLevelToSeverity(level),
+    description: rule.description || raw.full_log || 'No description available',
+    agentId: agent.id,
+    agentName: agent.name,
+    agentIp: agent.ip || data.srcip || undefined,
+    managerName: raw.manager?.name,
+    decoderName: decoder.name || pre.program_name,
+    location: raw.location,
+    sourceIp: data.srcip,
+    sourcePort: data.srcport,
+    destinationIp: data.dstip,
+    destinationPort: data.dstport,
+    protocol: data.protocol,
+    mitreTactics: rule.mitre?.tactic || [],
+    mitreTechniques: rule.mitre?.technique || [],
+    groups: rule.groups || [],
+    pciDss: rule.pci_dss || [],
+    gdpr: rule.gdpr || [],
+    hipaa: rule.hipaa || [],
+    nist80053: rule.nist_800_53 || [],
+    cis: rule.tsc || [],
+    fullLog: raw.full_log,
+    countryName: geo.country_name || geo.country_code || undefined,
+    raw: raw,
+  };
+}
+
+export function normalizeStats(rawStats: any): AlertStats {
+  if (!rawStats) {
+    return {
+      total: 0,
+      by_level: {},
+      by_severity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      timeline: []
+    };
+  }
+
+  const rawByLevel = rawStats.by_level || {};
+  const by_severity: Record<SeverityName, number> = {
+    critical: Number(rawByLevel.critical || 0),
+    high:     Number(rawByLevel.high || 0),
+    medium:   Number(rawByLevel.medium || 0),
+    low:      Number(rawByLevel.low || 0),
+    info:     Number(rawByLevel.info || 0),
+  };
+
+  const timeline = (rawStats.timeline || []).map((t: any) => ({
+    timestamp: t.time || t.timestamp,
+    count: t.total !== undefined ? t.total : (t.count || 0),
+    severity_breakdown: {
+      critical: t.critical || 0,
+      high: t.high || 0,
+      medium: t.medium || 0,
+      low: t.low || 0,
+    }
+  }));
+
+  return {
+    total: rawStats.total || 0,
+    by_level: rawByLevel,
+    by_severity,
+    timeline,
+    by_agent: rawStats.by_agent || [],
+    by_mitre: rawStats.by_mitre || [],
+    by_srcip: rawStats.by_srcip || [],
+    by_source: rawStats.by_source || [],
+  };
+}
 
 // ── Helper components ─────────────────────────────────────────────────────────
 interface LevelChipProps {
@@ -349,7 +442,7 @@ function FeedMiniCard({ name, color, main, mainLabel, rows = [], extra }: FeedMi
 
 // ── Alert Detail Drawer ───────────────────────────────────────────────────────
 interface AlertDrawerProps {
-  alert: AlertDetail | null;
+  alert: WazuhAlertItem | null;
   open: boolean;
   onClose: () => void;
 }
@@ -363,19 +456,21 @@ function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
-  const rule   = alert?.rule        || ({} as any)
-  const data   = alert?.data        || ({} as any)
-  const agent  = alert?.agent       || ({} as any)
-  const geo    = alert?.GeoLocation || ({} as any)
-  const pre    = alert?.predecoder  || ({} as any)
+  // Extract raw wazuh fields for detailed drawer content
+  const rawWazuh = (alert?.raw as any) || {}
+  const rule     = rawWazuh.rule || {}
+  const data     = rawWazuh.data || {}
+  const agent    = rawWazuh.agent || {}
+  const geo      = rawWazuh.GeoLocation || {}
+  const pre      = rawWazuh.predecoder || {}
 
-  const lv       = Number(rule.level || 0)
+  const lv       = alert?.ruleLevel || 0
   const color    = LC(lv)
-  const srcip    = data.srcip
-  const dstip    = data.dstip
-  const country  = geo.country_name || geo.country_code
-  const program  = pre.program_name
-  const groups: string[] = rule.groups || []
+  const srcip    = alert?.sourceIp
+  const dstip    = alert?.destinationIp
+  const country  = alert?.countryName
+  const program  = alert?.decoderName
+  const groups: string[] = alert?.groups || []
 
   const compliance = [
     { key: 'PCI-DSS', items: rule.pci_dss    || [] },
@@ -527,7 +622,7 @@ function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <FiberManualRecordIcon sx={{ fontSize: 6, color: color, opacity: 0.6 }} />
                   <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontFamily: '"IBM Plex Mono",monospace', fontWeight: 500 }}>
-                    {alert['@timestamp'] ? format(new Date(alert['@timestamp']), 'dd MMM yyyy · HH:mm:ss') : '—'}
+                    {alert?.timestamp ? format(new Date(alert.timestamp), 'dd MMM yyyy · HH:mm:ss') : '—'}
                   </Typography>
                 </Box>
                 {agent.name && (
@@ -789,14 +884,14 @@ function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
                 )}
 
                 {/* Full log */}
-                {alert.full_log && (
+                {alert.fullLog && (
                   <DrawerSection label="Full Log" accent="text.disabled">
                     <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
                       <Tooltip title="คัดลอก">
                         <IconButton size="small"
                           sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1, bgcolor: 'rgba(123,91,164,0.12)', transition: 'all 0.2s',
                             '&:hover': { bgcolor: 'rgba(123,91,164,0.2)', transform: 'scale(1.1)' } }}
-                          onClick={() => { navigator.clipboard.writeText(alert.full_log || ''); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}>
+                          onClick={() => { navigator.clipboard.writeText(alert.fullLog || ''); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}>
                           <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
                         </IconButton>
                       </Tooltip>
@@ -809,7 +904,7 @@ function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
                         width: '100%', maxWidth: '100%', boxSizing: 'border-box',
                       }} className="scrollbar-thin">
                         <Typography component="pre" sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.secondary', lineHeight: 1.7, width: '100%', maxWidth: '100%' }}>
-                          {alert.full_log}
+                          {alert.fullLog}
                         </Typography>
                       </Box>
                     </Box>
@@ -1172,10 +1267,73 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
     info:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v2h2v4zm0-8h-2V7h2v2z"/></svg>,
   }
 
+  const isTotalActive = activeLevel === 1;
+
+  const topAgent = stats?.by_agent?.[0];
+  const topAttacker = stats?.by_srcip?.[0];
+
   return (
     <Box sx={{ mb: 2 }}>
-      {/* ── 4 severity cards ── */}
-      <Grid container spacing={{ xs: 1, sm: 1.5 }} sx={{ mb: 1.5 }}>
+      {/* ── 5 count cards ── */}
+      <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
+        {/* Total Card */}
+        <Grid item xs={12} sm={4} md={2.4}>
+          <Card
+            onClick={() => onLevelClick(1)}
+            sx={{
+              cursor: 'pointer',
+              position: 'relative',
+              overflow: 'hidden',
+              border: isTotalActive ? `1.5px solid ${BRAND.purple}` : '1px solid',
+              borderColor: isTotalActive ? BRAND.purple : 'divider',
+              background: isTotalActive
+                ? `linear-gradient(135deg, ${BRAND.purple}18 0%, ${BRAND.purple}06 100%)`
+                : undefined,
+              boxShadow: isTotalActive
+                ? `0 0 0 3px ${BRAND.purple}20, 0 8px 24px ${BRAND.purple}22`
+                : '0 2px 8px rgba(0,0,0,0.08)',
+              transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
+              '&:hover': {
+                transform: 'translateY(-3px)',
+                boxShadow: `0 0 0 2px ${BRAND.purple}30, 0 10px 28px ${BRAND.purple}28`,
+                borderColor: BRAND.purple,
+              },
+            }}
+          >
+            <Box sx={{
+              position: 'absolute', bottom: -6, right: -4,
+              color: BRAND.purple, opacity: 0.08, lineHeight: 1,
+              transform: 'scale(2.8)', transformOrigin: 'bottom right',
+              pointerEvents: 'none',
+            }}>
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            </Box>
+            <CardContent sx={{ p: { xs: '12px 14px !important', sm: '14px 18px !important' }, position: 'relative', zIndex: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.09em', color: isTotalActive ? BRAND.purple : 'text.disabled' }}>
+                  Total Alerts
+                </Typography>
+                {isTotalActive && <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: BRAND.purple, boxShadow: `0 0 6px ${BRAND.purple}` }} />}
+              </Box>
+              {loadingStats ? (
+                <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: BRAND.purple }} /></Box>
+              ) : (
+                <Typography sx={{ fontSize: { xs: 26, sm: 30 }, fontWeight: 900, color: BRAND.purple, lineHeight: 1, letterSpacing: '-0.03em', mb: 0.25 }}>
+                  {fmtNum(total)}
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.5 }}>
+                <Box sx={{ opacity: 0.8 }}>
+                  <Sparkline data={timeline} color={BRAND.purple} height={28} />
+                </Box>
+                <Typography sx={{ fontSize: 9, color: 'text.disabled', lineHeight: 1.2 }}>all levels</Typography>
+              </Box>
+            </CardContent>
+            <Box sx={{ height: 3, background: isTotalActive ? `linear-gradient(90deg, ${BRAND.purple} 0%, ${BRAND.purple}80 100%)` : `${BRAND.purple}40` }} />
+          </Card>
+        </Grid>
+
+        {/* Severity Cards */}
         {SEV.map(s => {
           const count    = stats?.by_severity?.[s.key] || 0
           const pct      = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
@@ -1184,7 +1342,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                            (s.key === 'medium'   && activeLevel === 7)  ||
                            (s.key === 'low'      && activeLevel === 1)
           return (
-            <Grid item xs={6} sm={3} key={s.key}>
+            <Grid item xs={6} sm={4} md={2.4} key={s.key}>
               <Card
                 onClick={() => onLevelClick(s.min)}
                 sx={{
@@ -1207,7 +1365,6 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                   },
                 }}
               >
-                {/* Background icon watermark */}
                 <Box sx={{
                   position: 'absolute', bottom: -6, right: -4,
                   color: s.color, opacity: 0.08, lineHeight: 1,
@@ -1218,7 +1375,6 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                 </Box>
 
                 <CardContent sx={{ p: { xs: '12px 14px !important', sm: '14px 18px !important' }, position: 'relative', zIndex: 1 }}>
-                  {/* Label row */}
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
                     <Typography sx={{
                       fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
@@ -1231,12 +1387,8 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                       <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: s.color, boxShadow: `0 0 6px ${s.color}` }} />
                     )}
                   </Box>
-
-                  {/* Main count */}
                   {loadingStats ? (
-                    <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}>
-                      <CircularProgress size={22} sx={{ color: s.color }} />
-                    </Box>
+                    <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: s.color }} /></Box>
                   ) : (
                     <Typography sx={{
                       fontSize: { xs: 26, sm: 30 },
@@ -1246,11 +1398,9 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                       {fmtNum(count)}
                     </Typography>
                   )}
-
-                  {/* Bottom row: sparkline + pct */}
                   <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.5 }}>
                     <Box sx={{ opacity: 0.8 }}>
-                      <Sparkline data={timeline} color={s.color} height={28} />
+                      <Sparkline data={timeline.map(t => ({ timestamp: t.timestamp, count: t.severity_breakdown?.[s.key] ?? 0 }))} color={s.color} height={28} />
                     </Box>
                     {!loadingStats && (
                       <Box sx={{ textAlign: 'right' }}>
@@ -1260,19 +1410,70 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                     )}
                   </Box>
                 </CardContent>
-
-                {/* Bottom severity bar */}
-                <Box sx={{
-                  height: 3,
-                  background: isActive
-                    ? `linear-gradient(90deg, ${s.color} 0%, ${s.color}80 100%)`
-                    : `${s.color}40`,
-                  transition: 'all 0.22s ease',
-                }} />
+                <Box sx={{ height: 3, background: isActive ? `linear-gradient(90deg, ${s.color} 0%, ${s.color}80 100%)` : `${s.color}40` }} />
               </Card>
             </Grid>
           )
         })}
+      </Grid>
+
+      {/* ── Additional Stats Cards (Top Agent, Top Attacker) ── */}
+      <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
+        {/* Top Agent */}
+        <Grid item xs={12} sm={6}>
+          <Card variant="outlined" sx={{ bgcolor: 'background.paper', position: 'relative', overflow: 'hidden', borderLeft: `4px solid ${BRAND.purpleLight}` }}>
+            <Box sx={{ position: 'absolute', top: 12, right: 12, color: BRAND.purpleLight, opacity: 0.08, pointerEvents: 'none' }}>
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M4 6h16v12H4zm16-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-9 9H5v2h6v-2zm8 0h-6v2h6v-2zm-8-3H5v2h6v-2zm8 0h-6v2h6v-2z"/></svg>
+            </Box>
+            <CardContent sx={{ py: '12px !important', px: 2 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
+                TOP AFFECTED AGENT (อุปกรณ์ถูกกระทบสูงสุด)
+              </Typography>
+              {loadingStats ? (
+                <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
+              ) : topAgent ? (
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'text.primary' }}>
+                    {topAgent.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: BRAND.purpleLight, fontWeight: 600 }}>
+                    ({topAgent.count.toLocaleString()} alerts)
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>—</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Top Attacker IP */}
+        <Grid item xs={12} sm={6}>
+          <Card variant="outlined" sx={{ bgcolor: 'background.paper', position: 'relative', overflow: 'hidden', borderLeft: `4px solid ${BRAND.orange}` }}>
+            <Box sx={{ position: 'absolute', top: 12, right: 12, color: BRAND.orange, opacity: 0.08, pointerEvents: 'none' }}>
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v2h2v4zm0-8h-2V7h2v2z"/></svg>
+            </Box>
+            <CardContent sx={{ py: '12px !important', px: 2 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
+                TOP ATTACKER IP (IP โจมตีสูงสุด)
+              </Typography>
+              {loadingStats ? (
+                <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
+              ) : topAttacker ? (
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ fontFamily: '"IBM Plex Mono"', color: 'text.primary' }}>
+                    {topAttacker.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: BRAND.orange, fontWeight: 600 }}>
+                    ({topAttacker.count.toLocaleString()} alerts)
+                  </Typography>
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>—</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* ── Timeline chart ── */}
@@ -1347,43 +1548,88 @@ export default function AlertsPage() {
   const qc = useQueryClient()
 
   // Filter state
-  const [level,        setLevel]       = useState<number>(1)
-  const [source,       setSource]      = useState<string>('')
-  const [timeRange,    setTimeRange]   = useState<string>('24h')
-  const [search,       setSearch]      = useState<string>('')
-  const [searchInput,  setSearchInput] = useState<string>('')
-  const [agentFilter,  setAgentFilter] = useState<string>('')
-  const [mitreFilter,  setMitreFilter] = useState<string>('')
-  const [showFilters,  setShowFilters] = useState<boolean>(false)
+  const [level,            setLevel]            = useState<number>(1)
+  const [source,           setSource]           = useState<string>('')
+  const [timeRange,        setTimeRange]        = useState<string>('24h')
+  const [search,           setSearch]           = useState<string>('')
+  const [searchInput,      setSearchInput]      = useState<string>('')
+  const [agentFilter,      setAgentFilter]      = useState<string>('')
+  const [mitreFilter,      setMitreFilter]      = useState<string>('')
+  const [showFilters,      setShowFilters]      = useState<boolean>(false)
+
+  // Advanced Filters
+  const [ruleIdFilter,     setRuleIdFilter]     = useState<string>('')
+  const [srcIpFilter,      setSrcIpFilter]      = useState<string>('')
+  const [dstIpFilter,      setDstIpFilter]      = useState<string>('')
+  const [decoderFilter,    setDecoderFilter]    = useState<string>('')
+  const [complianceFilter, setComplianceFilter] = useState<string>('all')
 
   // Alert detail
-  const [selectedAlert, setSelected] = useState<AlertDetail | null>(null)
-  const [drawerOpen,    setDrawer]   = useState<boolean>(false)
+  const [selectedAlert,    setSelected]         = useState<WazuhAlertItem | null>(null)
+  const [drawerOpen,       setDrawer]           = useState<boolean>(false)
 
-  // Live alert indicator
-  const [newCount, setNewCount] = useState<number>(0)
-  const [liveActive, setLiveActive] = useState<boolean>(true)
-  const [lastTotal,  setLastTotal]  = useState<number | null>(null)
+  // Live alert indicator & auto refresh
+  const [newCount,         setNewCount]         = useState<number>(0)
+  const [refreshInterval,  setRefreshInterval]  = useState<number>(30000) // 30s default
+  const [lastTotal,        setLastTotal]        = useState<number | null>(null)
+
+  // Composed Lucene search query for server-side search composition
+  const composedSearchQuery = useMemo(() => {
+    const parts: string[] = []
+    if (search.trim()) {
+      parts.push(search.trim())
+    }
+    if (ruleIdFilter.trim()) {
+      parts.push(`rule.id:"${ruleIdFilter.trim()}"`)
+    }
+    if (srcIpFilter.trim()) {
+      parts.push(`data.srcip:"${srcIpFilter.trim()}"`)
+    }
+    if (dstIpFilter.trim()) {
+      parts.push(`data.dstip:"${dstIpFilter.trim()}"`)
+    }
+    if (decoderFilter.trim()) {
+      parts.push(`decoder.name:"${decoderFilter.trim()}"`)
+    }
+    if (complianceFilter && complianceFilter !== 'all') {
+      if (complianceFilter === 'pci_dss') {
+        parts.push(`_exists_:rule.pci_dss`)
+      } else if (complianceFilter === 'gdpr') {
+        parts.push(`_exists_:rule.gdpr`)
+      } else if (complianceFilter === 'hipaa') {
+        parts.push(`_exists_:rule.hipaa`)
+      } else if (complianceFilter === 'nist_800_53') {
+        parts.push(`_exists_:rule.nist_800_53`)
+      } else if (complianceFilter === 'cis') {
+        parts.push(`_exists_:rule.tsc`)
+      }
+    }
+    return parts.length > 0 ? parts.join(' AND ') : undefined
+  }, [search, ruleIdFilter, srcIpFilter, dstIpFilter, decoderFilter, complianceFilter])
 
   // Alerts query
-  const { data: alerts = [], isLoading, refetch, dataUpdatedAt } = useQuery<any[]>({
-    queryKey: ['alerts', level, source, timeRange, search, agentFilter, mitreFilter],
+  const { data: rawAlerts = [], isLoading, isError, refetch, dataUpdatedAt } = useQuery<any[]>({
+    queryKey: ['alerts', level, source, timeRange, composedSearchQuery, agentFilter, mitreFilter],
     queryFn: () => alertsApi.list({
       level, source: source || undefined, time_range: timeRange,
-      q: search || undefined, agent: agentFilter || undefined,
+      q: composedSearchQuery || undefined, agent: agentFilter || undefined,
       mitre_tactic: mitreFilter || undefined, limit: 500,
     }).then(r => r.data),
-    refetchInterval: liveActive ? 30000 : false,
+    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
     staleTime: 15000,
   })
 
+  const alerts = useMemo(() => (rawAlerts || []).map(normalizeWazuhAlert), [rawAlerts])
+
   // Stats query
-  const { data: stats, isLoading: loadingStats } = useQuery<AlertStats>({
+  const { data: rawStats, isLoading: loadingStats, isError: isErrorStats } = useQuery<any>({
     queryKey: ['alert-stats', timeRange, level],
     queryFn: () => alertsApi.stats(timeRange, level).then(r => r.data),
-    refetchInterval: liveActive ? 60000 : false,
+    refetchInterval: refreshInterval > 0 ? refreshInterval * 2 : false,
     staleTime: 30000,
   })
+
+  const stats = useMemo(() => normalizeStats(rawStats), [rawStats])
 
   // Detect new alerts (compare total)
   useEffect(() => {
@@ -1400,11 +1646,30 @@ export default function AlertsPage() {
     agentFilter && { label: `Agent: ${agentFilter}`, clear: () => setAgentFilter('') },
     mitreFilter && { label: `MITRE: ${mitreFilter}`, clear: () => setMitreFilter('') },
     search && { label: `ค้นหา: "${search}"`, clear: () => { setSearch(''); setSearchInput('') } },
+    ruleIdFilter && { label: `Rule ID: ${ruleIdFilter}`, clear: () => setRuleIdFilter('') },
+    srcIpFilter && { label: `Src IP: ${srcIpFilter}`, clear: () => setSrcIpFilter('') },
+    dstIpFilter && { label: `Dst IP: ${dstIpFilter}`, clear: () => setDstIpFilter('') },
+    decoderFilter && { label: `Decoder: ${decoderFilter}`, clear: () => setDecoderFilter('') },
+    complianceFilter && complianceFilter !== 'all' && { label: `Compliance: ${complianceFilter}`, clear: () => setComplianceFilter('all') },
   ].filter(Boolean) as { label: string; clear: () => void }[]
+
+  const handleClearAll = () => {
+    setSource('')
+    setSearch('')
+    setSearchInput('')
+    setAgentFilter('')
+    setMitreFilter('')
+    setLevel(1)
+    setRuleIdFilter('')
+    setSrcIpFilter('')
+    setDstIpFilter('')
+    setDecoderFilter('')
+    setComplianceFilter('all')
+  }
 
   const handleExport = async (fmt: 'csv' | 'json') => {
     try {
-      const r = await alertsApi.export({ level, source: source||undefined, time_range: timeRange, q: search||undefined, fmt })
+      const r = await alertsApi.export({ level, source: source||undefined, time_range: timeRange, q: composedSearchQuery||undefined, fmt })
       const url  = URL.createObjectURL(new Blob([r.data]))
       const link = document.createElement('a')
       link.href = url
@@ -1414,25 +1679,58 @@ export default function AlertsPage() {
     } catch { enqueueSnackbar('Export ล้มเหลว', { variant: 'error' }) }
   }
 
+  const connectionStatus = useMemo(() => {
+    if (isError || isErrorStats) return { label: 'Error', color: '#ef4444' }
+    if (isLoading || loadingStats) return { label: 'Syncing', color: '#eab308' }
+    return { label: 'Connected', color: '#22c55e' }
+  }, [isError, isErrorStats, isLoading, loadingStats])
+
   return (
     <Box className="page-enter">
       {/* ── Header ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>การแจ้งเตือน</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>การแจ้งเตือนภัยคุกคาม</Typography>
             {newCount > 0 && (
               <Chip label={`+${newCount} ใหม่`} size="small" color="error" onClick={() => { setNewCount(0); refetch() }}
                 sx={{ height: 22, fontSize: 11, fontWeight: 800, animation: 'pulse-critical 2s ease-in-out infinite', cursor: 'pointer' }} />
             )}
-            {/* Live indicator */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <FiberManualRecordIcon sx={{ fontSize: 9, color: liveActive ? '#22C55E' : 'text.disabled',
-                animation: liveActive ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
-              <Typography sx={{ fontSize: 10, fontWeight: 600, color: liveActive ? '#22C55E' : 'text.disabled', cursor: 'pointer' }}
-                onClick={() => setLiveActive(l => !l)}>
-                {liveActive ? 'LIVE' : 'Paused'}
+            
+            {/* API Status Indicator */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.25, borderRadius: '6px', bgcolor: `${connectionStatus.color}15`, border: `1px solid ${connectionStatus.color}25` }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: connectionStatus.color, animation: connectionStatus.label !== 'Error' ? 'pulseGlow 2s ease-in-out infinite' : 'none' }} />
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: connectionStatus.color }}>
+                {connectionStatus.label.toUpperCase()}
               </Typography>
+            </Box>
+
+            {/* Auto Refresh controls */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <FiberManualRecordIcon sx={{ fontSize: 9, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled',
+                animation: refreshInterval > 0 ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
+              <Typography sx={{ fontSize: 10, fontWeight: 600, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled', mr: 0.5 }}>
+                {refreshInterval > 0 ? 'AUTO' : 'MANUAL'}
+              </Typography>
+              <FormControl size="small" sx={{ m: 0 }}>
+                <Select
+                  value={refreshInterval}
+                  onChange={e => setRefreshInterval(Number(e.target.value))}
+                  sx={{ 
+                    height: 20, fontSize: 9, fontWeight: 700, 
+                    color: 'text.secondary', bgcolor: 'transparent',
+                    '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                    padding: 0
+                  }}
+                >
+                  <MenuItem value={0} sx={{ fontSize: 10 }}>Off</MenuItem>
+                  <MenuItem value={15000} sx={{ fontSize: 10 }}>15s</MenuItem>
+                  <MenuItem value={30000} sx={{ fontSize: 10 }}>30s</MenuItem>
+                  <MenuItem value={60000} sx={{ fontSize: 10 }}>60s</MenuItem>
+                </Select>
+              </FormControl>
             </Box>
           </Box>
           <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
@@ -1523,6 +1821,38 @@ export default function AlertsPage() {
               </Select>
             </FormControl>
 
+            {/* Rule ID */}
+            <TextField size="small" placeholder="Rule ID" value={ruleIdFilter}
+              onChange={e => setRuleIdFilter(e.target.value)}
+              sx={{ minWidth: 100, maxWidth: 120, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+            {/* Source IP */}
+            <TextField size="small" placeholder="Source IP" value={srcIpFilter}
+              onChange={e => setSrcIpFilter(e.target.value)}
+              sx={{ minWidth: 130, maxWidth: 150, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+            {/* Dest IP */}
+            <TextField size="small" placeholder="Destination IP" value={dstIpFilter}
+              onChange={e => setDstIpFilter(e.target.value)}
+              sx={{ minWidth: 130, maxWidth: 150, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+            {/* Decoder */}
+            <TextField size="small" placeholder="Decoder" value={decoderFilter}
+              onChange={e => setDecoderFilter(e.target.value)}
+              sx={{ minWidth: 120, maxWidth: 140, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+            {/* Compliance Framework */}
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <Select value={complianceFilter} onChange={e => setComplianceFilter(e.target.value)} sx={{ fontSize: 12 }}>
+                <MenuItem value="all">ทุก Compliance Standard</MenuItem>
+                <MenuItem value="pci_dss">PCI-DSS</MenuItem>
+                <MenuItem value="gdpr">GDPR</MenuItem>
+                <MenuItem value="hipaa">HIPAA</MenuItem>
+                <MenuItem value="nist_800_53">NIST 800-53</MenuItem>
+                <MenuItem value="cis">CIS Controls</MenuItem>
+              </Select>
+            </FormControl>
+
             {/* Top attackers quick-filter */}
             {(stats?.by_srcip || []).length > 0 && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
@@ -1587,11 +1917,14 @@ export default function AlertsPage() {
                 </TableRow>
               ) : (
                 alerts.map((a, i) => {
-                  const lv      = Number(a.rule?.level || 0)
-                  const srcip   = a.data?.srcip
-                  const country = a.GeoLocation?.country_name
-                  const groups: string[] = a.rule?.groups || []
-                  const mitre: MitreAttackInfo = a.rule?.mitre || {}
+                  const lv      = a.ruleLevel
+                  const srcip   = a.sourceIp
+                  const country = a.countryName
+                  const groups: string[] = a.groups || []
+                  const mitre: MitreAttackInfo = {
+                    tactic: a.mitreTactics,
+                    technique: a.mitreTechniques,
+                  }
                   const isCrit  = lv >= 15
                   return (
                     <TableRow
@@ -1607,7 +1940,7 @@ export default function AlertsPage() {
                     >
                       {/* Time */}
                       <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1, color: 'text.secondary' }}>
-                        {a['@timestamp'] ? format(new Date(a['@timestamp']), 'dd/MM HH:mm:ss') : '-'}
+                        {a.timestamp ? format(new Date(a.timestamp), 'dd/MM HH:mm:ss') : '-'}
                       </TableCell>
 
                       {/* Level */}
@@ -1618,16 +1951,16 @@ export default function AlertsPage() {
                       {/* Description + MITRE */}
                       <TableCell sx={{ py: 1, maxWidth: 300 }}>
                         <Typography sx={{ fontSize: 12, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }}>
-                          {a.rule?.description || '-'}
+                          {a.description || '-'}
                         </Typography>
                         <MitreTags groups={groups} mitre={mitre} />
                       </TableCell>
 
                       {/* Source */}
                       <TableCell sx={{ py: 1 }}>
-                        <Chip label={a.predecoder?.program_name || '-'} size="small" variant="outlined"
+                        <Chip label={a.decoderName || '-'} size="small" variant="outlined"
                           sx={{ height: 18, fontSize: 9, borderColor: 'rgba(123,91,164,0.2)', color: 'text.secondary', cursor: 'pointer' }}
-                          onClick={e => { e.stopPropagation(); setSource(a.predecoder?.program_name || '') }} />
+                          onClick={e => { e.stopPropagation(); setSource(a.decoderName || '') }} />
                       </TableCell>
 
                       {/* Src IP */}
@@ -1651,7 +1984,7 @@ export default function AlertsPage() {
 
                       {/* Agent */}
                       <TableCell sx={{ fontSize: 11, py: 1, color: 'text.secondary' }}>
-                        {a.agent?.name || '—'}
+                        {a.agentName || '—'}
                       </TableCell>
                     </TableRow>
                   )
