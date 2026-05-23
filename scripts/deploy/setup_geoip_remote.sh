@@ -1,7 +1,16 @@
 #!/bin/bash
 set -e
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 LICENSE_KEY="${MAXMIND_LICENSE_KEY:-<REPLACE_WITH_MAXMIND_LICENSE_KEY>}"
+OPENSEARCH_AUTH="${wazuh_open_search_username:-admin}:${wazuh_open_search_password:-}"
 DB_DIR="/etc/wazuh-indexer/ingest-geoip"
 TEMP_FILE="/tmp/GeoLite2-City.mmdb.tar.gz"
 UPDATER_SCRIPT="/usr/local/bin/update-geoip.sh"
@@ -51,7 +60,7 @@ echo "Adding to cron..."
 echo "Configuring OpenSearch API..."
 
 # 1. Update Template
-curl -s -k -u admin:admin -X PUT "https://localhost:9200/_index_template/wazuh-alerts-custom-geoip" -H 'Content-Type: application/json' -d'
+curl -s -k -u "$OPENSEARCH_AUTH" -X PUT "https://localhost:9200/_index_template/wazuh-alerts-custom-geoip" -H 'Content-Type: application/json' -d'
 {
   "index_patterns": [
     "wazuh-alerts-4.x-*"
@@ -81,7 +90,7 @@ curl -s -k -u admin:admin -X PUT "https://localhost:9200/_index_template/wazuh-a
 echo -e "\nTemplate updated."
 
 # 2. Create Pipeline
-curl -s -k -u admin:admin -X PUT "https://localhost:9200/_ingest/pipeline/wazuh-geoip-pipeline" -H 'Content-Type: application/json' -d'
+curl -s -k -u "$OPENSEARCH_AUTH" -X PUT "https://localhost:9200/_ingest/pipeline/wazuh-geoip-pipeline" -H 'Content-Type: application/json' -d'
 {
   "description": "Enrich srcip and dstip with GeoIP data",
   "processors": [
@@ -108,7 +117,7 @@ curl -s -k -u admin:admin -X PUT "https://localhost:9200/_ingest/pipeline/wazuh-
 echo -e "\nPipeline created."
 
 # 3. Set Default Pipeline
-curl -s -k -u admin:admin -X PUT "https://localhost:9200/_index_template/wazuh-alerts-default-pipeline" -H 'Content-Type: application/json' -d'
+curl -s -k -u "$OPENSEARCH_AUTH" -X PUT "https://localhost:9200/_index_template/wazuh-alerts-default-pipeline" -H 'Content-Type: application/json' -d'
 {
   "index_patterns": ["wazuh-alerts-4.x-*"],
   "priority": 200,

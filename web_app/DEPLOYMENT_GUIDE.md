@@ -544,7 +544,7 @@ tail -f /opt/code/wazuh_ova/web_app/logs/deploy.log
 
 ```
 Username: admin
-Password: Wazuh@S0C2026!
+Password: <SET_DEFAULT_ADMIN_PASSWORD>
 ```
 
 ⚠️ **IMPORTANT:** Change password after first login!

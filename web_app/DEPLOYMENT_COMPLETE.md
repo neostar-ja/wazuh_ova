@@ -205,7 +205,7 @@ $ ./deploy.sh fullbuild
 # ✓ All health checks passed!
 # 🎉 FULL BUILD & DEPLOY COMPLETED!
 # URL: https://10.251.150.222:3348/wazuh
-# Username: admin | Password: Wazuh@S0C2026!
+# Username: admin | Password: <SET_DEFAULT_ADMIN_PASSWORD>
 ```
 
 ### Example 2: Code Update

@@ -21,8 +21,10 @@
 
   <!-- PCI 6.6: Web application attacks -->
   <rule id="120002" level="8">
-    <if_group>attack</if_group>
+    <!-- Wazuh concatenates repeated <if_group> tags into an invalid group name.
+         Keep a single IDS anchor and narrow the match with Suricata attack metadata. -->
     <if_group>ids</if_group>
+    <match>Web Application Attack|Attempted Administrator Privilege Gain|Exploit|ET WEB_SERVER</match>
     <description>PCI DSS 6.6: Web application attack detected</description>
     <group>pci_dss_6.6,compliance,attack,ids,</group>
     <mitre>

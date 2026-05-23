@@ -5,11 +5,19 @@
 
 set -euo pipefail
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 # ────────────────────────── Config ──────────────────────────
 WORKER_HOST="10.251.151.12"
 MASTER_HOST="10.251.151.11"
-SSH_USER="wazuh-user"
-SSH_PASS="wazuh"
+SSH_USER="${SSH_USERNAME:-wazuh-user}"
+SSH_PASS="${SSH_PASSWORD:-}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 LOCAL_RULES="${REPO_ROOT}/rules/1006-suricata-ids-rules.xml"

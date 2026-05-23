@@ -10,12 +10,22 @@
 
 set -euo pipefail
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 MASTER="10.251.151.11"
 INDEXER="10.251.151.13"
-WAZUH_USER="wazuh-user"
-WAZUH_PASS="wazuh"
-OS_USER="admin"
-OS_PASS="admin"
+WAZUH_USER="${SSH_USERNAME:-wazuh-user}"
+WAZUH_PASS="${SSH_PASSWORD:-}"
+OS_USER="${wazuh_open_search_username:-admin}"
+OS_PASS="${wazuh_open_search_password:-}"
+WAZUH_API_USER="${wazuh_api_username:-wazuh-wui}"
+WAZUH_API_PASS="${wazuh_api_password:-}"
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -72,7 +82,7 @@ ORPHAN=$(curl -k -s -u "$OS_USER:$OS_PASS" \
   "https://$INDEXER:9200/_cat/indices/wazuh-states-inventory-hardware-wazuh-server?h=index" 2>/dev/null | tr -d ' \n')
 if [ -n "$ORPHAN" ]; then
   warn "Orphaned empty index found: wazuh-states-inventory-hardware-wazuh-server"
-  echo "       → Delete with: curl -k -u admin:admin -X DELETE https://$INDEXER:9200/wazuh-states-inventory-*-server"
+  echo "       → Delete with configured OpenSearch credentials from $ENV_FILE"
 fi
 echo ""
 
@@ -122,7 +132,7 @@ echo ""
 
 # --------------------------------------------------
 echo "[4/4] Checking Wazuh API syscollector data..."
-TOKEN=$(curl -k -s -u wazuh:wazuh -X POST \
+TOKEN=$(curl -k -s -u "$WAZUH_API_USER:$WAZUH_API_PASS" -X POST \
   "https://$MASTER:55000/security/user/authenticate" \
   2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('token',''))" 2>/dev/null || echo "")
 
@@ -170,8 +180,9 @@ else
   echo "  sed -i 's|https://127.0.0.1:9200|https://10.251.151.13:9200|g' /var/ossec/etc/ossec.conf"
   echo "  sed -i 's|wazuh-server.pem|filebeat.pem|g' /var/ossec/etc/ossec.conf"
   echo "  sed -i 's|wazuh-server-key.pem|filebeat-key.pem|g' /var/ossec/etc/ossec.conf"
-  echo "  echo 'admin' | /var/ossec/bin/wazuh-keystore -f indexer -k username"
-  echo "  echo 'admin' | /var/ossec/bin/wazuh-keystore -f indexer -k password"
+  echo "  # use credentials from $ENV_FILE when updating the keystore"
+  echo "  echo '<indexer-user>' | /var/ossec/bin/wazuh-keystore -f indexer -k username"
+  echo "  echo '<indexer-password>' | /var/ossec/bin/wazuh-keystore -f indexer -k password"
   echo "  /var/ossec/bin/wazuh-control restart"
 fi
 echo "========================================"

@@ -198,7 +198,28 @@
 #22 5.392 debconf: falling back to frontend: Noninteractive
 #22 6.266 Fetched 4886 kB in 0s (14.3 MB/s)
 #22 6.387 Selecting previously unselected package libbrotli1:amd64.
-#22 6.387 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5645 files and directories currently installed.)
+#22 6.387 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 5645 files and directories currently installed.)
 #22 6.393 Preparing to unpack .../00-libbrotli1_1.1.0-2+b7_amd64.deb ...
 #22 6.447 Unpacking libbrotli1:amd64 (1.1.0-2+b7) ...
 #22 6.561 Selecting previously unselected package libkrb5support0:amd64.
@@ -784,7 +805,7 @@
 
 🔐 Default Credentials:
   Username: admin
-  Password: Wazuh@S0C2026!
+  Password: <SET_DEFAULT_ADMIN_PASSWORD>
 
 [1;33m[⚠][0m ⚠️  IMPORTANT: Please change default password after first login!
 

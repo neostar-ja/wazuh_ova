@@ -10,11 +10,19 @@ set -euo pipefail
 # ─── Configuration ────────────────────────────────────────────────────────────
 APP_DIR="/opt/code/wazuh_ova/web_app"
 COMPOSE="docker compose -f ${APP_DIR}/docker/docker-compose.yml"
-APP_URL="https://10.251.150.222:3348/wazuh"
 BACKUP_DIR="/opt/code/wazuh_ova/backups"
 LOG_FILE="${APP_DIR}/logs/deploy.log"
 MAX_RETRIES=12
 HEALTH_CHECK_TIMEOUT=60
+
+if [[ -f "${APP_DIR}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${APP_DIR}/.env"
+  set +a
+fi
+
+APP_URL="${APP_URL:-https://10.251.150.222:3348/wazuh}"
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -140,6 +148,7 @@ check_environment() {
     "BACKEND_HOST"
     "BACKEND_PORT"
     "SECRET_KEY"
+    "DEFAULT_ADMIN_PASSWORD"
     "DATABASE_URL"
     "WAZUH_API_HOST"
     "WAZUH_API_PORT"
@@ -440,10 +449,10 @@ cmd_fullbuild() {
   echo "  ✓ Frontend: http://localhost:80 (internal)"
   echo ""
   echo "🔐 Default Credentials:"
-  echo "  Username: admin"
-  echo "  Password: Wazuh@S0C2026!"
+  echo "  Username: ${DEFAULT_ADMIN_USERNAME:-admin}"
+  echo "  Password: configured via DEFAULT_ADMIN_PASSWORD in web_app/.env"
   echo ""
-  warn "⚠️  IMPORTANT: Please change default password after first login!"
+  warn "⚠️  IMPORTANT: Change the bootstrap password after first login!"
   echo ""
   echo "📖 Useful commands:"
   echo "  • View logs:    $0 logs"
@@ -481,8 +490,8 @@ cmd_start() {
   echo ""
   echo "📍 Access Information:"
   echo "  URL:      ${APP_URL}"
-  echo "  Username: admin"
-  echo "  Password: Wazuh@S0C2026!"
+  echo "  Username: ${DEFAULT_ADMIN_USERNAME:-admin}"
+  echo "  Password: configured via DEFAULT_ADMIN_PASSWORD in web_app/.env"
   echo ""
   warn "⚠️  Please change your password after first login!"
   echo ""
@@ -803,15 +812,18 @@ cmd_env() {
   
   echo ""
   echo "🔗 External Services:"
-  grep -E "^WAZUH_|^OPENSEARCH_|^GRAFANA_" "${APP_DIR}/.env" | sed 's/^/  /'
+  grep -E "^WAZUH_|^OPENSEARCH_|^GRAFANA_" "${APP_DIR}/.env" | \
+    awk -F= '{ if ($1 ~ /(PASS|TOKEN|KEY|SECRET)/) print "  "$1"=<redacted>"; else print "  "$0 }'
   
   echo ""
   echo "🧠 Threat Intelligence APIs:"
-  grep -E "^ABUSEIPDB_KEY|^OTX_KEY|^SHODAN_KEY|^VIRUSTOTAL_KEY" "${APP_DIR}/.env" | sed 's/^/  /'
+  grep -E "^ABUSEIPDB_KEY|^OTX_KEY|^SHODAN_KEY|^VIRUSTOTAL_KEY" "${APP_DIR}/.env" | \
+    awk -F= '{ print "  "$1"=<redacted>" }'
   
   echo ""
   echo "📢 Notifications:"
-  grep -E "^TELEGRAM_" "${APP_DIR}/.env" | sed 's/^/  /'
+  grep -E "^TELEGRAM_" "${APP_DIR}/.env" | \
+    awk -F= '{ if ($1 ~ /(CHAT_ID)/) print "  "$0; else print "  "$1"=<redacted>" }'
   
   separator
 }
@@ -869,4 +881,3 @@ main() {
 
 # ─── Entry Point ─────────────────────────────────────────────────────────────
 main "$@"
-

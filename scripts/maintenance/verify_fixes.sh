@@ -2,9 +2,17 @@
 # Quick Verification Script for Wazuh Elasticsearch Fixes
 # Run this to verify both cluster.name and data.timestamp fixes are working
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 INDEXER="10.251.151.13"
-USER="admin"
-PASS="admin"
+USER="${wazuh_open_search_username:-admin}"
+PASS="${wazuh_open_search_password:-}"
 
 echo "========================================"
 echo "Wazuh Elasticsearch Fix Verification"

@@ -112,7 +112,7 @@ Internet / LAN ──→ HTTPS :3348
 
 | Username | Password | Role | สิทธิ์ |
 |----------|----------|------|--------|
-| `admin` | `Wazuh@S0C2026!` | superadmin | เข้าถึงได้ทุกหน้า รวมถึงจัดการ users |
+| `admin` | `<SET_DEFAULT_ADMIN_PASSWORD>` | superadmin | เข้าถึงได้ทุกหน้า รวมถึงจัดการ users |
 
 > ⚠️ **คำเตือนด้านความปลอดภัย:** กรุณาเปลี่ยนรหัสผ่าน admin ทันทีหลังเข้าใช้งานครั้งแรก
 
@@ -184,7 +184,7 @@ curl -skI https://10.251.150.222:3348/wazuh/ | head -5
 # 4. ทดสอบ Login API
 curl -sk -X POST https://10.251.150.222:3348/wazuh/api/auth/login \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=admin&password=Wazuh@S0C2026!" | python3 -m json.tool
+  -d "username=admin&password=<SET_DEFAULT_ADMIN_PASSWORD>" | python3 -m json.tool
 # Expected: {"access_token": "...", "token_type": "bearer", "user": {...}}
 
 # 5. ตรวจสอบ default user ใน database

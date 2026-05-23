@@ -8,10 +8,18 @@
 
 set -e
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 # Configuration
 ELASTICSEARCH_URL="https://10.251.151.13:9200"
-ELASTICSEARCH_USER="admin"
-ELASTICSEARCH_PASS="admin"
+ELASTICSEARCH_USER="${wazuh_open_search_username:-admin}"
+ELASTICSEARCH_PASS="${wazuh_open_search_password:-}"
 VERIFY_SSL=false
 
 # Colors for output

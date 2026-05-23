@@ -12,6 +12,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+def _is_placeholder_secret(value: str) -> bool:
+    normalized = (value or "").strip()
+    if not normalized:
+        return True
+
+    lowered = normalized.lower()
+    return (
+        lowered in {"changeme", "change_me_in_env", "replace_me"}
+        or "change_me" in lowered
+        or "placeholder" in lowered
+        or "redacted" in lowered
+        or (normalized.startswith("<") and normalized.endswith(">"))
+    )
+
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -85,15 +100,35 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     from ..core.security import get_password_hash
     db = SessionLocal()
-    if not db.query(User).filter(User.username == "admin").first():
+    if _is_placeholder_secret(settings.secret_key):
+        raise RuntimeError(
+            "SECRET_KEY must be configured with a real value before starting the web app."
+        )
+    if _is_placeholder_secret(settings.default_admin_password):
+        raise RuntimeError(
+            "DEFAULT_ADMIN_PASSWORD must be configured with a real value before starting the web app."
+        )
+    if _is_placeholder_secret(settings.wazuh_api_pass):
+        raise RuntimeError(
+            "WAZUH_API_PASS must be configured with a real value before starting the web app."
+        )
+    if _is_placeholder_secret(settings.opensearch_pass):
+        raise RuntimeError(
+            "OPENSEARCH_PASS must be configured with a real value before starting the web app."
+        )
+    if not db.query(User).filter(User.username == settings.default_admin_username).first():
+        if not settings.default_admin_password:
+            raise RuntimeError(
+                "DEFAULT_ADMIN_PASSWORD is required to bootstrap the initial web app admin user."
+            )
         admin = User(
-            username="admin",
-            email="admin@hospital.wu.ac.th",
-            full_name="SOC Administrator",
-            hashed_password=get_password_hash("Wazuh@S0C2026!"),
+            username=settings.default_admin_username,
+            email=settings.default_admin_email,
+            full_name=settings.default_admin_full_name,
+            hashed_password=get_password_hash(settings.default_admin_password),
             role="superadmin",
         )
         db.add(admin)
         db.commit()
-        print("Default admin user created: admin / Wazuh@S0C2026!")
+        print(f"Default admin user created: {settings.default_admin_username}")
     db.close()

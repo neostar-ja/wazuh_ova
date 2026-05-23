@@ -8,10 +8,18 @@
 
 set -e
 
+ENV_FILE="/opt/code/wazuh_ova/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 MASTER_IP="10.251.151.11"
 WORKER_IP="10.251.151.12"
-SSH_USER="wazuh-user"
-SSH_PASS="wazuh"
+SSH_USER="${SSH_USERNAME:-wazuh-user}"
+SSH_PASS="${SSH_PASSWORD:-}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCAL_DIR="$REPO_ROOT"
 WAZUH_HOME="/var/ossec"

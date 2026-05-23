@@ -112,7 +112,7 @@ help        Show this help
 
 **Default Login:**
 - Username: `admin`
-- Password: `Wazuh@S0C2026!`
+- Password: `<SET_DEFAULT_ADMIN_PASSWORD>`
 
 ⚠️ Change password after first login!
 
