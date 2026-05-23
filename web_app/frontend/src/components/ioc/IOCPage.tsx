@@ -6,7 +6,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Select, MenuItem, FormControl, InputLabel, Alert, CircularProgress,
   IconButton, Tooltip, LinearProgress, Divider, Skeleton, Collapse,
-  InputAdornment, Badge, useTheme,
+  InputAdornment,
 } from '@mui/material'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
 import AddRoundedIcon from '@mui/icons-material/AddRounded'
@@ -17,7 +17,6 @@ import GppGoodRoundedIcon from '@mui/icons-material/GppGoodRounded'
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded'
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
-import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
 import RouterRoundedIcon from '@mui/icons-material/RouterRounded'
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
 import BugReportRoundedIcon from '@mui/icons-material/BugReportRounded'
@@ -26,7 +25,6 @@ import BarChartRoundedIcon from '@mui/icons-material/BarChartRounded'
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
 import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded'
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded'
-import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -37,20 +35,28 @@ import { iocApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
+import { useThemeMode } from '../../theme/ThemeContext'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
 const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
 const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
 
-const VERDICT_CONFIG = {
+interface VerdictItem {
+  color: string;
+  bg: string;
+  label: string;
+  icon: React.ReactNode;
+  desc: string;
+}
+
+const VERDICT_CONFIG: Record<string, VerdictItem> = {
   blocked:    { color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   label: 'BLOCKED',    icon: <GppBadRoundedIcon />,  desc: 'พบใน Custom IOC Block-list' },
   malicious:  { color: '#EF4444', bg: 'rgba(239,68,68,0.08)',   label: 'MALICIOUS',  icon: <GppBadRoundedIcon />,  desc: 'ตรวจพบว่าเป็นภัยคุกคาม' },
   suspicious: { color: '#F17422', bg: 'rgba(241,116,34,0.10)',  label: 'SUSPICIOUS', icon: <WarningRoundedIcon />, desc: 'พบสัญญาณที่น่าสงสัย' },
   clean:      { color: '#22C55E', bg: 'rgba(34,197,94,0.08)',   label: 'CLEAN',      icon: <GppGoodRoundedIcon />, desc: 'ไม่พบภัยคุกคามในฐานข้อมูล' },
 }
 
-const IOC_TYPE_ICON = {
+const IOC_TYPE_ICON: Record<string, React.ReactNode> = {
   ip:          <RouterRoundedIcon    sx={{ fontSize: 14 }} />,
   domain:      <LanguageRoundedIcon  sx={{ fontSize: 14 }} />,
   hash_md5:    <FingerprintRoundedIcon sx={{ fontSize: 14 }} />,
@@ -60,17 +66,22 @@ const IOC_TYPE_ICON = {
   unknown:     <ManageSearchRoundedIcon sx={{ fontSize: 14 }} />,
 }
 
-const TYPE_LABEL = {
+const TYPE_LABEL: Record<string, string> = {
   ip: 'IP Address', domain: 'Domain', hash_md5: 'MD5 Hash',
   hash_sha1: 'SHA1 Hash', hash_sha256: 'SHA256 Hash', url: 'URL',
 }
 
-const SEV_COLORS = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
+const SEV_COLORS: Record<string, string> = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
 const PIE_PALETTE = [BRAND.purple, BRAND.orange, '#38BDF8', '#22C55E', '#EAB308', '#EC4899']
 
 // ── Risk Score Gauge ──────────────────────────────────────────────────────────
+interface RiskGaugeProps {
+  score?: number;
+  verdict?: string;
+  size?: number;
+}
 
-function RiskGauge({ score = 0, verdict = 'clean', size = 120 }) {
+function RiskGauge({ score = 0, verdict = 'clean', size = 120 }: RiskGaugeProps) {
   const cfg = VERDICT_CONFIG[verdict] || VERDICT_CONFIG.clean
   const circumference = 2 * Math.PI * 44
   const dashOffset = circumference - (score / 100) * circumference
@@ -100,7 +111,7 @@ function RiskGauge({ score = 0, verdict = 'clean', size = 120 }) {
       <Chip
         label={cfg.label}
         size="small"
-        icon={cfg.icon}
+        icon={cfg.icon as any}
         sx={{
           bgcolor: cfg.bg, color: cfg.color,
           fontWeight: 800, fontSize: 11, height: 24,
@@ -113,7 +124,11 @@ function RiskGauge({ score = 0, verdict = 'clean', size = 120 }) {
 }
 
 // ── Copy Button ───────────────────────────────────────────────────────────────
-function CopyBtn({ text }) {
+interface CopyBtnProps {
+  text: string;
+}
+
+function CopyBtn({ text }: CopyBtnProps) {
   const { enqueueSnackbar } = useSnackbar()
   return (
     <Tooltip title="คัดลอก">
@@ -129,7 +144,15 @@ function CopyBtn({ text }) {
 }
 
 // ── Feed Card base ────────────────────────────────────────────────────────────
-function FeedCard({ title, logo, available, children, accentColor }) {
+interface FeedCardProps {
+  title: string;
+  logo: string;
+  available: boolean;
+  children: React.ReactNode;
+  accentColor?: string;
+}
+
+function FeedCard({ title, logo, available, children, accentColor }: FeedCardProps) {
   const color = accentColor || BRAND.purple
   return (
     <Card sx={{
@@ -157,7 +180,11 @@ function FeedCard({ title, logo, available, children, accentColor }) {
 }
 
 // ── AbuseIPDB Card ────────────────────────────────────────────────────────────
-function AbuseIPDBCard({ data }) {
+interface AbuseIPDBCardProps {
+  data: any;
+}
+
+function AbuseIPDBCard({ data }: AbuseIPDBCardProps) {
   if (!data?.available) {
     return (
       <FeedCard title="AbuseIPDB" logo="ABUSEIPDB" available={false} accentColor="#EF4444">
@@ -204,7 +231,7 @@ function AbuseIPDBCard({ data }) {
       {data.reports?.length > 0 && (
         <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
           <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 600, mb: 0.5 }}>RECENT REPORTS</Typography>
-          {data.reports.slice(0, 2).map((r, i) => (
+          {data.reports.slice(0, 2).map((r: any, i: number) => (
             <Typography key={i} sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1.4 }} noWrap>
               {r.comment || '(no comment)'}
             </Typography>
@@ -216,7 +243,11 @@ function AbuseIPDBCard({ data }) {
 }
 
 // ── AlienVault OTX Card ───────────────────────────────────────────────────────
-function OTXCard({ data }) {
+interface OTXCardProps {
+  data: any;
+}
+
+function OTXCard({ data }: OTXCardProps) {
   const hasPulses = data?.available && (data?.pulse_count || 0) > 0
   return (
     <FeedCard title="OTX" logo="ALIENVAULT OTX" available={!!data?.available} accentColor="#FF7A00">
@@ -248,7 +279,7 @@ function OTXCard({ data }) {
               <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
                 THREAT PULSES
               </Typography>
-              {data.pulse_refs.map((p, i) => (
+              {data.pulse_refs.map((p: any, i: number) => (
                 <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
                   <BugReportRoundedIcon sx={{ fontSize: 12, color: '#FF7A00', mt: 0.15, flexShrink: 0 }} />
                   <Typography sx={{ fontSize: 10, lineHeight: 1.4, color: 'text.secondary' }} className="line-clamp-2">
@@ -268,7 +299,11 @@ function OTXCard({ data }) {
 }
 
 // ── Shodan Card ───────────────────────────────────────────────────────────────
-function ShodanCard({ data }) {
+interface ShodanCardProps {
+  data: any;
+}
+
+function ShodanCard({ data }: ShodanCardProps) {
   if (!data?.available) {
     return (
       <FeedCard title="Shodan" logo="SHODAN" available={false} accentColor="#CC0000">
@@ -289,7 +324,7 @@ function ShodanCard({ data }) {
             OPEN PORTS ({data.ports.length})
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
-            {data.ports.slice(0, 16).map(p => (
+            {data.ports.slice(0, 16).map((p: number) => (
               <Chip key={p} label={p} size="small" sx={{
                 height: 18, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
                 bgcolor: [21, 22, 23, 25, 443, 3389, 4444, 6379, 27017].includes(p)
@@ -306,7 +341,7 @@ function ShodanCard({ data }) {
             CVEs ({data.vulns.length})
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
-            {data.vulns.slice(0, 8).map(v => (
+            {data.vulns.slice(0, 8).map((v: string) => (
               <Chip key={v} label={v} size="small" sx={{
                 height: 18, fontSize: 9, bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
               }} />
@@ -319,7 +354,7 @@ function ShodanCard({ data }) {
           <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
             SERVICES
           </Typography>
-          {data.services.slice(0, 3).map((s, i) => (
+          {data.services.slice(0, 3).map((s: any, i: number) => (
             <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.3 }}>
               <Chip label={`${s.port}/${s.transport}`} size="small" sx={{ height: 16, fontSize: 9, fontFamily: '"IBM Plex Mono"', bgcolor: 'rgba(123,91,164,0.1)', color: 'text.secondary' }} />
               <Typography sx={{ fontSize: 10, color: 'text.secondary' }} noWrap>
@@ -339,7 +374,11 @@ function ShodanCard({ data }) {
 }
 
 // ── VirusTotal Card ───────────────────────────────────────────────────────────
-function VirusTotalCard({ data }) {
+interface VirusTotalCardProps {
+  data: any;
+}
+
+function VirusTotalCard({ data }: VirusTotalCardProps) {
   if (!data?.available) {
     return (
       <FeedCard title="VirusTotal" logo="VIRUSTOTAL" available={false} accentColor="#395BA9">
@@ -388,7 +427,7 @@ function VirusTotalCard({ data }) {
           <Typography sx={{ fontSize: 9, color: '#EF4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
             DETECTED BY
           </Typography>
-          {data.malicious_engines.slice(0, 4).map((e, i) => (
+          {data.malicious_engines.slice(0, 4).map((e: any, i: number) => (
             <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
               <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>{e.engine}</Typography>
               <Typography sx={{ fontSize: 10, color: '#EF4444', fontFamily: '"IBM Plex Mono"', fontWeight: 600 }} noWrap>{e.result}</Typography>
@@ -407,10 +446,14 @@ function VirusTotalCard({ data }) {
 }
 
 // ── Search Results Panel ──────────────────────────────────────────────────────
-function SearchResults({ result, onClose }) {
+interface SearchResultsProps {
+  result: any;
+  onClose: () => void;
+}
+
+function SearchResults({ result, onClose }: SearchResultsProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [histTimeRange, setHistTimeRange] = useState('30d')
-  const { enqueueSnackbar } = useSnackbar()
 
   const { data: histData, isFetching: histLoading, refetch: fetchHistory } = useQuery({
     queryKey: ['ioc-history', result?.value, histTimeRange],
@@ -448,7 +491,7 @@ function SearchResults({ result, onClose }) {
                 <CopyBtn text={result.value} />
                 <Chip
                   size="small"
-                  icon={IOC_TYPE_ICON[result.ioc_type] || IOC_TYPE_ICON.unknown}
+                  icon={(IOC_TYPE_ICON[result.ioc_type] || IOC_TYPE_ICON.unknown) as React.ReactElement}
                   label={TYPE_LABEL[result.ioc_type] || result.ioc_type}
                   sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.15)', color: BRAND.purpleLight }}
                 />
@@ -595,7 +638,7 @@ function SearchResults({ result, onClose }) {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {histData.matches.map((m, i) => {
+                      {histData.matches.map((m: any, i: number) => {
                         const lv = m.level || 0
                         const lc = lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? BRAND.purple : '#22C55E'
                         return (
@@ -639,20 +682,20 @@ function CustomIOCPanel() {
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ ioc_type: 'ip', value: '', description: '', severity: 'high', expires_at: '' })
 
-  const { data: iocs = [], isLoading } = useQuery({
+  const { data: iocs = [], isLoading } = useQuery<any[]>({
     queryKey: ['custom-iocs', filterType, filterSev],
     queryFn: () => iocApi.listCustom({ ioc_type: filterType || undefined, severity: filterSev || undefined }).then(r => r.data),
     staleTime: 30000,
   })
 
-  const { data: stats = {} } = useQuery({
+  const { data: stats = {} } = useQuery<any>({
     queryKey: ['ioc-stats'],
     queryFn: () => iocApi.stats().then(r => r.data),
     staleTime: 60000,
   })
 
   const addMut = useMutation({
-    mutationFn: data => iocApi.addCustom(data),
+    mutationFn: (data: any) => iocApi.addCustom(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['custom-iocs'] })
       qc.invalidateQueries({ queryKey: ['ioc-stats'] })
@@ -664,7 +707,7 @@ function CustomIOCPanel() {
   })
 
   const delMut = useMutation({
-    mutationFn: id => iocApi.deleteCustom(id),
+    mutationFn: (id: string | number) => iocApi.deleteCustom(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['custom-iocs'] })
       qc.invalidateQueries({ queryKey: ['ioc-stats'] })
@@ -676,7 +719,7 @@ function CustomIOCPanel() {
     !search || i.value.toLowerCase().includes(search.toLowerCase()) || (i.description || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const sevColor = s => SEV_COLORS[s] || BRAND.purple
+  const sevColor = (s: string) => SEV_COLORS[s] || BRAND.purple
 
   return (
     <Box>
@@ -684,7 +727,7 @@ function CustomIOCPanel() {
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {[
           { label: 'ทั้งหมด', value: stats.total || 0, color: BRAND.purple },
-          ...((stats.by_severity || []).slice(0, 3).map(s => ({
+          ...((stats.by_severity || []).slice(0, 3).map((s: any) => ({
             label: s.name.toUpperCase(), value: s.count, color: SEV_COLORS[s.name] || BRAND.purple,
           }))),
         ].map((s, i) => (
@@ -877,12 +920,12 @@ function CustomIOCPanel() {
 
 // ── Statistics Panel ──────────────────────────────────────────────────────────
 function StatsPanel() {
-  const { data: stats = {}, isLoading } = useQuery({
+  const { data: stats = {}, isLoading } = useQuery<any>({
     queryKey: ['ioc-stats'],
     queryFn: () => iocApi.stats().then(r => r.data),
     staleTime: 60000,
   })
-  const sevColors = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
+  const sevColors: Record<string, string> = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
 
   if (isLoading) return <Box sx={{ p: 2 }}>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</Box>
   if (!stats.total) return (
@@ -902,9 +945,9 @@ function StatsPanel() {
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={stats.by_type || []} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={72} innerRadius={36} paddingAngle={3}>
-                  {(stats.by_type || []).map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}
+                  {(stats.by_type || []).map((_: any, i: number) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}
                 </Pie>
-                <RechartTooltip contentStyle={ChartTip} formatter={(v, n) => [v, n]} />
+                <RechartTooltip contentStyle={ChartTip} formatter={(v: any, n?: any) => [v, n || '']} />
                 <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11 }}>{v.toUpperCase()}</span>} />
               </PieChart>
             </ResponsiveContainer>
@@ -924,7 +967,7 @@ function StatsPanel() {
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <RechartTooltip contentStyle={ChartTip} />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {(stats.by_severity || []).map((e, i) => (
+                  {(stats.by_severity || []).map((e: any, i: number) => (
                     <Cell key={i} fill={sevColors[e.name] || BRAND.purple} />
                   ))}
                 </Bar>
@@ -939,7 +982,7 @@ function StatsPanel() {
           <Card>
             <CardContent sx={{ p: '14px 16px !important' }}>
               <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1.5 }}>ผู้เพิ่ม IOC</Typography>
-              {stats.by_user.map((u, i) => (
+              {stats.by_user.map((u: any, i: number) => (
                 <Box key={i} sx={{ mb: 0.75 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                     <Typography sx={{ fontSize: 12 }}>{u.name}</Typography>
@@ -963,10 +1006,10 @@ function StatsPanel() {
 const RECENT_SEARCHES_KEY = 'soc_ioc_recent'
 const MAX_RECENT = 8
 
-function getRecent() {
+function getRecent(): string[] {
   try { return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]') } catch { return [] }
 }
-function saveRecent(val) {
+function saveRecent(val: string) {
   const prev = getRecent().filter(v => v !== val)
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([val, ...prev].slice(0, MAX_RECENT)))
 }
@@ -974,13 +1017,13 @@ function saveRecent(val) {
 export default function IOCPage() {
   const [query, setQuery]           = useState('')
   const [activeTab, setActiveTab]   = useState(0) // 0=search, 1=custom, 2=stats
-  const [searchResult, setResult]   = useState(null)
+  const [searchResult, setResult]   = useState<any>(null)
   const [searching, setSearching]   = useState(false)
   const [searchError, setSearchErr] = useState('')
-  const [recent, setRecent]         = useState(getRecent)
-  const inputRef = useRef(null)
+  const [recent, setRecent]         = useState<string[]>(getRecent)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleSearch = useCallback(async (val) => {
+  const handleSearch = useCallback(async (val?: string) => {
     const q = (val || query).trim()
     if (!q) return
     setQuery(q)
@@ -1074,7 +1117,7 @@ export default function IOCPage() {
                   inputRef={inputRef}
                   fullWidth
                   size="small"
-                  placeholder="ตัวอย่าง: 1.2.3.4 · malware.com · d41d8cd98f00b204e9800998ecf8427e"
+                  placeholder="ตัวอย่าง: 1.2.3.4 · malware.com · d41d8cd9... "
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}

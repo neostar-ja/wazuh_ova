@@ -1,5 +1,3 @@
-/* eslint-disable react/prop-types */
-
 import { useDeferredValue, useMemo, useState } from 'react'
 import {
   Box,
@@ -90,8 +88,12 @@ const CHART_TOOLTIP_STYLE = {
 
 const TAB_LABELS = ['Overview', 'Frameworks', 'SCA Checks', 'Agents', 'Vulnerabilities', 'Alerts', 'Evidence']
 
-function ConnectionChip({ status }) {
-  const config = {
+interface ConnectionChipProps {
+  status: 'connected' | 'degraded' | 'error' | 'cached' | string
+}
+
+function ConnectionChip({ status }: ConnectionChipProps) {
+  const config: Record<string, { label: string; color: string }> = {
     connected: { label: 'Connected', color: '#10b981' },
     degraded: { label: 'Degraded', color: '#f59e0b' },
     error: { label: 'Error', color: '#ef4444' },
@@ -115,7 +117,11 @@ function ConnectionChip({ status }) {
   )
 }
 
-function SeverityChip({ severity }) {
+interface SeverityChipProps {
+  severity: string
+}
+
+function SeverityChip({ severity }: SeverityChipProps) {
   const color = SEVERITY_COLORS[severity] || SEVERITY_COLORS.unknown
   return (
     <Chip
@@ -132,8 +138,12 @@ function SeverityChip({ severity }) {
   )
 }
 
-function StatusChip({ status }) {
-  const palette = {
+interface StatusChipProps {
+  status: string
+}
+
+function StatusChip({ status }: StatusChipProps) {
+  const palette: Record<string, { label: string; color: string }> = {
     passed: { label: 'Passed', color: '#10b981' },
     failed: { label: 'Failed', color: '#ef4444' },
     not_applicable: { label: 'N/A', color: '#94a3b8' },
@@ -160,7 +170,15 @@ function StatusChip({ status }) {
   )
 }
 
-function MetricCard({ title, value, subtitle, icon: Icon, accent = '#7B5BA4' }) {
+interface MetricCardComponentProps {
+  title: string
+  value: string | number
+  subtitle?: string
+  icon?: React.ComponentType<any>
+  accent?: string
+}
+
+function MetricCard({ title, value, subtitle, icon: Icon, accent = '#7B5BA4' }: MetricCardComponentProps) {
   return (
     <Card
       sx={{
@@ -216,7 +234,12 @@ function MetricCard({ title, value, subtitle, icon: Icon, accent = '#7B5BA4' }) 
   )
 }
 
-function FrameworkCard({ framework, onSelect }) {
+interface FrameworkCardProps {
+  framework: any
+  onSelect: (id: string) => void
+}
+
+function FrameworkCard({ framework, onSelect }: FrameworkCardProps) {
   const color = FRAMEWORK_COLORS[framework.frameworkId] || '#7B5BA4'
   return (
     <Card
@@ -285,7 +308,12 @@ function FrameworkCard({ framework, onSelect }) {
   )
 }
 
-function RetryableError({ error, onRetry }) {
+interface RetryableErrorProps {
+  error: any
+  onRetry: () => void
+}
+
+function RetryableError({ error, onRetry }: RetryableErrorProps) {
   return (
     <AlertMessage
       type="error"
@@ -300,7 +328,13 @@ function RetryableError({ error, onRetry }) {
   )
 }
 
-function SectionTitle({ title, subtitle, action }) {
+interface SectionTitleProps {
+  title: string
+  subtitle?: string
+  action?: React.ReactNode
+}
+
+function SectionTitle({ title, subtitle, action }: SectionTitleProps) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
       <Box>
@@ -312,7 +346,12 @@ function SectionTitle({ title, subtitle, action }) {
   )
 }
 
-function ScoreTable({ frameworks, onSelectFramework }) {
+interface ScoreTableProps {
+  frameworks: any[]
+  onSelectFramework: (id: string) => void
+}
+
+function ScoreTable({ frameworks, onSelectFramework }: ScoreTableProps) {
   if (!frameworks.length) {
     return <EmptyState title="ยังไม่มี framework mapping" message="ระบบยังไม่พบข้อมูลควบคุมหรือ alert ที่ map กับ framework ที่เลือก" />
   }
@@ -363,14 +402,18 @@ function ScoreTable({ frameworks, onSelectFramework }) {
   )
 }
 
-function CopyButton({ value }) {
+interface CopyButtonProps {
+  value?: string
+}
+
+function CopyButton({ value }: CopyButtonProps) {
   return (
     <Tooltip title="Copy">
       <span>
         <IconButton
           size="small"
           disabled={!value}
-          onClick={() => navigator.clipboard.writeText(value)}
+          onClick={() => value && navigator.clipboard.writeText(value)}
         >
           <ContentCopyOutlinedIcon fontSize="inherit" />
         </IconButton>
@@ -388,8 +431,8 @@ export default function CompliancePage() {
   const [severity, setSeverity] = useState('all')
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
-  const [selectedAgent, setSelectedAgent] = useState(null)
-  const [selectedCheck, setSelectedCheck] = useState(null)
+  const [selectedAgent, setSelectedAgent] = useState<any>(null)
+  const [selectedCheck, setSelectedCheck] = useState<any>(null)
   const [agentDrawerTab, setAgentDrawerTab] = useState(0)
   const [exporting, setExporting] = useState(false)
 
@@ -423,10 +466,11 @@ export default function CompliancePage() {
   const agentVulnerabilitiesQuery = useComplianceVulnerabilities(agentDetailFilters, Boolean(selectedAgent))
   const agentAlertsQuery = useComplianceAlerts(agentDetailFilters, Boolean(selectedAgent))
 
-  const summary = useMemo(() => summaryQuery.data?.summary || {}, [summaryQuery.data])
-  const meta = useMemo(() => summaryQuery.data?.meta || {}, [summaryQuery.data])
-  const frameworks = useMemo(() => summaryQuery.data?.frameworks || [], [summaryQuery.data])
-  const charts = useMemo(() => summaryQuery.data?.charts || {}, [summaryQuery.data])
+  const summaryData = summaryQuery.data as any
+  const summary = useMemo(() => summaryData?.summary || {}, [summaryData])
+  const meta = useMemo(() => summaryData?.meta || {}, [summaryData])
+  const frameworks = useMemo(() => summaryData?.frameworks || [], [summaryData])
+  const charts = useMemo(() => summaryData?.charts || {}, [summaryData])
   const frameworkOptions = meta.availableFrameworks || Object.entries(FRAMEWORK_LABELS).map(([frameworkId, frameworkName]) => ({ frameworkId, frameworkName }))
   const groupOptions = meta.agentGroups || []
   const osOptions = meta.agentOs || []
@@ -462,7 +506,7 @@ export default function CompliancePage() {
       if (activeTab === 0 || activeTab === 1) {
         downloadTextFile(`compliance-${TAB_LABELS[activeTab].toLowerCase()}.csv`, makeCsv(currentRows), 'text/csv;charset=utf-8')
       } else {
-        const datasetMap = { 2: 'sca', 3: 'agents', 4: 'vulnerabilities', 5: 'alerts', 6: 'evidence' }
+        const datasetMap: Record<number, string> = { 2: 'sca', 3: 'agents', 4: 'vulnerabilities', 5: 'alerts', 6: 'evidence' }
         const dataset = datasetMap[activeTab] || 'evidence'
         await downloadApiBlob(
           `compliance-${dataset}-${timeRange}.csv`,
@@ -528,13 +572,13 @@ export default function CompliancePage() {
   ]
 
   const findingsBySeverity = charts.findingsBySeverity || []
-  const findingsByFramework = (charts.findingsByFramework || []).map(item => ({
+  const findingsByFramework = (charts.findingsByFramework || []).map((item: any) => ({
     ...item,
     color: FRAMEWORK_COLORS[item.frameworkId] || '#7B5BA4',
   }))
   const timeline = charts.alertsTimeline || []
-  const topFailedControls = charts.topFailedControls || []
-  const topRiskyAgents = charts.topRiskyAgents || []
+  const topFailedControls: any[] = charts.topFailedControls || []
+  const topRiskyAgents: any[] = charts.topRiskyAgents || []
 
   const currentTabError =
     activeTab === 2 ? scaQuery.error :
@@ -565,7 +609,7 @@ export default function CompliancePage() {
                   <ConnectionChip status={meta.dataSourceStatus} />
                   <Chip size="small" label={`Last sync: ${formatDateTime(meta.lastUpdated)}`} variant="outlined" />
                   {Object.entries(meta.sources || {}).map(([sourceName, sourceStatus]) => (
-                    <Chip key={sourceName} size="small" label={`${sourceName}: ${sourceStatus}`} variant="outlined" />
+                    <Chip key={sourceName} size="small" label={`${sourceName}: ${sourceStatus as string}`} variant="outlined" />
                   ))}
                 </Stack>
               </Box>
@@ -596,7 +640,7 @@ export default function CompliancePage() {
                 <FormControl fullWidth size="small">
                   <Select value={framework} onChange={event => setFramework(event.target.value)}>
                     <MenuItem value="all">All frameworks</MenuItem>
-                    {frameworkOptions.map(item => (
+                    {frameworkOptions.map((item: any) => (
                       <MenuItem key={item.frameworkId} value={item.frameworkId}>{item.frameworkName}</MenuItem>
                     ))}
                   </Select>
@@ -606,7 +650,7 @@ export default function CompliancePage() {
                 <FormControl fullWidth size="small">
                   <Select value={agentGroup} onChange={event => setAgentGroup(event.target.value)}>
                     <MenuItem value="all">All groups</MenuItem>
-                    {groupOptions.map(item => (
+                    {groupOptions.map((item: any) => (
                       <MenuItem key={item} value={item}>{item}</MenuItem>
                     ))}
                   </Select>
@@ -616,7 +660,7 @@ export default function CompliancePage() {
                 <FormControl fullWidth size="small">
                   <Select value={agentOs} onChange={event => setAgentOs(event.target.value)}>
                     <MenuItem value="all">All OS</MenuItem>
-                    {osOptions.map(item => (
+                    {osOptions.map((item: any) => (
                       <MenuItem key={item} value={item}>{item}</MenuItem>
                     ))}
                   </Select>
@@ -709,7 +753,7 @@ export default function CompliancePage() {
                               <ResponsiveContainer width="100%" height={250}>
                                 <PieChart>
                                   <Pie data={findingsBySeverity} dataKey="count" nameKey="severity" innerRadius={52} outerRadius={86}>
-                                    {findingsBySeverity.map(item => (
+                                    {findingsBySeverity.map((item: any) => (
                                       <Cell key={item.severity} fill={SEVERITY_COLORS[item.severity] || '#64748b'} />
                                     ))}
                                   </Pie>
@@ -735,7 +779,7 @@ export default function CompliancePage() {
                                   <YAxis tick={{ fontSize: 11 }} stroke="#8899bb" />
                                   <RechartsTooltip contentStyle={CHART_TOOLTIP_STYLE} />
                                   <Bar dataKey="score" radius={[6, 6, 0, 0]}>
-                                    {findingsByFramework.map(item => (
+                                    {findingsByFramework.map((item: any) => (
                                       <Cell key={item.frameworkId} fill={item.color} />
                                     ))}
                                   </Bar>
@@ -785,7 +829,7 @@ export default function CompliancePage() {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {topFailedControls.map(item => (
+                                  {topFailedControls.map((item: any) => (
                                     <TableRow key={`${item.framework}-${item.controlId}`} hover>
                                       <TableCell>{FRAMEWORK_LABELS[item.framework] || item.framework}</TableCell>
                                       <TableCell>
@@ -822,7 +866,7 @@ export default function CompliancePage() {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {topRiskyAgents.slice(0, 10).map(agent => (
+                                  {topRiskyAgents.slice(0, 10).map((agent: any) => (
                                     <TableRow key={agent.agentId} hover>
                                       <TableCell>
                                         <Typography variant="body2" fontWeight={600}>{agent.name}</Typography>
@@ -849,7 +893,7 @@ export default function CompliancePage() {
                 {activeTab === 1 && (
                   <>
                     <Grid container spacing={1.5}>
-                      {frameworks.map(item => (
+                      {frameworks.map((item: any) => (
                         <Grid item xs={12} md={6} xl={4} key={item.frameworkId}>
                           <FrameworkCard framework={item} onSelect={setFramework} />
                         </Grid>
@@ -899,7 +943,7 @@ export default function CompliancePage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {scaQuery.data.checks.map(check => (
+                                {scaQuery.data.checks.map((check: any) => (
                                   <TableRow key={check.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedCheck(check)}>
                                     <TableCell>
                                       <Typography variant="body2" fontWeight={600}>{check.affectedAgents?.[0] || '-'}</Typography>
@@ -911,7 +955,7 @@ export default function CompliancePage() {
                                       <Typography variant="caption" color="text.secondary">{check.title}</Typography>
                                     </TableCell>
                                     <TableCell><StatusChip status={check.status} /></TableCell>
-                                    <TableCell>{(check.frameworks || []).map(name => FRAMEWORK_LABELS[name] || name).join(', ') || '-'}</TableCell>
+                                    <TableCell>{(check.frameworks || []).map((name: string) => FRAMEWORK_LABELS[name] || name).join(', ') || '-'}</TableCell>
                                     <TableCell>{formatDateTime(check.lastSeen)}</TableCell>
                                   </TableRow>
                                 ))}
@@ -950,7 +994,7 @@ export default function CompliancePage() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {agentsQuery.data.items.map(agent => (
+                              {agentsQuery.data.items.map((agent: any) => (
                                 <TableRow key={agent.agentId} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedAgent(agent)}>
                                   <TableCell>
                                     <Typography variant="body2" fontWeight={600}>{agent.name}</Typography>
@@ -986,7 +1030,7 @@ export default function CompliancePage() {
                   ) : vulnerabilitiesQuery.data?.items?.length ? (
                     <>
                       <Grid container spacing={1.5}>
-                        {(vulnerabilitiesQuery.data.summary?.bySeverity || []).map(item => (
+                        {(vulnerabilitiesQuery.data.summary?.bySeverity || []).map((item: any) => (
                           <Grid item xs={6} md={3} key={item.severity}>
                             <MetricCard
                               title={`${item.severity} CVEs`}
@@ -1015,7 +1059,7 @@ export default function CompliancePage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {vulnerabilitiesQuery.data.items.map(item => (
+                                {vulnerabilitiesQuery.data.items.map((item: any) => (
                                   <TableRow key={`${item.cve}-${item.agentId}`} hover>
                                     <TableCell>
                                       <Typography variant="body2" fontWeight={600}>{item.cve}</Typography>
@@ -1068,7 +1112,7 @@ export default function CompliancePage() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {alertsQuery.data.items.map(alert => (
+                              {alertsQuery.data.items.map((alert: any) => (
                                 <TableRow key={alert.id} hover>
                                   <TableCell>{formatDateTime(alert.timestamp)}</TableCell>
                                   <TableCell>
@@ -1087,7 +1131,7 @@ export default function CompliancePage() {
                                       <Chip
                                         key={`${alert.id}-${name}`}
                                         size="small"
-                                        label={`${FRAMEWORK_LABELS[name] || name}: ${(values || []).slice(0, 2).join(', ')}`}
+                                        label={`${FRAMEWORK_LABELS[name] || name}: ${(values as string[] || []).slice(0, 2).join(', ')}`}
                                         sx={{ mr: 0.5, mb: 0.5 }}
                                       />
                                     ))}
@@ -1125,7 +1169,7 @@ export default function CompliancePage() {
                               </TableRow>
                             </TableHead>
                             <TableBody>
-                              {evidenceQuery.data.items.map(item => (
+                              {evidenceQuery.data.items.map((item: any) => (
                                 <TableRow key={item.id} hover>
                                   <TableCell>{formatDateTime(item.timestamp)}</TableCell>
                                   <TableCell>{FRAMEWORK_LABELS[item.framework] || item.framework}</TableCell>
@@ -1200,7 +1244,7 @@ export default function CompliancePage() {
               <Box>
                 <Typography variant="caption" color="text.secondary">References</Typography>
                 <Stack spacing={0.5} sx={{ mt: 0.75 }}>
-                  {selectedCheck.references.map(reference => (
+                  {selectedCheck.references.map((reference: string) => (
                     <Typography key={reference} variant="body2">{reference}</Typography>
                   ))}
                 </Stack>
@@ -1288,7 +1332,7 @@ export default function CompliancePage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {agentScaQuery.data.checks.map(check => (
+                        {agentScaQuery.data.checks.map((check: any) => (
                           <TableRow key={check.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedCheck(check)}>
                             <TableCell>{check.policyName}</TableCell>
                             <TableCell>
@@ -1320,7 +1364,7 @@ export default function CompliancePage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {agentVulnerabilitiesQuery.data.items.map(item => (
+                        {agentVulnerabilitiesQuery.data.items.map((item: any) => (
                           <TableRow key={`${item.cve}-${item.packageName}`} hover>
                             <TableCell>{item.cve}</TableCell>
                             <TableCell>{item.packageName}</TableCell>
@@ -1349,7 +1393,7 @@ export default function CompliancePage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {agentAlertsQuery.data.items.map(item => (
+                        {agentAlertsQuery.data.items.map((item: any) => (
                           <TableRow key={item.id} hover>
                             <TableCell>{formatDateTime(item.timestamp)}</TableCell>
                             <TableCell>

@@ -1,4 +1,4 @@
-export const FRAMEWORK_LABELS = {
+export const FRAMEWORK_LABELS: Record<string, string> = {
   cis: 'CIS Benchmark',
   pci_dss: 'PCI-DSS',
   gdpr: 'GDPR',
@@ -9,7 +9,7 @@ export const FRAMEWORK_LABELS = {
   mitre: 'MITRE ATT&CK',
 }
 
-export const FRAMEWORK_COLORS = {
+export const FRAMEWORK_COLORS: Record<string, string> = {
   cis: '#3b82f6',
   pci_dss: '#0ea5e9',
   gdpr: '#8b5cf6',
@@ -20,7 +20,7 @@ export const FRAMEWORK_COLORS = {
   mitre: '#f97316',
 }
 
-export const SEVERITY_COLORS = {
+export const SEVERITY_COLORS: Record<string, string> = {
   critical: '#ef4444',
   high: '#f97316',
   medium: '#f59e0b',
@@ -29,7 +29,7 @@ export const SEVERITY_COLORS = {
   unknown: '#64748b',
 }
 
-export function formatDateTime(value, fallback = '-') {
+export function formatDateTime(value?: string | Date | null, fallback = '-'): string {
   if (!value) return fallback
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return fallback
@@ -42,27 +42,27 @@ export function formatDateTime(value, fallback = '-') {
   })
 }
 
-export function formatCompactNumber(value) {
+export function formatCompactNumber(value?: string | number | null): string {
   if (value === null || value === undefined) return '-'
   const number = Number(value)
   if (Number.isNaN(number)) return '-'
   return number.toLocaleString('en-US')
 }
 
-export function formatPercent(value) {
+export function formatPercent(value?: string | number | null): string {
   if (value === null || value === undefined || value === '') return 'N/A'
   const number = Number(value)
   if (Number.isNaN(number)) return 'N/A'
   return `${number.toFixed(1)}%`
 }
 
-export function makeCsv(rows) {
+export function makeCsv(rows: Record<string, any>[]): string {
   if (!Array.isArray(rows) || rows.length === 0) {
     return 'message\r\nNo data\r\n'
   }
 
   const columns = Array.from(new Set(rows.flatMap(row => Object.keys(row))))
-  const escapeCell = value => {
+  const escapeCell = (value: any) => {
     if (value === null || value === undefined) return ''
     const cell = typeof value === 'object' ? JSON.stringify(value) : String(value)
     return `"${cell.replaceAll('"', '""')}"`
@@ -75,7 +75,7 @@ export function makeCsv(rows) {
   return `${lines.join('\r\n')}\r\n`
 }
 
-export function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+export function downloadTextFile(filename: string, content: string, mimeType = 'text/plain;charset=utf-8'): void {
   const blob = new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -87,7 +87,7 @@ export function downloadTextFile(filename, content, mimeType = 'text/plain;chars
   URL.revokeObjectURL(url)
 }
 
-export async function downloadApiBlob(filename, promise) {
+export async function downloadApiBlob(filename: string, promise: Promise<any>): Promise<void> {
   const response = await promise
   const blob = new Blob([response.data], { type: response.headers?.['content-type'] || 'application/octet-stream' })
   const url = URL.createObjectURL(blob)

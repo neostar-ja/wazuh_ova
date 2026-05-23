@@ -15,13 +15,21 @@ import { format } from 'date-fns'
 import { assetsApi } from '../../services/api'
 import { DetailPanel, LoadingSpinner, EmptyState, StatusDot, StatusCard } from '../common/CommonComponents'
 
-function RiskChip({ value = 0 }) {
+interface RiskChipProps {
+  value?: number;
+}
+
+function RiskChip({ value = 0 }: RiskChipProps) {
   const color = value >= 8 ? 'error' : value >= 5 ? 'warning' : 'success'
   return <Chip label={value.toFixed(1)} size="small" color={color} sx={{ fontWeight: 700 }} />
 }
 
-function StatusChip({ status }) {
-  const config = {
+interface StatusChipProps {
+  status: string;
+}
+
+function StatusChip({ status }: StatusChipProps) {
+  const config: Record<string, { color: string; label: string; pulse: boolean }> = {
     online: { color: '#10b981', label: 'Online', pulse: true },
     stale: { color: '#f59e0b', label: 'Stale', pulse: false },
     offline: { color: '#94a3b8', label: 'Offline', pulse: false },
@@ -30,7 +38,11 @@ function StatusChip({ status }) {
   return <StatusDot color={item.color} label={item.label} pulse={item.pulse} />
 }
 
-function SmallMono({ value }) {
+interface SmallMonoProps {
+  value?: string | null;
+}
+
+function SmallMono({ value }: SmallMonoProps) {
   return (
     <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12 }}>
       {value || '-'}
@@ -38,19 +50,26 @@ function SmallMono({ value }) {
   )
 }
 
-function DeviceDrawer({ identifier, timeRange, open, onClose }) {
+interface DeviceDrawerProps {
+  identifier: string | null;
+  timeRange: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+function DeviceDrawer({ identifier, timeRange, open, onClose }: DeviceDrawerProps) {
   const [tab, setTab] = useState(0)
   const { data, isLoading } = useQuery({
     queryKey: ['asset-detail', identifier, timeRange],
-    queryFn: () => assetsApi.detail(identifier, timeRange).then(r => r.data),
+    queryFn: () => assetsApi.detail(identifier || '', timeRange).then(r => r.data),
     enabled: open && Boolean(identifier),
   })
 
   const device = data?.device || {}
-  const alerts = data?.recent_alerts || []
-  const dhcp = data?.dhcp_history || []
-  const wifi = data?.wifi_sessions || []
-  const topRules = data?.top_rules || []
+  const alerts: any[] = data?.recent_alerts || []
+  const dhcp: any[] = data?.dhcp_history || []
+  const wifi: any[] = data?.wifi_sessions || []
+  const topRules: any[] = data?.top_rules || []
 
   return (
     <DetailPanel
@@ -262,21 +281,21 @@ export default function AssetsPage() {
   const [tab, setTab] = useState(0)
   const [timeRange, setTimeRange] = useState('7d')
   const [search, setSearch] = useState('')
-  const [selectedIdentifier, setSelectedIdentifier] = useState(null)
+  const [selectedIdentifier, setSelectedIdentifier] = useState<string | null>(null)
 
-  const { data: devices = [], isLoading: devLoading } = useQuery({
+  const { data: devices = [], isLoading: devLoading } = useQuery<any[]>({
     queryKey: ['assets-devices', timeRange],
     queryFn: () => assetsApi.devices(timeRange).then(r => r.data),
   })
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<any>({
     queryKey: ['assets-stats', timeRange],
     queryFn: () => assetsApi.stats(timeRange).then(r => r.data),
   })
-  const { data: dhcp = [], isLoading: dhcpLoading } = useQuery({
+  const { data: dhcp = [], isLoading: dhcpLoading } = useQuery<any[]>({
     queryKey: ['assets-dhcp', timeRange],
     queryFn: () => assetsApi.dhcp(timeRange).then(r => r.data),
   })
-  const { data: sessions = [], isLoading: sessLoading } = useQuery({
+  const { data: sessions = [], isLoading: sessLoading } = useQuery<any[]>({
     queryKey: ['assets-sessions', timeRange],
     queryFn: () => assetsApi.sessions(timeRange).then(r => r.data),
   })
@@ -300,25 +319,25 @@ export default function AssetsPage() {
     {
       title: 'อุปกรณ์ทั้งหมด',
       value: stats?.total_devices || 0,
-      status: 'neutral',
+      status: 'neutral' as const,
       icon: DevicesIcon,
     },
     {
       title: 'Online',
       value: stats?.online_devices || 0,
-      status: 'success',
+      status: 'success' as const,
       icon: WifiIcon,
     },
     {
       title: 'อุปกรณ์ใหม่ 24 ชม.',
       value: stats?.new_devices_24h || 0,
-      status: 'info',
+      status: 'info' as const,
       icon: RouterIcon,
     },
     {
       title: 'High Risk',
       value: stats?.high_risk_devices || 0,
-      status: 'critical',
+      status: 'critical' as const,
       icon: ShieldIcon,
     },
   ]

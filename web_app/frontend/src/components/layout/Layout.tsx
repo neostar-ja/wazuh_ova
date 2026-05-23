@@ -1,21 +1,4 @@
-/**
- * Layout.jsx — Root layout wrapper
- *
- * GAP ROOT CAUSE & FIX:
- * The previous version used `position: sticky` on the sidebar inside a
- * flex parent with `overflow: hidden`. This is known to cause inconsistent
- * flex-space allocation across browsers — some compute the sidebar width
- * in the flex algorithm *before* applying sticky, leaving a phantom gap
- * equal to (viewport_width - sidebar_width) in some render paths.
- *
- * THE FIX: Use a pure flex layout.
- * - Parent: `display:flex, height:100vh, overflow:hidden`
- * - Sidebar: `flex-shrink:0, width:DRAWER_WIDTH` → participates in flex flow normally
- * - Main: `flex:1, min-width:0, overflow:hidden` → takes remaining space exactly
- *
- * No `position:fixed/sticky`, no `margin-left` offsets needed.
- */
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Box, Typography, Chip, useTheme, useMediaQuery } from '@mui/material'
 import SecurityRoundedIcon from '@mui/icons-material/SecurityRounded'
@@ -104,23 +87,7 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen]           = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  // The effective sidebar width used for flex space allocation
-  const sidebarW = isMobile ? 0 : (sidebarCollapsed ? DRAWER_COLLAPSED : DRAWER_WIDTH)
-
   return (
-    /**
-     * ROOT CONTAINER
-     * ─────────────
-     * `display:flex` (row) + `height:100vh` + `overflow:hidden`
-     * This is a pure flex layout. No position tricks.
-     *
-     * Children:
-     *   1. <Sidebar>  → flex-shrink:0 , width = sidebarW
-     *   2. <main>     → flex:1 , min-width:0  (takes ALL remaining space)
-     *
-     * On mobile: sidebar is overlay (position:fixed), sidebarW = 0
-     * so <main> fills 100% width.
-     */
     <Box sx={{
       display: 'flex',
       flexDirection: 'row',
@@ -143,19 +110,11 @@ export default function Layout() {
       <Box
         component="main"
         sx={{
-          /**
-           * flex:1 + minWidth:0 is THE correct way to fill remaining flex space.
-           * `flex:1` = `flex-grow:1, flex-shrink:1, flex-basis:0%`
-           * `minWidth:0` prevents content from overflowing the flex item.
-           * This guarantees main takes (100vw - sidebarW) width.
-           */
           flex: 1,
           minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          // On mobile, sidebar is fixed-overlay → main is full width
-          // On desktop, sidebar is in-flow → main auto-shrinks
         }}
       >
         {/* Topbar */}
@@ -172,7 +131,6 @@ export default function Layout() {
             py: { xs: 2, sm: 2.5, md: 3 },
             width: '100%',
             boxSizing: 'border-box',
-            // Remove maxWidth that caused centering with phantom right margin
           }}>
             <Outlet />
           </Box>

@@ -1,3 +1,4 @@
+import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import LoginPage from './components/auth/LoginPage'
@@ -10,13 +11,19 @@ import AssetsPage from './components/assets/AssetsPage'
 import KPIPage from './components/kpi/KPIPage'
 import AdminPage from './components/admin/AdminPage'
 import { useAuth } from './hooks/useAuth'
+import { UserRole } from './types/auth'
 
 const BASE = (import.meta.env.VITE_BASE_PATH || '/wazuh').replace(/\/+$/, '') || '/'
 
-function ProtectedRoute({ children, roles }) {
+interface ProtectedRouteProps {
+  children: React.ReactElement
+  roles?: UserRole[]
+}
+
+function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   const { user, isAuthenticated } = useAuth()
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (roles && !roles.includes(user?.role)) return <Navigate to="/" replace />
+  if (roles && user && !roles.includes(user.role)) return <Navigate to="/" replace />
   return children
 }
 

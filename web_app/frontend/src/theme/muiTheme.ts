@@ -1,4 +1,12 @@
-import { createTheme } from '@mui/material/styles'
+import { createTheme, Theme } from '@mui/material/styles'
+
+// Module augmentation for custom theme properties
+declare module '@mui/material/styles' {
+  interface TypeBackground {
+    card?: string;
+    elevated?: string;
+  }
+}
 
 // Brand palette
 const BRAND = {
@@ -15,7 +23,7 @@ const BRAND = {
 // Shared transition
 const TRANSITION = 'all 220ms cubic-bezier(0.4, 0, 0.2, 1)'
 
-const createSOCTheme = (mode = 'dark') => {
+const createSOCTheme = (mode: 'light' | 'dark' = 'dark'): Theme => {
   const isDark = mode === 'dark'
 
   const palette = {
@@ -117,7 +125,7 @@ const createSOCTheme = (mode = 'dark') => {
     ...Array(19).fill(null).map((_, i) =>
       `0 ${16 + i * 4}px ${24 + i * 6}px ${shadowBase}${(0.20 + i * 0.015).toFixed(3)})`
     ),
-  ]
+  ] as Theme['shadows']
 
   return createTheme({
     palette,
@@ -434,7 +442,6 @@ const createSOCTheme = (mode = 'dark') => {
           },
         },
       },
-      // ── New component overrides ──────────────────────────────
       MuiSkeleton: {
         styleOverrides: {
           root: {
@@ -499,7 +506,7 @@ const createSOCTheme = (mode = 'dark') => {
           },
         },
       },
-    },
+    } as any,
   })
 }
 

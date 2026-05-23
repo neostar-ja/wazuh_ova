@@ -1,39 +1,31 @@
-/**
- * SOC Dashboard v3 — Enterprise-grade real-time security overview
- * MUI + Tailwind CSS combined
- */
+import React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Box, Typography, Chip, Skeleton, Select, MenuItem, FormControl,
   Table, TableBody, TableCell, TableHead, TableRow,
-  IconButton, Tooltip, useTheme, Button, LinearProgress, Alert,
+  IconButton, Tooltip, useTheme, Button, Alert,
 } from '@mui/material'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
 import WarningAmberRoundedIcon        from '@mui/icons-material/WarningAmberRounded'
 import InfoRoundedIcon                 from '@mui/icons-material/InfoRounded'
 import CheckCircleRoundedIcon          from '@mui/icons-material/CheckCircleRounded'
 import StorageRoundedIcon              from '@mui/icons-material/StorageRounded'
-import TrendingUpRoundedIcon           from '@mui/icons-material/TrendingUpRounded'
-import TrendingDownRoundedIcon         from '@mui/icons-material/TrendingDownRounded'
-import TrendingFlatRoundedIcon         from '@mui/icons-material/TrendingFlatRounded'
-import PauseRoundedIcon                from '@mui/icons-material/PauseRounded'
-import PlayArrowRoundedIcon            from '@mui/icons-material/PlayArrowRounded'
-import RefreshRoundedIcon              from '@mui/icons-material/RefreshRounded'
-import PublicRoundedIcon               from '@mui/icons-material/PublicRounded'
-import ErrorRoundedIcon                from '@mui/icons-material/ErrorRounded'
-import OpenInNewRoundedIcon            from '@mui/icons-material/OpenInNewRounded'
-import RouterRoundedIcon               from '@mui/icons-material/RouterRounded'
-import FiberManualRecordIcon           from '@mui/icons-material/FiberManualRecord'
-import ShieldRoundedIcon               from '@mui/icons-material/ShieldRounded'
 import BoltRoundedIcon                 from '@mui/icons-material/BoltRounded'
 import DevicesRoundedIcon              from '@mui/icons-material/DevicesRounded'
 import SecurityRoundedIcon             from '@mui/icons-material/SecurityRounded'
 import GppBadRoundedIcon               from '@mui/icons-material/GppBadRounded'
 import ContentCopyRoundedIcon          from '@mui/icons-material/ContentCopyRounded'
+import RouterRoundedIcon               from '@mui/icons-material/RouterRounded'
+import PublicRoundedIcon               from '@mui/icons-material/PublicRounded'
+import ErrorRoundedIcon                from '@mui/icons-material/ErrorRounded'
+import OpenInNewRoundedIcon            from '@mui/icons-material/OpenInNewRounded'
+import FiberManualRecordIcon           from '@mui/icons-material/FiberManualRecord'
+import ShieldRoundedIcon               from '@mui/icons-material/ShieldRounded'
+import RefreshRoundedIcon              from '@mui/icons-material/RefreshRounded'
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTip, ResponsiveContainer, Cell, PieChart, Pie, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartTip, ResponsiveContainer, Cell, PieChart, Pie,
 } from 'recharts'
 import { dashboardApi, alertsApi } from '../../services/api'
 import { format } from 'date-fns'
@@ -48,13 +40,12 @@ const B = {
   red:     '#EF4444', yellow: '#EAB308',  green:   '#22C55E',
   sky:     '#38BDF8', pink:   '#EC4899',
 }
-const SEV = { critical: B.red, high: B.orange, medium: B.yellow, low: B.green }
-const PIE = [B.purple, B.orange, B.sky, B.green, B.yellow, B.pink, '#A855F7']
 const TIP = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.35)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
+const PIE = [B.purple, B.orange, B.sky, B.green, B.yellow, B.pink, '#A855F7']
 const AUTO_MS = 30000
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const N = (n) => {
+const N = (n: number | null | undefined): string => {
   if (n == null) return '—'
   if (n >= 1e9) return `${(n/1e9).toFixed(1)}B`
   if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`
@@ -62,11 +53,18 @@ const N = (n) => {
   if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`
   return n.toLocaleString()
 }
-const LC = (lv) => lv >= 15 ? B.red : lv >= 12 ? B.orange : lv >= 7 ? B.yellow : B.green
-const LL = (lv) => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+const LC = (lv: number): string => lv >= 15 ? B.red : lv >= 12 ? B.orange : lv >= 7 ? B.yellow : B.green
+const LL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
 
 // ─── Inline sparkline (pure SVG) ─────────────────────────────────────────────
-function Spark({ data = [], color, w = 80, h = 28 }) {
+interface SparkProps {
+  data?: any[]
+  color: string
+  w?: number
+  h?: number
+}
+
+function Spark({ data = [], color, w = 80, h = 28 }: SparkProps) {
   const vals = data.map(d => d.total || d.count || 0)
   if (vals.length < 2) return null
   const max = Math.max(...vals, 1)
@@ -92,17 +90,24 @@ function Spark({ data = [], color, w = 80, h = 28 }) {
 }
 
 // ─── Metric Hero Card ─────────────────────────────────────────────────────────
-function MetricHero({ stats, isLoading, tl, navigate }) {
+interface MetricHeroProps {
+  stats: any
+  isLoading: boolean
+  tl: any[]
+  navigate: (path: string) => void
+}
+
+function MetricHero({ stats, isLoading, tl, navigate }: MetricHeroProps) {
   const metrics = [
     { key: 'total',    label: 'รวมทั้งหมด', color: B.purple,  bg: 'rgba(123,91,164,0.12)' },
     { key: 'critical', label: 'Critical',   color: B.red,     bg: 'rgba(239,68,68,0.1)'   },
     { key: 'high',     label: 'High',       color: B.orange,  bg: 'rgba(241,116,34,0.1)'  },
     { key: 'medium',   label: 'Medium',     color: B.yellow,  bg: 'rgba(234,179,8,0.08)'  },
     { key: 'low',      label: 'Low',        color: B.green,   bg: 'rgba(34,197,94,0.08)'  },
-  ]
+  ] as const
   const total = (stats?.critical||0)+(stats?.high||0)+(stats?.medium||0)+(stats?.low||0)
-  const vals  = { total, critical: stats?.critical||0, high: stats?.high||0, medium: stats?.medium||0, low: stats?.low||0 }
-  const navLevel = { critical: 15, high: 12, medium: 7, low: 1 }
+  const vals: Record<string, number>  = { total, critical: stats?.critical||0, high: stats?.high||0, medium: stats?.medium||0, low: stats?.low||0 }
+  const navLevel = { critical: 15, high: 12, medium: 7, low: 1 } as const
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 rounded-2xl overflow-hidden"
@@ -110,7 +115,13 @@ function MetricHero({ stats, isLoading, tl, navigate }) {
       {metrics.map((m, i) => (
         <Box
           key={m.key}
-          onClick={() => m.key !== 'total' ? navigate(`/alerts?level=${navLevel[m.key]}`) : navigate('/alerts')}
+          onClick={() => {
+            if (m.key !== 'total') {
+              navigate(`/alerts?level=${navLevel[m.key]}`)
+            } else {
+              navigate('/alerts')
+            }
+          }}
           className="relative overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
           sx={{
             p: { xs: '12px 10px', sm: '14px 16px', md: '16px 18px' },
@@ -159,11 +170,16 @@ function MetricHero({ stats, isLoading, tl, navigate }) {
 }
 
 // ─── Timeline chart ───────────────────────────────────────────────────────────
-function Timeline({ data = [], isLoading, isDark }) {
+interface TimelineProps {
+  data?: any[]
+  isLoading: boolean
+  isDark: boolean
+}
+
+function Timeline({ data = [], isLoading, isDark }: TimelineProps) {
   if (isLoading) return <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
   if (!data.length) return (
     <Box className="flex flex-col items-center justify-center h-56 gap-2">
-      <BarChart size={40} style={{ opacity: 0.2 }} />
       <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>ยังไม่มีข้อมูล Timeline</Typography>
     </Box>
   )
@@ -175,9 +191,9 @@ function Timeline({ data = [], isLoading, isDark }) {
             ['gt', B.purple, 0.18], ['gc', B.red, 0.45],
             ['gh', B.orange, 0.35], ['gm', B.yellow, 0.25],
           ].map(([id, c, o]) => (
-            <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"   stopColor={c} stopOpacity={o} />
-              <stop offset="95%"  stopColor={c} stopOpacity={0} />
+            <linearGradient key={id as string} id={id as string} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"   stopColor={c as string} stopOpacity={o as number} />
+              <stop offset="95%"  stopColor={c as string} stopOpacity={0} />
             </linearGradient>
           ))}
         </defs>
@@ -186,7 +202,7 @@ function Timeline({ data = [], isLoading, isDark }) {
           tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return '' } }}
           interval="preserveStartEnd" />
         <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={N} />
-        <RechartTip contentStyle={TIP} formatter={(v, n) => [N(v), n]}
+        <RechartTip contentStyle={TIP} formatter={(v, n) => [N(v as number), n]}
           labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
         <Area type="monotone" dataKey="total"    name="Total"    stroke={B.purple} strokeWidth={2.5} fill="url(#gt)" dot={false} />
         <Area type="monotone" dataKey="critical" name="Critical" stroke={B.red}    strokeWidth={1.5} fill="url(#gc)" dot={false} />
@@ -198,7 +214,18 @@ function Timeline({ data = [], isLoading, isDark }) {
 }
 
 // ─── Panel wrapper ────────────────────────────────────────────────────────────
-function Panel({ title, icon, iconColor, action, children, accent, className = '' }) {
+interface PanelProps {
+  title: string
+  icon?: React.ReactNode
+  iconColor?: string
+  action?: React.ReactNode
+  children: React.ReactNode
+  accent?: string
+  className?: string
+  noPad?: boolean
+}
+
+function Panel({ title, icon, iconColor, action, children, accent, className = '', noPad = false }: PanelProps) {
   return (
     <Box className={`rounded-2xl overflow-hidden flex flex-col ${className}`}
       sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', height: '100%' }}>
@@ -211,7 +238,7 @@ function Panel({ title, icon, iconColor, action, children, accent, className = '
         </Box>
         {action}
       </Box>
-      <Box className="flex-1 overflow-auto" sx={{ p: 2 }}>
+      <Box className="flex-1 overflow-auto" sx={{ p: noPad ? 0 : 2 }}>
         {children}
       </Box>
     </Box>
@@ -219,7 +246,20 @@ function Panel({ title, icon, iconColor, action, children, accent, className = '
 }
 
 // ─── Top-N horizontal bar ────────────────────────────────────────────────────
-function HBar({ items = [], isLoading, limit = 8, colorFn, mono }) {
+interface HBarItem {
+  name: string
+  count: number
+}
+
+interface HBarProps {
+  items?: HBarItem[]
+  isLoading: boolean
+  limit?: number
+  colorFn?: (index: number, item: HBarItem) => string
+  mono?: boolean
+}
+
+function HBar({ items = [], isLoading, limit = 8, colorFn, mono }: HBarProps) {
   if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
   if (!items.length) return (
     <Box className="flex flex-col items-center justify-center py-6 gap-1">
@@ -260,7 +300,12 @@ function HBar({ items = [], isLoading, limit = 8, colorFn, mono }) {
 }
 
 // ─── Source donut ────────────────────────────────────────────────────────────
-function SourceDonut({ data = [], isLoading }) {
+interface SourceDonutProps {
+  data?: any[]
+  isLoading: boolean
+}
+
+function SourceDonut({ data = [], isLoading }: SourceDonutProps) {
   if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
   if (!data.length) return (
     <Box className="flex flex-col items-center justify-center h-48 gap-2">
@@ -276,7 +321,7 @@ function SourceDonut({ data = [], isLoading }) {
           <Pie data={pd} dataKey="value" cx="50%" cy="50%" outerRadius={65} innerRadius={32} paddingAngle={3}>
             {pd.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} stroke="transparent" />)}
           </Pie>
-          <RechartTip contentStyle={TIP} formatter={v => [N(v), 'alerts']} />
+          <RechartTip contentStyle={TIP} formatter={(v) => [N(v as number), 'alerts']} />
         </PieChart>
       </ResponsiveContainer>
       <div className="flex flex-col gap-1.5 mt-1">
@@ -295,14 +340,20 @@ function SourceDonut({ data = [], isLoading }) {
 }
 
 // ─── MITRE tactics ────────────────────────────────────────────────────────────
-const TACTIC_COLORS = {
+const TACTIC_COLORS: Record<string, string> = {
   'initial-access': B.red, 'execution': B.red, 'persistence': B.orange,
   'privilege-escalation': B.orange, 'defense-evasion': B.yellow,
   'credential-access': B.yellow, 'discovery': B.green,
   'lateral-movement': B.sky, 'collection': B.sky,
   'command-and-control': '#A855F7', 'exfiltration': '#A855F7', 'impact': B.pink,
 }
-function MitreTactics({ data = [], isLoading }) {
+
+interface MitreTacticsProps {
+  data?: any[]
+  isLoading: boolean
+}
+
+function MitreTactics({ data = [], isLoading }: MitreTacticsProps) {
   if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
   if (!data.length) return (
     <Box className="flex flex-col items-center justify-center py-6 gap-1">
@@ -337,8 +388,12 @@ function MitreTactics({ data = [], isLoading }) {
 }
 
 // ─── Cluster health ────────────────────────────────────────────────────────────
-function ClusterStatus({ cluster }) {
-  let nodes = []
+interface ClusterStatusProps {
+  cluster: any
+}
+
+function ClusterStatus({ cluster }: ClusterStatusProps) {
+  let nodes: any[] = []
   if (cluster) {
     if (Array.isArray(cluster.data?.affected_items))  nodes = cluster.data.affected_items
     else if (Array.isArray(cluster?.affected_items))   nodes = cluster.affected_items
@@ -378,7 +433,12 @@ function ClusterStatus({ cluster }) {
 }
 
 // ─── Agents mini panel ────────────────────────────────────────────────────────
-function AgentsMini({ agentData, isLoading }) {
+interface AgentsMiniProps {
+  agentData: any
+  isLoading: boolean
+}
+
+function AgentsMini({ agentData, isLoading }: AgentsMiniProps) {
   const navigate = useNavigate()
   if (isLoading) return <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
   if (!agentData || agentData.error) return <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่สามารถดึงข้อมูล Agent</Typography>
@@ -408,7 +468,7 @@ function AgentsMini({ agentData, isLoading }) {
       </div>
       {agentData.by_os?.length > 0 && (
         <div className="flex flex-wrap gap-1 pt-2 border-t" style={{ borderColor: 'rgba(123,91,164,0.15)' }}>
-          {agentData.by_os.slice(0,4).map(os => (
+          {agentData.by_os.slice(0,4).map((os: any) => (
             <Chip key={os.name} label={`${os.name} ${os.count}`} size="small"
               sx={{ height: 18, fontSize: 9, bgcolor: 'rgba(123,91,164,0.1)', color: B.purpleL }} />
           ))}
@@ -424,7 +484,12 @@ function AgentsMini({ agentData, isLoading }) {
 }
 
 // ─── Recent critical alerts ───────────────────────────────────────────────────
-function RecentAlerts({ alerts = [], isLoading }) {
+interface RecentAlertsProps {
+  alerts?: any[]
+  isLoading: boolean
+}
+
+function RecentAlerts({ alerts = [], isLoading }: RecentAlertsProps) {
   const navigate = useNavigate()
   const { enqueueSnackbar } = useSnackbar()
   const top = alerts.filter(a => Number(a['rule.level']||a?.rule?.level||0) >= 12).slice(0,12)
@@ -504,7 +569,17 @@ function RecentAlerts({ alerts = [], isLoading }) {
 }
 
 // ─── Countries panel ──────────────────────────────────────────────────────────
-function CountriesPanel({ countries = [], isLoading }) {
+interface CountryItem {
+  name: string
+  count: number
+}
+
+interface CountriesPanelProps {
+  countries?: CountryItem[]
+  isLoading: boolean
+}
+
+function CountriesPanel({ countries = [], isLoading }: CountriesPanelProps) {
   if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
   if (!countries.length) return (
     <Box className="flex flex-col items-center py-6 gap-1">
@@ -628,7 +703,7 @@ export default function DashboardPage() {
             </IconButton>
           </Tooltip>
           <FormControl size="small" sx={{ minWidth: 130 }}>
-            <Select value={timeRange} onChange={e => setTimeRange(e.target.value)} sx={{ fontSize: 13, borderRadius: '10px' }}>
+            <Select value={timeRange} onChange={e => setTimeRange(e.target.value as string)} sx={{ fontSize: 13, borderRadius: '10px' }}>
               {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
             </Select>
           </FormControl>
@@ -648,8 +723,8 @@ export default function DashboardPage() {
             action={
               <div className="flex items-center gap-3">
                 {[['Total',B.purple],['Critical',B.red],['High',B.orange],['Medium',B.yellow]].map(([l,c]) => (
-                  <div key={l} className="flex items-center gap-1">
-                    <Box sx={{ width: 12, height: 3, borderRadius: 1.5, bgcolor: c }} />
+                  <div key={l as string} className="flex items-center gap-1">
+                    <Box sx={{ width: 12, height: 3, borderRadius: 1.5, bgcolor: c as string }} />
                     <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l}</Typography>
                   </div>
                 ))}

@@ -25,28 +25,36 @@ import RouterRoundedIcon       from '@mui/icons-material/RouterRounded'
 import FiberManualRecordIcon   from '@mui/icons-material/FiberManualRecord'
 import TuneRoundedIcon         from '@mui/icons-material/TuneRounded'
 import BookmarkAddRoundedIcon  from '@mui/icons-material/BookmarkAddRounded'
-import PublicRoundedIcon       from '@mui/icons-material/PublicRounded'
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTip, ResponsiveContainer, Cell,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartTip, ResponsiveContainer,
 } from 'recharts'
 import { alertsApi, investigateApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
+import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName } from '../../types/alert'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND  = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
 const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
 
-const SEV = [
+interface SeverityOption {
+  key: SeverityName;
+  label: string;
+  color: string;
+  min: number;
+  max: number;
+}
+
+const SEV: SeverityOption[] = [
   { key: 'critical', label: 'Critical', color: '#EF4444', min: 15, max: 99 },
   { key: 'high',     label: 'High',     color: BRAND.orange, min: 12, max: 14 },
   { key: 'medium',   label: 'Medium',   color: '#EAB308', min: 7, max: 11 },
   { key: 'low',      label: 'Low',      color: '#22C55E', min: 1,  max: 6 },
 ]
-const LC = (lv) => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? '#EAB308' : '#22C55E'
-const LL = (lv) => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+const LC = (lv: number): string => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? '#EAB308' : '#22C55E'
+const LL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
 
 const SOURCES = ['fortigate', 'mikrotik', 'infoblox', 'huawei-ac', 'suricata', 'syscheck', 'ossec', 'syslog']
 const TIME_OPTS = [
@@ -58,7 +66,12 @@ const TIME_OPTS = [
 ]
 
 // ── Helper components ─────────────────────────────────────────────────────────
-function LevelChip({ level, animate = false }) {
+interface LevelChipProps {
+  level: string | number;
+  animate?: boolean;
+}
+
+function LevelChip({ level, animate = false }: LevelChipProps) {
   const lv = Number(level || 0)
   return (
     <Chip label={`${lv} ${LL(lv)}`} size="small" sx={{
@@ -70,7 +83,11 @@ function LevelChip({ level, animate = false }) {
   )
 }
 
-function CopyBtn({ text }) {
+interface CopyBtnProps {
+  text: string;
+}
+
+function CopyBtn({ text }: CopyBtnProps) {
   const { enqueueSnackbar } = useSnackbar()
   return (
     <Tooltip title="คัดลอก">
@@ -83,7 +100,12 @@ function CopyBtn({ text }) {
   )
 }
 
-function MitreTags({ groups = [], mitre = {} }) {
+interface MitreTagsProps {
+  groups?: string[];
+  mitre?: MitreAttackInfo;
+}
+
+function MitreTags({ groups = [], mitre = {} }: MitreTagsProps) {
   const tags = [
     ...(mitre?.tactic || []),
     ...(mitre?.technique || []),
@@ -118,7 +140,13 @@ function MitreTags({ groups = [], mitre = {} }) {
 }
 
 // ── Section Header ────────────────────────────────────────────────────────────
-function DrawerSection({ label, children, accent }) {
+interface DrawerSectionProps {
+  label: string;
+  children: React.ReactNode;
+  accent?: string;
+}
+
+function DrawerSection({ label, children, accent }: DrawerSectionProps) {
   const accentColor = accent || BRAND.purple
   return (
     <Box sx={{ mb: 3 }}>
@@ -141,7 +169,16 @@ function DrawerSection({ label, children, accent }) {
 }
 
 // ── IP Card (Source / Dest) ───────────────────────────────────────────────────
-function IPCard({ label, ip, port, country, onClick, accent }) {
+interface IPCardProps {
+  label: string;
+  ip?: string;
+  port?: string | number;
+  country?: string;
+  onClick?: (() => void) | null;
+  accent?: string;
+}
+
+function IPCard({ label, ip, port, country, onClick, accent }: IPCardProps) {
   const { enqueueSnackbar } = useSnackbar()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
@@ -253,7 +290,16 @@ function IPCard({ label, ip, port, country, onClick, accent }) {
 }
 
 // ── Threat feed mini-card ─────────────────────────────────────────────────────
-function FeedMiniCard({ name, color, main, mainLabel, rows = [], extra }) {
+interface FeedMiniCardProps {
+  name: string;
+  color: string;
+  main?: string | number;
+  mainLabel?: string;
+  rows?: [string, any][];
+  extra?: React.ReactNode;
+}
+
+function FeedMiniCard({ name, color, main, mainLabel, rows = [], extra }: FeedMiniCardProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   return (
@@ -302,20 +348,26 @@ function FeedMiniCard({ name, color, main, mainLabel, rows = [], extra }) {
 }
 
 // ── Alert Detail Drawer ───────────────────────────────────────────────────────
-function AlertDrawer({ alert, open, onClose }) {
+interface AlertDrawerProps {
+  alert: AlertDetail | null;
+  open: boolean;
+  onClose: () => void;
+}
+
+function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
   const navigate   = useNavigate()
   const { enqueueSnackbar } = useSnackbar()
   const [tab, setTab]       = useState(0)
-  const [enrichData, setEnrich]       = useState(null)
+  const [enrichData, setEnrich]       = useState<any>(null)
   const [enrichLoading, setEnrichLoading] = useState(false)
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
-  const rule   = alert?.rule        || {}
-  const data   = alert?.data        || {}
-  const agent  = alert?.agent       || {}
-  const geo    = alert?.GeoLocation || {}
-  const pre    = alert?.predecoder  || {}
+  const rule   = alert?.rule        || ({} as any)
+  const data   = alert?.data        || ({} as any)
+  const agent  = alert?.agent       || ({} as any)
+  const geo    = alert?.GeoLocation || ({} as any)
+  const pre    = alert?.predecoder  || ({} as any)
 
   const lv       = Number(rule.level || 0)
   const color    = LC(lv)
@@ -323,7 +375,7 @@ function AlertDrawer({ alert, open, onClose }) {
   const dstip    = data.dstip
   const country  = geo.country_name || geo.country_code
   const program  = pre.program_name
-  const groups   = rule.groups || []
+  const groups: string[] = rule.groups || []
 
   const compliance = [
     { key: 'PCI-DSS', items: rule.pci_dss    || [] },
@@ -340,11 +392,13 @@ function AlertDrawer({ alert, open, onClose }) {
     try {
       const r = await investigateApi.enrich(srcip)
       setEnrich(r.data)
-    } catch {}
+    } catch {
+      // ignore
+    }
     setEnrichLoading(false)
   }, [srcip, enrichLoading, enrichData])
 
-  useEffect(() => { if (open && srcip && tab === 1) fetchEnrich() }, [open, srcip, tab])
+  useEffect(() => { if (open && srcip && tab === 1) fetchEnrich() }, [open, srcip, tab, fetchEnrich])
   useEffect(() => { if (!open) { setTab(0); setEnrich(null) } }, [open])
 
   const TABS = [
@@ -372,20 +426,22 @@ function AlertDrawer({ alert, open, onClose }) {
           overflowX: 'hidden',
         },
       }}
-      PaperProps={{
-        sx: {
-          width: DRAWER_WIDTH,
-          minWidth: DRAWER_WIDTH,
-          maxWidth: DRAWER_WIDTH,
-          display: 'flex', flexDirection: 'column',
-          bgcolor: isDark ? 'rgba(22, 18, 42, 0.95)' : 'rgba(255, 255, 255, 0.97)',
-          backdropFilter: 'blur(20px)',
-          borderLeft: `4px solid ${color}`,
-          boxShadow: isDark 
-            ? `0 24px 64px rgba(0,0,0,0.65), inset 1px 0 0 0 rgba(255,255,255,0.06), 0 0 30px ${color}18`
-            : `0 24px 64px rgba(123,91,164,0.18), inset 1px 0 0 0 rgba(255,255,255,0.4), 0 0 30px ${color}12`,
-          overflowX: 'hidden',
-        },
+      slotProps={{
+        paper: {
+          sx: {
+            width: DRAWER_WIDTH,
+            minWidth: DRAWER_WIDTH,
+            maxWidth: DRAWER_WIDTH,
+            display: 'flex', flexDirection: 'column',
+            bgcolor: isDark ? 'rgba(22, 18, 42, 0.95)' : 'rgba(255, 255, 255, 0.97)',
+            backdropFilter: 'blur(20px)',
+            borderLeft: `4px solid ${color}`,
+            boxShadow: isDark 
+              ? `0 24px 64px rgba(0,0,0,0.65), inset 1px 0 0 0 rgba(255,255,255,0.06), 0 0 30px ${color}18`
+              : `0 24px 64px rgba(123,91,164,0.18), inset 1px 0 0 0 rgba(255,255,255,0.4), 0 0 30px ${color}12`,
+            overflowX: 'hidden',
+          }
+        }
       }}
     >
       {alert && (
@@ -476,8 +532,8 @@ function AlertDrawer({ alert, open, onClose }) {
                 </Box>
                 {agent.name && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} />
-                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontWeight: 500 }}>{agent.name}</Typography>
+                     <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} />
+                     <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontWeight: 500 }}>{agent.name}</Typography>
                   </Box>
                 )}
               </Box>
@@ -622,7 +678,7 @@ function AlertDrawer({ alert, open, onClose }) {
                         <Box sx={{ mb: 1.5 }}>
                           <Typography sx={{ fontSize: 10, color: '#EF4444', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.75 }}>Tactics</Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                            {rule.mitre.tactic.map(t => (
+                            {rule.mitre.tactic.map((t: string) => (
                               <Box key={t} sx={{ 
                                 px: 1.25, py: 0.6, borderRadius: '8px', 
                                 bgcolor: 'rgba(239,68,68,0.18)', 
@@ -643,7 +699,7 @@ function AlertDrawer({ alert, open, onClose }) {
                         <Box>
                           <Typography sx={{ fontSize: 10, color: 'rgba(239,68,68,0.75)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.75 }}>Techniques</Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                            {rule.mitre.technique.map(t => (
+                            {rule.mitre.technique.map((t: string) => (
                               <Chip key={t} label={t} size="small" variant="outlined"
                                 sx={{ 
                                   height: 26, fontSize: 11, fontWeight: 600,
@@ -683,7 +739,7 @@ function AlertDrawer({ alert, open, onClose }) {
                         }}>
                           <Typography sx={{ fontSize: 10, fontWeight: 900, color: BRAND.purpleLight, letterSpacing: '0.08em', mb: 0.75, textTransform: 'uppercase' }}>{c.key}</Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
-                            {c.items.slice(0, 10).map(i => (
+                            {c.items.slice(0, 10).map((i: string) => (
                               <Chip key={i} label={i} size="small"
                                 sx={{ 
                                   height: 22, fontSize: 10, fontWeight: 600,
@@ -740,7 +796,7 @@ function AlertDrawer({ alert, open, onClose }) {
                         <IconButton size="small"
                           sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1, bgcolor: 'rgba(123,91,164,0.12)', transition: 'all 0.2s',
                             '&:hover': { bgcolor: 'rgba(123,91,164,0.2)', transform: 'scale(1.1)' } }}
-                          onClick={() => { navigator.clipboard.writeText(alert.full_log); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}>
+                          onClick={() => { navigator.clipboard.writeText(alert.full_log || ''); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}>
                           <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
                         </IconButton>
                       </Tooltip>
@@ -813,7 +869,7 @@ function AlertDrawer({ alert, open, onClose }) {
                       const vtBad  = vt?.found ? (vt.malicious || 0) : 0
                       const otx    = feeds.otx?.pulse_count || 0
                       const riskPct = Math.max(abuse, vtBad >= 5 ? 80 : vtBad * 10, otx >= 3 ? 60 : otx * 15)
-                      const verdict = (abuse >= 75 || vtBad >= 5) ? 'malicious' : (abuse >= 30 || otx >= 3) ? 'suspicious' : 'clean'
+                      const verdict: 'malicious' | 'suspicious' | 'clean' = (abuse >= 75 || vtBad >= 5) ? 'malicious' : (abuse >= 30 || otx >= 3) ? 'suspicious' : 'clean'
                       const vc = { malicious: '#EF4444', suspicious: BRAND.orange, clean: '#22C55E' }
                       const vIcon = verdict === 'clean'
                         ? <GppGoodRoundedIcon sx={{ fontSize: 32, color: '#22C55E' }} />
@@ -854,7 +910,7 @@ function AlertDrawer({ alert, open, onClose }) {
                             ['ISP',      enrichData.feeds?.abuseipdb?.isp],
                             ['Domain',   enrichData.feeds?.abuseipdb?.domain],
                             ['Usage',    enrichData.feeds?.abuseipdb?.usageType],
-                          ],
+                          ] as [string, any][],
                           extra: enrichData.feeds?.abuseipdb?.available && (
                             <Box sx={{ mt: 0.75 }}>
                               <LinearProgress variant="determinate"
@@ -873,10 +929,10 @@ function AlertDrawer({ alert, open, onClose }) {
                             ['Country', enrichData.feeds?.otx?.country_name],
                             ['ASN',     enrichData.feeds?.otx?.asn],
                             ['Malware', enrichData.feeds?.otx?.malware_count],
-                          ],
+                          ] as [string, any][],
                           extra: enrichData.feeds?.otx?.pulse_refs?.length > 0 && (
                             <Box sx={{ mt: 0.5 }}>
-                              {enrichData.feeds.otx.pulse_refs.slice(0, 2).map((p, i) => (
+                              {enrichData.feeds.otx.pulse_refs.slice(0, 2).map((p: any, i: number) => (
                                 <Typography key={i} sx={{ fontSize: 9, color: '#FF7A00', lineHeight: 1.4, mt: 0.3 }} className="line-clamp-2">• {p.name}</Typography>
                               ))}
                             </Box>
@@ -891,11 +947,11 @@ function AlertDrawer({ alert, open, onClose }) {
                             ['Org',     enrichData.feeds?.shodan?.org],
                             ['Country', enrichData.feeds?.shodan?.country_name],
                             ['CVEs',    enrichData.feeds?.shodan?.vulns?.length],
-                          ],
+                          ] as [string, any][],
                           extra: enrichData.feeds?.shodan?.ports?.length > 0 && (
                             <Box sx={{ mt: 0.75 }}>
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3 }}>
-                                {enrichData.feeds.shodan.ports.slice(0, 8).map(p => (
+                                {enrichData.feeds.shodan.ports.slice(0, 8).map((p: number) => (
                                   <Chip key={p} label={p} size="small"
                                     sx={{ height: 15, fontSize: 8, fontFamily: '"IBM Plex Mono"',
                                       bgcolor: [22,23,3389,4444,6379].includes(p) ? 'rgba(239,68,68,0.18)' : 'rgba(123,91,164,0.12)',
@@ -917,10 +973,10 @@ function AlertDrawer({ alert, open, onClose }) {
                             ['Country',   enrichData.feeds?.virustotal?.country],
                             ['AS Owner',  enrichData.feeds?.virustotal?.as_owner],
                             ['Suspicious',enrichData.feeds?.virustotal?.suspicious],
-                          ],
+                          ] as [string, any][],
                           extra: enrichData.feeds?.virustotal?.malicious_engines?.length > 0 && (
                             <Box sx={{ mt: 0.75 }}>
-                              {enrichData.feeds.virustotal.malicious_engines.slice(0, 2).map((e, i) => (
+                              {enrichData.feeds.virustotal.malicious_engines.slice(0, 2).map((e: any, i: number) => (
                                 <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                   <Typography sx={{ fontSize: 9, color: 'text.disabled' }}>{e.engine}</Typography>
                                   <Typography sx={{ fontSize: 9, color: '#395BA9', fontWeight: 700 }} noWrap>{e.result}</Typography>
@@ -1051,7 +1107,7 @@ function AlertDrawer({ alert, open, onClose }) {
 }
 
 // ── Number formatter (K / M) ──────────────────────────────────────────────────
-const fmtNum = (n) => {
+const fmtNum = (n?: number | null): string => {
   if (n == null) return '—'
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 10_000)    return `${(n / 1_000).toFixed(0)}K`
@@ -1060,9 +1116,15 @@ const fmtNum = (n) => {
 }
 
 // Inline mini-sparkline (pure SVG, no lib)
-function Sparkline({ data = [], color, height = 32 }) {
+interface SparklineProps {
+  data?: { timestamp: string; count: number }[];
+  color: string;
+  height?: number;
+}
+
+function Sparkline({ data = [], color, height = 32 }: SparklineProps) {
   if (!data.length) return null
-  const values = data.map(d => d.total || 0)
+  const values = data.map(d => d.count || 0)
   const max = Math.max(...values, 1)
   const w = 80, h = height
   const pts = values.map((v, i) => {
@@ -1091,15 +1153,23 @@ function Sparkline({ data = [], color, height = 32 }) {
 }
 
 // ── Stats Bar ─────────────────────────────────────────────────────────────────
-function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }) {
+interface StatsBarProps {
+  stats?: AlertStats;
+  loadingStats: boolean;
+  onLevelClick: (level: number) => void;
+  activeLevel: number;
+}
+
+function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarProps) {
   const timeline = stats?.timeline || []
   const total    = stats?.total || 0
 
-  const SEV_ICON = {
+  const SEV_ICON: Record<SeverityName, React.ReactNode> = {
     critical: <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>,
     high:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12V11c0 4.52-3.02 8.79-7 10.07C8.02 19.79 5 15.52 5 11V6.3l7-3.12z"/><path d="M11 7h2v6h-2zM11 15h2v2h-2z"/></svg>,
     medium:   <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/></svg>,
     low:      <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-9l-2.5-2.5-1.42 1.42L11 16.84l7.08-7.08-1.42-1.41L11 13z"/></svg>,
+    info:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v2h2v4zm0-8h-2V7h2v2z"/></svg>,
   }
 
   return (
@@ -1107,7 +1177,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }) {
       {/* ── 4 severity cards ── */}
       <Grid container spacing={{ xs: 1, sm: 1.5 }} sx={{ mb: 1.5 }}>
         {SEV.map(s => {
-          const count    = stats?.by_level?.[s.key] || 0
+          const count    = stats?.by_severity?.[s.key] || 0
           const pct      = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
           const isActive = (s.key === 'critical' && activeLevel === 15) ||
                            (s.key === 'high'     && activeLevel === 12) ||
@@ -1251,16 +1321,16 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }) {
                   ))}
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
-                <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
+                <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
                   tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
                   interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} />
-                <RechartTip contentStyle={ChartTip} formatter={(v, n) => [fmtNum(v), n]}
+                <RechartTip contentStyle={ChartTip} formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
                   labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
-                <Area type="monotone" dataKey="total"    stroke={BRAND.purple} strokeWidth={2}   fill="url(#g-total)"    dot={false} name="Total" />
-                <Area type="monotone" dataKey="critical" stroke="#EF4444"     strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
-                <Area type="monotone" dataKey="high"     stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)"     dot={false} name="High" />
-                <Area type="monotone" dataKey="medium"   stroke="#EAB308"     strokeWidth={1}   fill="url(#g-medium)"   dot={false} name="Medium" />
+                <Area type="monotone" dataKey="count"    stroke={BRAND.purple} strokeWidth={2}   fill="url(#g-total)"    dot={false} name="Total" />
+                <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444"     strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
+                <Area type="monotone" dataKey="severity_breakdown.high"     stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)"     dot={false} name="High" />
+                <Area type="monotone" dataKey="severity_breakdown.medium"   stroke="#EAB308"     strokeWidth={1}   fill="url(#g-medium)"   dot={false} name="Medium" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -1277,26 +1347,26 @@ export default function AlertsPage() {
   const qc = useQueryClient()
 
   // Filter state
-  const [level,        setLevel]       = useState(1)
-  const [source,       setSource]      = useState('')
-  const [timeRange,    setTimeRange]   = useState('24h')
-  const [search,       setSearch]      = useState('')
-  const [searchInput,  setSearchInput] = useState('')
-  const [agentFilter,  setAgentFilter] = useState('')
-  const [mitreFilter,  setMitreFilter] = useState('')
-  const [showFilters,  setShowFilters] = useState(false)
+  const [level,        setLevel]       = useState<number>(1)
+  const [source,       setSource]      = useState<string>('')
+  const [timeRange,    setTimeRange]   = useState<string>('24h')
+  const [search,       setSearch]      = useState<string>('')
+  const [searchInput,  setSearchInput] = useState<string>('')
+  const [agentFilter,  setAgentFilter] = useState<string>('')
+  const [mitreFilter,  setMitreFilter] = useState<string>('')
+  const [showFilters,  setShowFilters] = useState<boolean>(false)
 
   // Alert detail
-  const [selectedAlert, setSelected] = useState(null)
-  const [drawerOpen,    setDrawer]   = useState(false)
+  const [selectedAlert, setSelected] = useState<AlertDetail | null>(null)
+  const [drawerOpen,    setDrawer]   = useState<boolean>(false)
 
   // Live alert indicator
-  const [newCount, setNewCount] = useState(0)
-  const [liveActive, setLiveActive] = useState(true)
-  const [lastTotal,  setLastTotal]  = useState(null)
+  const [newCount, setNewCount] = useState<number>(0)
+  const [liveActive, setLiveActive] = useState<boolean>(true)
+  const [lastTotal,  setLastTotal]  = useState<number | null>(null)
 
   // Alerts query
-  const { data: alerts = [], isLoading, refetch, dataUpdatedAt } = useQuery({
+  const { data: alerts = [], isLoading, refetch, dataUpdatedAt } = useQuery<any[]>({
     queryKey: ['alerts', level, source, timeRange, search, agentFilter, mitreFilter],
     queryFn: () => alertsApi.list({
       level, source: source || undefined, time_range: timeRange,
@@ -1308,7 +1378,7 @@ export default function AlertsPage() {
   })
 
   // Stats query
-  const { data: stats, isLoading: loadingStats } = useQuery({
+  const { data: stats, isLoading: loadingStats } = useQuery<AlertStats>({
     queryKey: ['alert-stats', timeRange, level],
     queryFn: () => alertsApi.stats(timeRange, level).then(r => r.data),
     refetchInterval: liveActive ? 60000 : false,
@@ -1320,22 +1390,9 @@ export default function AlertsPage() {
     const total = stats?.total || 0
     if (lastTotal !== null && total > lastTotal) setNewCount(n => n + (total - lastTotal))
     setLastTotal(total)
-  }, [stats?.total])
+  }, [stats?.total, lastTotal])
 
   const commitSearch = () => setSearch(searchInput)
-
-  // Counts from current filtered results
-  const counts = useMemo(() => {
-    const c = { critical: 0, high: 0, medium: 0, low: 0 }
-    alerts.forEach(a => {
-      const l = Number(a.rule?.level || 0)
-      if (l >= 15) c.critical++
-      else if (l >= 12) c.high++
-      else if (l >= 7)  c.medium++
-      else c.low++
-    })
-    return c
-  }, [alerts])
 
   // Active filter chips
   const activeFilters = [
@@ -1343,14 +1400,16 @@ export default function AlertsPage() {
     agentFilter && { label: `Agent: ${agentFilter}`, clear: () => setAgentFilter('') },
     mitreFilter && { label: `MITRE: ${mitreFilter}`, clear: () => setMitreFilter('') },
     search && { label: `ค้นหา: "${search}"`, clear: () => { setSearch(''); setSearchInput('') } },
-  ].filter(Boolean)
+  ].filter(Boolean) as { label: string; clear: () => void }[]
 
-  const handleExport = async (fmt) => {
+  const handleExport = async (fmt: 'csv' | 'json') => {
     try {
       const r = await alertsApi.export({ level, source: source||undefined, time_range: timeRange, q: search||undefined, fmt })
       const url  = URL.createObjectURL(new Blob([r.data]))
       const link = document.createElement('a')
-      link.href = url; link.download = `alerts-${timeRange}.${fmt}`; link.click()
+      link.href = url
+      link.download = `alerts-${timeRange}.${fmt}`
+      link.click()
       enqueueSnackbar(`Export ${fmt.toUpperCase()} สำเร็จ`, { variant: 'success' })
     } catch { enqueueSnackbar('Export ล้มเหลว', { variant: 'error' }) }
   }
@@ -1409,7 +1468,7 @@ export default function AlertsPage() {
 
           {/* Level */}
           <FormControl size="small" sx={{ minWidth: 120 }}>
-            <Select value={level} onChange={e => setLevel(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+            <Select value={level} onChange={e => setLevel(Number(e.target.value))} displayEmpty sx={{ fontSize: 12 }}>
               <MenuItem value={1}>ทุก Level</MenuItem>
               {SEV.map(s => <MenuItem key={s.key} value={s.min}><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color }} />{s.label} ({s.min}+)</Box></MenuItem>)}
             </Select>
@@ -1452,7 +1511,7 @@ export default function AlertsPage() {
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก Agent</MenuItem>
-                {(stats?.by_agent || []).map(a => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count})</MenuItem>)}
+                {(stats?.by_agent || []).map((a: any) => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count})</MenuItem>)}
               </Select>
             </FormControl>
 
@@ -1460,7 +1519,7 @@ export default function AlertsPage() {
             <FormControl size="small" sx={{ minWidth: 160 }}>
               <Select value={mitreFilter} onChange={e => setMitreFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก MITRE Tactic</MenuItem>
-                {(stats?.by_mitre || []).map(m => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count})</MenuItem>)}
+                {(stats?.by_mitre || []).map((m: any) => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count})</MenuItem>)}
               </Select>
             </FormControl>
 
@@ -1468,7 +1527,7 @@ export default function AlertsPage() {
             {(stats?.by_srcip || []).length > 0 && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: 10, color: 'text.disabled', mr: 0.5 }}>Top Attackers:</Typography>
-                {(stats.by_srcip || []).slice(0, 5).map(ip => (
+                {(stats?.by_srcip || []).slice(0, 5).map((ip: any) => (
                   <Chip key={ip.name} label={ip.name} size="small" onClick={() => setSearchInput(ip.name)}
                     sx={{ height: 18, fontSize: 9, fontFamily: '"IBM Plex Mono"', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
                       '&:hover': { bgcolor: 'rgba(239,68,68,0.2)' } }} />
@@ -1498,7 +1557,7 @@ export default function AlertsPage() {
           <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
             {alerts.length.toLocaleString()} alerts · ทั้งระบบ {(stats.total || 0).toLocaleString()}
           </Typography>
-          {(stats.by_source || []).slice(0, 5).map(s => (
+          {(stats.by_source || []).slice(0, 5).map((s: any) => (
             <Chip key={s.name} label={`${s.name}: ${s.count}`} size="small"
               onClick={() => setSource(s.name)}
               sx={{ height: 18, fontSize: 9, cursor: 'pointer', bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }} />
@@ -1531,8 +1590,8 @@ export default function AlertsPage() {
                   const lv      = Number(a.rule?.level || 0)
                   const srcip   = a.data?.srcip
                   const country = a.GeoLocation?.country_name
-                  const groups  = a.rule?.groups || []
-                  const mitre   = a.rule?.mitre || {}
+                  const groups: string[] = a.rule?.groups || []
+                  const mitre: MitreAttackInfo = a.rule?.mitre || {}
                   const isCrit  = lv >= 15
                   return (
                     <TableRow
@@ -1610,7 +1669,7 @@ export default function AlertsPage() {
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             {[['CSV', 'csv'], ['JSON', 'json']].map(([label, fmt]) => (
-              <Button key={fmt} size="small" onClick={() => handleExport(fmt)}
+              <Button key={fmt} size="small" onClick={() => handleExport(fmt as 'csv' | 'json')}
                 sx={{ fontSize: 10, py: 0.4, px: 1, borderRadius: '7px', color: 'text.disabled', '&:hover': { color: BRAND.purpleLight } }}>
                 Export {label}
               </Button>

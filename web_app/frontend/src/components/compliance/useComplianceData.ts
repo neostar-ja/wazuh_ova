@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { complianceApi } from '../../services/api'
 
-function buildKey(prefix, params) {
+function buildKey(prefix: string, params: any) {
   return [prefix, JSON.stringify(params || {})]
 }
 
-export function useComplianceSummary(params) {
+export function useComplianceSummary(params: any) {
   return useQuery({
     queryKey: buildKey('compliance-summary', params),
     queryFn: () => complianceApi.summary(params).then(response => response.data),
@@ -14,7 +14,7 @@ export function useComplianceSummary(params) {
   })
 }
 
-export function useComplianceFrameworks(params, enabled = true) {
+export function useComplianceFrameworks(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-frameworks', params),
     queryFn: () => complianceApi.frameworks(params).then(response => response.data),
@@ -23,7 +23,7 @@ export function useComplianceFrameworks(params, enabled = true) {
   })
 }
 
-export function useComplianceAgents(params, enabled = true) {
+export function useComplianceAgents(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-agents', params),
     queryFn: () => complianceApi.agents(params).then(response => response.data),
@@ -32,7 +32,7 @@ export function useComplianceAgents(params, enabled = true) {
   })
 }
 
-export function useComplianceSca(params, enabled = true) {
+export function useComplianceSca(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-sca', params),
     queryFn: () => complianceApi.sca(params).then(response => response.data),
@@ -41,7 +41,7 @@ export function useComplianceSca(params, enabled = true) {
   })
 }
 
-export function useComplianceVulnerabilities(params, enabled = true) {
+export function useComplianceVulnerabilities(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-vulnerabilities', params),
     queryFn: () => complianceApi.vulnerabilities(params).then(response => response.data),
@@ -50,7 +50,7 @@ export function useComplianceVulnerabilities(params, enabled = true) {
   })
 }
 
-export function useComplianceAlerts(params, enabled = true) {
+export function useComplianceAlerts(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-alerts', params),
     queryFn: () => complianceApi.alerts(params).then(response => response.data),
@@ -59,7 +59,7 @@ export function useComplianceAlerts(params, enabled = true) {
   })
 }
 
-export function useComplianceEvidence(params, enabled = true) {
+export function useComplianceEvidence(params: any, enabled = true) {
   return useQuery({
     queryKey: buildKey('compliance-evidence', params),
     queryFn: () => complianceApi.evidence(params).then(response => response.data),

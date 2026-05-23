@@ -1,18 +1,32 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Box, Avatar, Tooltip, IconButton, Typography, useTheme } from '@mui/material'
 import LogoutRoundedIcon     from '@mui/icons-material/LogoutRounded'
 import SecurityRoundedIcon   from '@mui/icons-material/SecurityRounded'
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded'
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded'
-import MenuOpenRoundedIcon    from '@mui/icons-material/MenuOpenRounded'
 import { useAuth } from '../../hooks/useAuth'
 
 export const DRAWER_WIDTH = 240
 export const DRAWER_COLLAPSED = 68
 
-// ── Icon colors per menu item ────────────────────────────────────────────────
-const NAV_GROUPS = [
+interface NavItemData {
+  label: string
+  sub: string
+  path: string
+  exact?: boolean
+  bg: string
+  glow: string
+  icon: React.ReactNode
+}
+
+interface NavGroupData {
+  section: string | null
+  adminOnly?: boolean
+  items: NavItemData[]
+}
+
+const NAV_GROUPS: NavGroupData[] = [
   {
     section: null,
     items: [
@@ -33,7 +47,6 @@ const NAV_GROUPS = [
       {
         label: 'การแจ้งเตือน', sub: 'Threat Alerts', path: '/alerts',
         bg: 'linear-gradient(135deg,#EF4444,#B91C1C)', glow: 'rgba(239,68,68,0.55)',
-        badge: true,
         icon: (
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6V11c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
@@ -104,11 +117,20 @@ const NAV_GROUPS = [
   },
 ]
 
-const ROLE_COLOR = { superadmin: '#EF4444', admin: '#F59E0B', analyst: '#3B82F6', viewer: '#9A90BF' }
-const ROLE_LABEL = { superadmin: 'Super Admin', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
+const ROLE_COLOR: Record<string, string> = { superadmin: '#EF4444', admin: '#F59E0B', analyst: '#3B82F6', viewer: '#9A90BF' }
+const ROLE_LABEL: Record<string, string> = { superadmin: 'Super Admin', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
 
-// ── Nav Item ──────────────────────────────────────────────────────────────────
-function NavItem({ item, active, onClick, hasBadge, collapsed }) {
+const BRAND_PURPLE = '#7B5BA4'
+
+interface NavItemProps {
+  item: NavItemData
+  active: boolean
+  onClick: () => void
+  hasBadge?: boolean
+  collapsed: boolean
+}
+
+function NavItem({ item, active, onClick, hasBadge, collapsed }: NavItemProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -243,10 +265,12 @@ function NavItem({ item, active, onClick, hasBadge, collapsed }) {
   return content
 }
 
-const BRAND_PURPLE = '#7B5BA4'
+interface SectionLabelProps {
+  children: React.ReactNode
+  collapsed: boolean
+}
 
-// ── Section Label ─────────────────────────────────────────────────────────────
-function SectionLabel({ children, collapsed }) {
+function SectionLabel({ children, collapsed }: SectionLabelProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -282,8 +306,13 @@ function SectionLabel({ children, collapsed }) {
   )
 }
 
-// ── Sidebar Content ───────────────────────────────────────────────────────────
-function SidebarContent({ onClose, collapsed, onToggleCollapse }) {
+interface SidebarContentProps {
+  onClose?: () => void
+  collapsed: boolean
+  onToggleCollapse?: () => void
+}
+
+function SidebarContent({ onClose, collapsed, onToggleCollapse }: SidebarContentProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const navigate  = useNavigate()
@@ -291,17 +320,17 @@ function SidebarContent({ onClose, collapsed, onToggleCollapse }) {
   const { user, logout } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin'
 
-  const isActive = (path, exact = false) =>
+  const isActive = (path: string, exact = false) =>
     exact || path === '/' ? location.pathname === '/' : location.pathname === path || location.pathname.startsWith(`${path}/`)
 
-  const navTo = path => { navigate(path); onClose?.() }
+  const navTo = (path: string) => { navigate(path); onClose?.() }
 
   const handleLogout = async () => { await logout(); navigate('/login') }
 
-  const initials = (user?.full_name || user?.username || 'U')
+  const initials = (user?.name || user?.username || 'U')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
-  const roleColor = ROLE_COLOR[user?.role] || '#9A90BF'
+  const roleColor = ROLE_COLOR[user?.role || ''] || '#9A90BF'
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -443,7 +472,7 @@ function SidebarContent({ onClose, collapsed, onToggleCollapse }) {
         {collapsed ? (
           /* Collapsed: just avatar + logout */
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <Tooltip title={user?.full_name || user?.username} placement="right">
+            <Tooltip title={user?.name || user?.username || ''} placement="right">
               <Avatar sx={{
                 width: 36, height: 36, fontSize: 13, fontWeight: 800,
                 background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)`,
@@ -495,12 +524,12 @@ function SidebarContent({ onClose, collapsed, onToggleCollapse }) {
                 lineHeight: 1.2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
-                {user?.full_name || user?.username}
+                {user?.name || user?.username}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, mt: 0.2 }}>
                 <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: roleColor, flexShrink: 0 }} />
                 <Typography sx={{ fontSize: 10, color: roleColor, fontWeight: 600 }}>
-                  {ROLE_LABEL[user?.role] || user?.role}
+                  {ROLE_LABEL[user?.role || ''] || user?.role}
                 </Typography>
               </Box>
             </Box>
@@ -524,19 +553,15 @@ function SidebarContent({ onClose, collapsed, onToggleCollapse }) {
   )
 }
 
-// ── Sidebar wrapper ───────────────────────────────────────────────────────────
-/**
- * DESKTOP: Pure flex child — NO position:sticky/fixed.
- *   width = DRAWER_WIDTH or DRAWER_COLLAPSED
- *   flexShrink = 0 → keeps its width, lets main take the rest
- *   height = 100vh → fills the flex row height
- *   overflow = hidden → internal scrolling handled by SidebarContent
- *
- * MOBILE: position:fixed overlay sliding in from left.
- *   Does NOT participate in flex layout (position:fixed removes it from flow).
- *   Main area takes full width on mobile.
- */
-export default function Sidebar({ mobileOpen, onClose, isMobile, collapsed, onToggleCollapse }) {
+interface SidebarProps {
+  mobileOpen: boolean
+  onClose: () => void
+  isMobile: boolean
+  collapsed: boolean
+  onToggleCollapse: () => void
+}
+
+export default function Sidebar({ mobileOpen, onClose, isMobile, collapsed, onToggleCollapse }: SidebarProps) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
 
@@ -586,12 +611,6 @@ export default function Sidebar({ mobileOpen, onClose, isMobile, collapsed, onTo
       component="nav"
       sx={{
         ...baseSx,
-        /**
-         * KEY: width + flexShrink:0 makes this a fixed-width flex child.
-         * The parent (Layout root) is display:flex,row → this sidebar
-         * occupies exactly `currentWidth` px; <main> gets the rest via flex:1.
-         * NO position tricks — pure CSS flex.
-         */
         width: currentWidth,
         flexShrink: 0,
         height: '100vh',

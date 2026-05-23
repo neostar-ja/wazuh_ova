@@ -5,7 +5,7 @@ import {
   Chip, Table, TableBody, TableCell, TableHead, TableRow,
   FormControl, Select, MenuItem, Alert, CircularProgress,
   IconButton, Tooltip, LinearProgress, Divider, Avatar, Collapse,
-  InputAdornment, Badge, useTheme,
+  InputAdornment, useTheme,
 } from '@mui/material'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
@@ -20,21 +20,16 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded'
 import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded'
 import SecurityRoundedIcon from '@mui/icons-material/SecurityRounded'
 import NetworkCheckRoundedIcon from '@mui/icons-material/NetworkCheckRounded'
-import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
 import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded'
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import InfoRoundedIcon from '@mui/icons-material/InfoRounded'
-import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
-import GppBadRoundedIcon from '@mui/icons-material/GppBadRounded'
-import GppGoodRoundedIcon from '@mui/icons-material/GppGoodRounded'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTooltip, ResponsiveContainer, Cell,
+  Tooltip as RechartTooltip, ResponsiveContainer,
 } from 'recharts'
 import { investigateApi } from '../../services/api'
-import { format, formatDistanceToNow } from 'date-fns'
-import { th } from 'date-fns/locale'
+import { format } from 'date-fns'
 import { useSnackbar } from 'notistack'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -45,10 +40,10 @@ const ChartTip = {
   borderRadius: 8, fontSize: 12, color: '#EDE9FA',
 }
 
-const LEVEL_COLOR = (lv) => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? BRAND.purple : '#22C55E'
-const LEVEL_LABEL = (lv) => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+const LEVEL_COLOR = (lv: number): string => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? BRAND.purple : '#22C55E'
+const LEVEL_LABEL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
 
-const ENTITY_TYPE_CONFIG = {
+const ENTITY_TYPE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   ip:   { icon: <RouterRoundedIcon />,      label: 'IP Address',   color: BRAND.purple },
   mac:  { icon: <FingerprintRoundedIcon />, label: 'MAC Address',  color: '#38BDF8' },
   user: { icon: <PersonRoundedIcon />,      label: 'Username',     color: BRAND.orange },
@@ -56,7 +51,7 @@ const ENTITY_TYPE_CONFIG = {
   auto: { icon: <SearchRoundedIcon />,      label: 'Auto-detect',  color: BRAND.purple },
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
   online:  { color: '#22C55E', label: 'Online',  icon: <CheckCircleRoundedIcon sx={{ fontSize: 13 }} /> },
   stale:   { color: BRAND.orange, label: 'Stale', icon: <WarningRoundedIcon sx={{ fontSize: 13 }} /> },
   offline: { color: '#5A5278', label: 'Offline', icon: <InfoRoundedIcon sx={{ fontSize: 13 }} /> },
@@ -64,14 +59,19 @@ const STATUS_CONFIG = {
 
 const RECENT_KEY = 'soc_inv_recent'
 const MAX_RECENT = 8
-const getRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] } }
-const saveRecent = (v) => {
+const getRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] } }
+const saveRecent = (v: string) => {
   const p = getRecent().filter(x => x !== v)
   localStorage.setItem(RECENT_KEY, JSON.stringify([v, ...p].slice(0, MAX_RECENT)))
 }
 
 // ── Utility components ────────────────────────────────────────────────────────
-function CopyBtn({ text, sx = {} }) {
+interface CopyBtnProps {
+  text: string;
+  sx?: any;
+}
+
+function CopyBtn({ text, sx = {} }: CopyBtnProps) {
   const { enqueueSnackbar } = useSnackbar()
   return (
     <Tooltip title="คัดลอก">
@@ -83,7 +83,12 @@ function CopyBtn({ text, sx = {} }) {
   )
 }
 
-function SectionLabel({ children, count }) {
+interface SectionLabelProps {
+  children: React.ReactNode;
+  count?: number | string;
+}
+
+function SectionLabel({ children, count }: SectionLabelProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
       <Typography sx={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'text.disabled' }}>
@@ -96,7 +101,11 @@ function SectionLabel({ children, count }) {
   )
 }
 
-function LevelChip({ level }) {
+interface LevelChipProps {
+  level: string | number;
+}
+
+function LevelChip({ level }: LevelChipProps) {
   const lv = Number(level || 0)
   return (
     <Chip label={`${lv} ${LEVEL_LABEL(lv)}`} size="small" sx={{
@@ -109,7 +118,11 @@ function LevelChip({ level }) {
 }
 
 // ── Risk Score Gauge ──────────────────────────────────────────────────────────
-function RiskGauge({ score = 0 }) {
+interface RiskGaugeProps {
+  score?: number;
+}
+
+function RiskGauge({ score = 0 }: RiskGaugeProps) {
   const color = score >= 7.5 ? '#EF4444' : score >= 5 ? BRAND.orange : score >= 2.5 ? '#EAB308' : '#22C55E'
   const pct = Math.round((score / 10) * 100)
   const circ = 2 * Math.PI * 36
@@ -134,7 +147,14 @@ function RiskGauge({ score = 0 }) {
 }
 
 // ── Entity Identity Card ──────────────────────────────────────────────────────
-function EntityCard({ query, data, enrichData, onClose }) {
+interface EntityCardProps {
+  query: string;
+  data: any;
+  enrichData: any;
+  onClose: () => void;
+}
+
+function EntityCard({ query, data, enrichData, onClose }: EntityCardProps) {
   const identity   = data.identity || {}
   const levelDist  = data.level_dist || {}
   const entityType = data.type || 'auto'
@@ -167,7 +187,7 @@ function EntityCard({ query, data, enrichData, onClose }) {
               <Chip label={typeConf.label} size="small"
                 sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: `${typeConf.color}18`, color: typeConf.color, border: `1px solid ${typeConf.color}30` }} />
               <Chip
-                icon={statusConf.icon}
+                icon={statusConf.icon as React.ReactElement}
                 label={statusConf.label}
                 size="small"
                 sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: `${statusConf.color}15`, color: statusConf.color,
@@ -238,22 +258,25 @@ function EntityCard({ query, data, enrichData, onClose }) {
 }
 
 // ── Activity Section ──────────────────────────────────────────────────────────
-function ActivitySection({ data }) {
+interface ActivitySectionProps {
+  data: any;
+}
+
+function ActivitySection({ data }: ActivitySectionProps) {
   const events  = data.events || []
   const hourly  = data.hourly || []
-  const sources = data.top_sources || []
   const [expanded, setExpanded] = useState(true)
   const [filterLevel, setFilterLevel] = useState(0)
   const [filterSrc, setFilterSrc]     = useState('')
 
-  const filtered = events.filter(e => {
+  const filtered = events.filter((e: any) => {
     const lv = Number(e.rule?.level || 0)
     if (filterLevel && lv < filterLevel) return false
     if (filterSrc && e.predecoder?.program_name !== filterSrc) return false
     return true
   })
 
-  const allSources = [...new Set(events.map(e => e.predecoder?.program_name).filter(Boolean))]
+  const allSources: string[] = [...new Set(events.map((e: any) => e.predecoder?.program_name).filter(Boolean))] as string[]
 
   return (
     <Card sx={{ mb: 2 }}>
@@ -299,11 +322,11 @@ function ActivitySection({ data }) {
             <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
               {[['Critical', '#EF4444', data.level_dist.critical], ['High', BRAND.orange, data.level_dist.high],
                 ['Medium', '#EAB308', data.level_dist.medium], ['Low', '#22C55E', data.level_dist.low]].map(([l, c, n]) => (
-                n > 0 && (
-                  <Box key={l} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.4, borderRadius: '7px', bgcolor: `${c}14`, border: `1px solid ${c}25` }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c, boxShadow: `0 0 5px ${c}80` }} />
-                    <Typography sx={{ fontSize: 10, fontWeight: 700, color: c }}>{n}</Typography>
-                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l}</Typography>
+                Number(n) > 0 && (
+                  <Box key={String(l)} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.4, borderRadius: '7px', bgcolor: `${c}14`, border: `1px solid ${c}25` }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: String(c), boxShadow: `0 0 5px ${c}80` }} />
+                    <Typography sx={{ fontSize: 10, fontWeight: 700, color: String(c) }}>{String(n)}</Typography>
+                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{String(l)}</Typography>
                   </Box>
                 )
               ))}
@@ -313,7 +336,7 @@ function ActivitySection({ data }) {
           {/* Filters */}
           <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
             <FormControl size="small" sx={{ minWidth: 110 }}>
-              <Select value={filterLevel} onChange={e => setFilterLevel(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+              <Select value={filterLevel} onChange={e => setFilterLevel(Number(e.target.value))} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value={0}>ทุก Level</MenuItem>
                 <MenuItem value={15}>Critical (15+)</MenuItem>
                 <MenuItem value={12}>High (12+)</MenuItem>
@@ -346,9 +369,9 @@ function ActivitySection({ data }) {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow><TableCell colSpan={7} sx={{ textAlign: 'center', py: 3, color: 'text.disabled', fontSize: 12 }}>ไม่มีข้อมูล</TableCell></TableRow>
-                ) : filtered.slice(0, 200).map((e, i) => {
+                ) : filtered.slice(0, 200).map((e: any, i: number) => {
                   const lv = Number(e.rule?.level || 0)
-                  const groups = e.rule?.groups || []
+                  const groups: string[] = e.rule?.groups || []
                   const mitreTags = groups.filter(g => g.startsWith('attack.') || g.startsWith('mitre'))
                   return (
                     <TableRow key={i} hover sx={{ bgcolor: lv >= 15 ? 'rgba(239,68,68,0.04)' : 'transparent' }}>
@@ -389,7 +412,11 @@ function ActivitySection({ data }) {
 }
 
 // ── Network Section (DHCP + WiFi) ─────────────────────────────────────────────
-function NetworkSection({ data }) {
+interface NetworkSectionProps {
+  data: any;
+}
+
+function NetworkSection({ data }: NetworkSectionProps) {
   const dhcp = data.dhcp || []
   const wifi = data.wifi || []
   const [tab, setTab] = useState(0)
@@ -434,7 +461,7 @@ function NetworkSection({ data }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dhcp.map((e, i) => (
+                {dhcp.map((e: any, i: number) => (
                   <TableRow key={i} hover>
                     <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.9 }}>
                       {e['@timestamp'] ? format(new Date(e['@timestamp']), 'dd/MM HH:mm') : '-'}
@@ -463,7 +490,7 @@ function NetworkSection({ data }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {wifi.map((e, i) => (
+                {wifi.map((e: any, i: number) => (
                   <TableRow key={i} hover>
                     <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.9 }}>
                       {e['@timestamp'] ? format(new Date(e['@timestamp']), 'dd/MM HH:mm') : '-'}
@@ -489,7 +516,12 @@ function NetworkSection({ data }) {
 }
 
 // ── Threat Intel Section ──────────────────────────────────────────────────────
-function ThreatIntelSection({ enrichData, entityType }) {
+interface ThreatIntelSectionProps {
+  enrichData: any;
+  entityType: string;
+}
+
+function ThreatIntelSection({ enrichData, entityType }: ThreatIntelSectionProps) {
   if (entityType !== 'ip' && entityType !== 'auto') return null
   if (!enrichData) return (
     <Card sx={{ mb: 2 }}>
@@ -530,7 +562,7 @@ function ThreatIntelSection({ enrichData, entityType }) {
         ['Domain', abuse.domain],
         ['Usage', abuse.usageType],
         ['Whitelisted', abuse.isWhitelisted ? 'Yes' : 'No'],
-      ],
+      ] as [string, any][],
       bar: abuse.abuseConfidenceScore,
       barColor: (abuse.abuseConfidenceScore || 0) >= 75 ? '#EF4444' : (abuse.abuseConfidenceScore || 0) >= 30 ? BRAND.orange : '#22C55E',
     },
@@ -543,8 +575,8 @@ function ThreatIntelSection({ enrichData, entityType }) {
         ['ASN', otx.asn],
         ['Malware', otx.malware_count],
         ['City', otx.city],
-      ],
-      extra: otx.pulse_refs?.length > 0 ? otx.pulse_refs.slice(0, 3).map(p => p.name) : null,
+      ] as [string, any][],
+      extra: otx.pulse_refs?.length > 0 ? otx.pulse_refs.slice(0, 3).map((p: any) => p.name) : null,
     },
     {
       name: 'SHODAN', color: '#CC0000', available: shodan.available,
@@ -555,9 +587,9 @@ function ThreatIntelSection({ enrichData, entityType }) {
         ['Country', shodan.country_name],
         ['ASN', shodan.asn],
         ['CVEs', shodan.vulns?.length],
-      ],
-      ports: shodan.ports?.slice(0, 12),
-      vulns: shodan.vulns?.slice(0, 5),
+      ] as [string, any][],
+      ports: shodan.ports?.slice(0, 12) as number[],
+      vulns: shodan.vulns?.slice(0, 5) as string[],
     },
     {
       name: 'VIRUSTOTAL', color: '#395BA9', available: vt.available,
@@ -568,8 +600,8 @@ function ThreatIntelSection({ enrichData, entityType }) {
         ['AS Owner', vt.as_owner],
         ['Suspicious', vt.suspicious],
         ['Harmless', vt.harmless],
-      ],
-      engines: vt.malicious_engines?.slice(0, 3),
+      ] as [string, any][],
+      engines: vt.malicious_engines?.slice(0, 3) as { engine: string; result: string }[],
     },
   ]
 
@@ -612,7 +644,7 @@ function ThreatIntelSection({ enrichData, entityType }) {
                         </Typography>
                       </Box>
                     ))}
-                    {fc.ports?.length > 0 && (
+                    {fc.ports && fc.ports.length > 0 && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography sx={{ fontSize: 9, color: 'text.disabled', mb: 0.3, textTransform: 'uppercase' }}>Ports</Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3 }}>
@@ -627,7 +659,7 @@ function ThreatIntelSection({ enrichData, entityType }) {
                         </Box>
                       </Box>
                     )}
-                    {fc.vulns?.length > 0 && (
+                    {fc.vulns && fc.vulns.length > 0 && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography sx={{ fontSize: 9, color: '#EF4444', textTransform: 'uppercase', fontWeight: 700, mb: 0.3 }}>CVEs</Typography>
                         {fc.vulns.map(v => (
@@ -635,15 +667,15 @@ function ThreatIntelSection({ enrichData, entityType }) {
                         ))}
                       </Box>
                     )}
-                    {fc.extra?.length > 0 && (
+                    {fc.extra && fc.extra.length > 0 && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography sx={{ fontSize: 9, color: 'text.disabled', textTransform: 'uppercase', mb: 0.3 }}>Threat Pulses</Typography>
-                        {fc.extra.map((p, i) => (
+                        {fc.extra.map((p: string, i: number) => (
                           <Typography key={i} sx={{ fontSize: 9, color: 'text.secondary', lineHeight: 1.4 }} className="line-clamp-2">{p}</Typography>
                         ))}
                       </Box>
                     )}
-                    {fc.engines?.length > 0 && (
+                    {fc.engines && fc.engines.length > 0 && (
                       <Box sx={{ mt: 0.5 }}>
                         <Typography sx={{ fontSize: 9, color: '#EF4444', textTransform: 'uppercase', fontWeight: 700, mb: 0.3 }}>Detected by</Typography>
                         {fc.engines.map((eng, i) => (
@@ -665,9 +697,13 @@ function ThreatIntelSection({ enrichData, entityType }) {
 }
 
 // ── MITRE ATT&CK Section ──────────────────────────────────────────────────────
-function MitreSection({ mitre = {} }) {
-  const tactics    = mitre.tactics || []
-  const techniques = mitre.techniques || []
+interface MitreSectionProps {
+  mitre?: any;
+}
+
+function MitreSection({ mitre = {} }: MitreSectionProps) {
+  const tactics: string[]    = mitre.tactics || []
+  const techniques: string[] = mitre.techniques || []
   if (!tactics.length && !techniques.length) return null
 
   return (
@@ -702,13 +738,17 @@ function MitreSection({ mitre = {} }) {
 }
 
 // ── Correlation Section ───────────────────────────────────────────────────────
-function CorrelationSection({ data }) {
+interface CorrelationSectionProps {
+  data: any;
+}
+
+function CorrelationSection({ data }: CorrelationSectionProps) {
   const corr    = data.correlation || {}
   const sources = data.top_sources || []
-  const relIPs  = (corr.related_ips || []).filter(x => x.value)
-  const relMACs = (corr.related_macs || []).filter(x => x.value)
-  const relUsers = (corr.related_users || []).filter(x => x.value)
-  const relAgents = (corr.related_agents || []).filter(x => x.value)
+  const relIPs  = (corr.related_ips || []).filter((x: any) => x.value) as { value: string; count: number }[]
+  const relMACs = (corr.related_macs || []).filter((x: any) => x.value) as { value: string; count: number }[]
+  const relUsers = (corr.related_users || []).filter((x: any) => x.value) as { value: string; count: number }[]
+  const relAgents = (corr.related_agents || []).filter((x: any) => x.value) as { value: string; count: number }[]
   const topRules  = corr.top_rules || []
   const conflicts = corr.ip_conflicts || {}
 
@@ -743,7 +783,7 @@ function CorrelationSection({ data }) {
             {Object.keys(conflicts).length > 0 && (
               <Alert severity="warning" sx={{ fontSize: 11, mb: 1 }}>
                 <b>IP Conflict:</b> พบ IP ที่ใช้ MAC หลายค่า
-                {Object.entries(conflicts).map(([ip, macs]) => (
+                {Object.entries(conflicts).map(([ip, macs]: any) => (
                   <Box key={ip} sx={{ mt: 0.5 }}>
                     <Typography sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"' }}>{ip}: {macs.join(', ')}</Typography>
                   </Box>
@@ -758,7 +798,7 @@ function CorrelationSection({ data }) {
             <Box sx={{ maxHeight: 250, overflow: 'auto' }} className="scrollbar-thin">
               {topRules.length === 0 ? (
                 <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
-              ) : topRules.map((r, i) => (
+              ) : topRules.map((r: any) => (
                 <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75,
                   p: 0.75, borderRadius: '8px', bgcolor: 'rgba(123,91,164,0.04)' }}>
                   <Typography sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight, minWidth: 48, fontWeight: 700 }}>
@@ -797,18 +837,18 @@ function CorrelationSection({ data }) {
 export default function InvestigatePage() {
   const [searchParams] = useSearchParams()
   const initialQ = searchParams.get('q') || ''
-  const inputRef = useRef(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const [query,      setQuery]     = useState(initialQ)
   const [entityType, setEntityType]= useState('auto')
   const [timeRange,  setTimeRange] = useState('30d')
   const [loading,    setLoading]   = useState(false)
   const [error,      setError]     = useState('')
-  const [result,     setResult]    = useState(null)
-  const [enrichData, setEnrich]    = useState(null)
-  const [recent,     setRecent]    = useState(getRecent)
+  const [result,     setResult]    = useState<any>(null)
+  const [enrichData, setEnrich]    = useState<any>(null)
+  const [recent,     setRecent]    = useState<string[]>(getRecent)
 
-  const doSearch = useCallback(async (q, type = entityType, tr = timeRange) => {
+  const doSearch = useCallback(async (q?: string, type = entityType, tr = timeRange) => {
     const val = (q || query).trim()
     if (!val) return
     setQuery(val)
@@ -826,7 +866,7 @@ export default function InvestigatePage() {
       if (detectedType === 'ip' || detectedType === 'auto') {
         investigateApi.enrich(val).then(e => setEnrich(e.data)).catch(() => {})
       }
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.detail || 'เกิดข้อผิดพลาดในการค้นหา')
     } finally {
       setLoading(false)
@@ -834,7 +874,7 @@ export default function InvestigatePage() {
   }, [query, entityType, timeRange])
 
   // Auto-search from URL param
-  useEffect(() => { if (initialQ) doSearch(initialQ) }, [])
+  useEffect(() => { if (initialQ) doSearch(initialQ) }, [initialQ, doSearch])
 
   const clearResult = () => { setResult(null); setEnrich(null); setQuery(''); setError(''); inputRef.current?.focus() }
 

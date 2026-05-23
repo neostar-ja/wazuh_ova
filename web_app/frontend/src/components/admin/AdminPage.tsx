@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box, Card, CardContent, Typography, Chip, TextField, Select, MenuItem,
   FormControl, InputLabel, Button, Grid, Table, TableBody, TableCell,
   TableHead, TableRow, TableContainer, Dialog, DialogTitle, DialogContent,
   DialogActions, CircularProgress, Tooltip, IconButton, Avatar, Skeleton,
-  Paper, InputAdornment, Alert, Divider, LinearProgress, useTheme,
+  Paper, InputAdornment, Alert, Divider, useTheme,
 } from '@mui/material'
 import Editor from '@monaco-editor/react'
 import RefreshRoundedIcon       from '@mui/icons-material/RefreshRounded'
@@ -23,29 +23,26 @@ import ArticleRoundedIcon        from '@mui/icons-material/ArticleRounded'
 import TuneRoundedIcon           from '@mui/icons-material/TuneRounded'
 import PeopleRoundedIcon         from '@mui/icons-material/PeopleRounded'
 import HistoryRoundedIcon        from '@mui/icons-material/HistoryRounded'
-import CheckCircleRoundedIcon    from '@mui/icons-material/CheckCircleRounded'
 import WarningAmberRoundedIcon   from '@mui/icons-material/WarningAmberRounded'
 import MonitorHeartRoundedIcon   from '@mui/icons-material/MonitorHeartRounded'
 import CodeRoundedIcon           from '@mui/icons-material/CodeRounded'
 import ListAltRoundedIcon        from '@mui/icons-material/ListAltRounded'
 import SettingsSuggestRoundedIcon from '@mui/icons-material/SettingsSuggestRounded'
 import ErrorRoundedIcon          from '@mui/icons-material/ErrorRounded'
-import FiberManualRecordIcon     from '@mui/icons-material/FiberManualRecord'
-import ContentCopyRoundedIcon    from '@mui/icons-material/ContentCopyRounded'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
 import { adminApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { useThemeMode } from '../../theme/ThemeContext'
+import { UserRole } from '../../types/auth'
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', orange: '#F17422' }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const ROLE_COLOR = { superadmin: 'error', admin: 'warning', analyst: 'info', viewer: 'default' }
-const ROLE_TH    = { superadmin: 'ซูเปอร์แอดมิน', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
-const ACTION_COLOR = {
+const ROLE_TH: Record<UserRole, string> = { superadmin: 'ซูเปอร์แอดมิน', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
+const ACTION_COLOR: Record<string, 'primary' | 'default' | 'warning' | 'info' | 'secondary' | 'error' | 'success'> = {
   login: 'primary', logout: 'default',
   save_rule: 'warning', save_decoder: 'info', save_list: 'secondary', save_wazuh_config: 'warning',
   deploy_restart: 'error',
@@ -53,7 +50,7 @@ const ACTION_COLOR = {
   add_tuning: 'warning', save_config: 'secondary',
 }
 
-function getLevelColor(lv) {
+function getLevelColor(lv: number): string {
   if (lv >= 12) return '#EF4444'
   if (lv >= 7)  return BRAND.orange
   if (lv >= 4)  return BRAND.purple
@@ -61,7 +58,18 @@ function getLevelColor(lv) {
 }
 
 // ─── Nav config ──────────────────────────────────────────────────────────────
-const NAV = [
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  color: string;
+}
+interface NavGroup {
+  section: string;
+  items: NavItem[];
+}
+
+const NAV: NavGroup[] = [
   {
     section: 'WAZUH ENGINE',
     items: [
@@ -89,8 +97,14 @@ const NAV = [
 ]
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
-function SectionHeader({ icon, title, count, action }) {
-  const theme = useTheme()
+interface SectionHeaderProps {
+  icon: React.ReactNode;
+  title: string;
+  count?: number;
+  action?: React.ReactNode;
+}
+
+function SectionHeader({ icon, title, count, action }: SectionHeaderProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5, gap: 1 }}>
       <Box sx={{ color: 'primary.main', display: 'flex', alignItems: 'center' }}>{icon}</Box>
@@ -104,7 +118,17 @@ function SectionHeader({ icon, title, count, action }) {
   )
 }
 
-function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmColor = 'error', loading }) {
+interface ConfirmDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmColor?: 'inherit' | 'primary' | 'secondary' | 'success' | 'error' | 'info' | 'warning';
+  loading?: boolean;
+}
+
+function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmColor = 'error', loading }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
@@ -122,7 +146,7 @@ function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmColor 
   )
 }
 
-function prettifyXML(xml) {
+function prettifyXML(xml: string): string {
   try {
     const PAD = '  '
     let out = '', indent = 0
@@ -138,7 +162,15 @@ function prettifyXML(xml) {
   } catch { return xml }
 }
 
-function parseRulesFromXml(xml) {
+interface RuleItem {
+  id: string;
+  level: string;
+  desc: string;
+  parent?: string;
+  program?: string;
+}
+
+function parseRulesFromXml(xml: string): RuleItem[] {
   try {
     const doc = new DOMParser().parseFromString(xml, 'text/xml')
     return Array.from(doc.querySelectorAll('rule')).map(r => ({
@@ -149,11 +181,13 @@ function parseRulesFromXml(xml) {
   } catch { return [] }
 }
 
-function parseDecodersFromXml(xml) {
+function parseDecodersFromXml(xml: string): RuleItem[] {
   try {
     const doc = new DOMParser().parseFromString(xml, 'text/xml')
     return Array.from(doc.querySelectorAll('decoder')).map(d => ({
       id: d.getAttribute('name') || '',
+      level: '',
+      desc: '',
       parent: d.querySelector('parent')?.textContent?.trim() || '',
       program: d.querySelector('program_name')?.textContent?.trim() || '',
     })).filter(d => d.id)
@@ -161,10 +195,19 @@ function parseDecodersFromXml(xml) {
 }
 
 // ─── Reusable XML file editor (Rules / Decoders) ─────────────────────────────
-function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, deployBtn }) {
+interface XmlFileEditorProps {
+  title: string;
+  listFn: () => Promise<any>;
+  getFn: (filename: string) => Promise<any>;
+  saveFn: (filename: string, content: string) => Promise<any>;
+  parseItemsFn: (xml: string) => RuleItem[];
+  itemLabel: string;
+}
+
+function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel }: XmlFileEditorProps) {
   const { mode } = useThemeMode()
   const { enqueueSnackbar } = useSnackbar()
-  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [isCustomFile, setIsCustomFile] = useState(false)
   const [content, setContent] = useState('')
   const [originalContent, setOriginalContent] = useState('')
@@ -174,7 +217,7 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
   const [showList, setShowList] = useState(true)
   const [deployConfirm, setDeployConfirm] = useState(false)
   const [deploying, setDeploying] = useState(false)
-  const editorRef = useRef(null)
+  const editorRef = useRef<any>(null)
 
   const { data: filesData, isLoading } = useQuery({
     queryKey: [`admin-${title}-files`],
@@ -182,11 +225,11 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
   })
 
   const allFiles = filesData?.data?.affected_items || []
-  const customCount = allFiles.filter(f => f.relative_dirname?.includes('etc')).length
+  const customCount = allFiles.filter((f: any) => f.relative_dirname?.includes('etc')).length
   const sorted = [
-    ...allFiles.filter(f => f.relative_dirname?.includes('etc')),
-    ...allFiles.filter(f => !f.relative_dirname?.includes('etc')),
-  ].filter(f => !search || f.filename.toLowerCase().includes(search.toLowerCase()))
+    ...allFiles.filter((f: any) => f.relative_dirname?.includes('etc')),
+    ...allFiles.filter((f: any) => !f.relative_dirname?.includes('etc')),
+  ].filter((f: any) => !search || f.filename.toLowerCase().includes(search.toLowerCase())) as any[]
 
   const isDirty = content !== originalContent
   const parsedItems = parseItemsFn(content)
@@ -197,7 +240,7 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
         r.parent?.toLowerCase().includes(itemSearch.toLowerCase()))
     : parsedItems
 
-  const loadFile = async (filename, custom) => {
+  const loadFile = async (filename: string, custom: boolean) => {
     try {
       const r = await getFn(filename)
       setSelectedFile(filename)
@@ -215,7 +258,7 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
       await saveFn(selectedFile, content)
       setOriginalContent(content)
       enqueueSnackbar('บันทึกสำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
     setSaving(false)
   }
 
@@ -224,14 +267,14 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
     try {
       await adminApi.deploy()
       enqueueSnackbar('Restart Wazuh Manager สำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
     setDeploying(false)
   }
 
-  const jumpToItem = (id) => {
+  const jumpToItem = (id: string) => {
     if (!editorRef.current) return
     const lines = editorRef.current.getModel()?.getValue()?.split('\n') || []
-    const idx = lines.findIndex(l => l.includes(`id="${id}"`) || l.includes(`name="${id}"`))
+    const idx = lines.findIndex((l: string) => l.includes(`id="${id}"`) || l.includes(`name="${id}"`))
     if (idx >= 0) { editorRef.current.revealLineInCenter(idx + 1); editorRef.current.setPosition({ lineNumber: idx + 1, column: 1 }); editorRef.current.focus() }
   }
 
@@ -261,7 +304,7 @@ function XmlFileEditor({ title, listFn, getFn, saveFn, parseItemsFn, itemLabel, 
             {isLoading
               ? Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} height={30} sx={{ mx: 1 }} />)
               : (() => {
-                  let lastGroup = null
+                  let lastGroup: string | null = null
                   return sorted.map((f, i) => {
                     const isCustom = f.relative_dirname?.includes('etc')
                     const group = isCustom ? 'CUSTOM' : 'DEFAULT'
@@ -468,7 +511,7 @@ function DecodersTab() {
 function ListsTab() {
   const { mode } = useThemeMode()
   const { enqueueSnackbar } = useSnackbar()
-  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedFile, setSelectedFile] = useState<any>(null)
   const [content, setContent] = useState('')
   const [originalContent, setOriginalContent] = useState('')
   const [saving, setSaving] = useState(false)
@@ -482,12 +525,12 @@ function ListsTab() {
   })
 
   const allFiles = filesData?.data?.affected_items || []
-  const sorted = allFiles.filter(f => !search || f.filename?.toLowerCase().includes(search.toLowerCase()))
+  const sorted = allFiles.filter((f: any) => !search || f.filename?.toLowerCase().includes(search.toLowerCase())) as any[]
   const isDirty = content !== originalContent
 
   const entryCount = content.split('\n').filter(l => l.trim() && !l.startsWith('#')).length
 
-  const loadFile = async (item) => {
+  const loadFile = async (item: any) => {
     try {
       const r = await adminApi.getCdbList(item.filename)
       setSelectedFile(item)
@@ -503,7 +546,7 @@ function ListsTab() {
       await adminApi.saveCdbList(selectedFile.filename, content)
       setOriginalContent(content)
       enqueueSnackbar('บันทึกสำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
     setSaving(false)
   }
 
@@ -512,7 +555,7 @@ function ListsTab() {
     try {
       await adminApi.deploy()
       enqueueSnackbar('Restart Wazuh Manager สำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
     setDeploying(false)
   }
 
@@ -653,7 +696,7 @@ function WazuhConfigTab() {
   const [saveConfirm, setSaveConfirm] = useState(false)
   const [deployConfirm, setDeployConfirm] = useState(false)
   const [deploying, setDeploying] = useState(false)
-  const editorRef = useRef(null)
+  const editorRef = useRef<any>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['admin-wazuh-config'],
@@ -665,15 +708,15 @@ function WazuhConfigTab() {
       setContent(data.content)
       setOriginalContent(data.content)
     }
-  }, [data])
+  }, [data, content])
 
   const isDirty = content !== originalContent
   const lineCount = content.split('\n').length
 
-  const jumpToSection = (key) => {
+  const jumpToSection = (key: string) => {
     if (!editorRef.current) return
     const lines = editorRef.current.getModel()?.getValue()?.split('\n') || []
-    const idx = lines.findIndex(l => l.trim().startsWith(key))
+    const idx = lines.findIndex((l: string) => l.trim().startsWith(key))
     if (idx >= 0) { editorRef.current.revealLineInCenter(idx + 1); editorRef.current.setPosition({ lineNumber: idx + 1, column: 1 }); editorRef.current.focus() }
   }
 
@@ -683,7 +726,7 @@ function WazuhConfigTab() {
       await adminApi.saveWazuhConfig(content)
       setOriginalContent(content)
       enqueueSnackbar('บันทึก ossec.conf สำเร็จ — กรุณา Deploy เพื่อให้การเปลี่ยนแปลงมีผล', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
     setSaving(false)
   }
 
@@ -692,7 +735,7 @@ function WazuhConfigTab() {
     try {
       await adminApi.deploy()
       enqueueSnackbar('Restart Wazuh Manager สำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'Restart ล้มเหลว', { variant: 'error' }) }
     setDeploying(false)
   }
 
@@ -798,7 +841,7 @@ function WazuhConfigTab() {
 }
 
 // ─── System Status Tab ────────────────────────────────────────────────────────
-const DAEMON_LABELS = {
+const DAEMON_LABELS: Record<string, { label: string; desc: string }> = {
   'wazuh-analysisd':   { label: 'Analysis',     desc: 'วิเคราะห์ log และ trigger alerts' },
   'wazuh-remoted':     { label: 'Remote',        desc: 'รับ log จาก agents' },
   'wazuh-logcollector':{ label: 'Log Collector', desc: 'เก็บ log จาก local files' },
@@ -815,7 +858,6 @@ const DAEMON_LABELS = {
 }
 
 function SystemStatusTab() {
-  const { enqueueSnackbar } = useSnackbar()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -959,7 +1001,7 @@ function SystemStatusTab() {
                             {name}
                           </Typography>
                         </Box>
-                        <Chip size="small" label={isRunning ? 'running' : status}
+                        <Chip size="small" label={isRunning ? 'running' : String(status)}
                           sx={{ height: 18, fontSize: 10, fontWeight: 700,
                             bgcolor: isRunning ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
                             color: isRunning ? '#22C55E' : '#EF4444' }} />
@@ -994,11 +1036,11 @@ function TuningTab() {
   const qc = useQueryClient()
   const { enqueueSnackbar } = useSnackbar()
   const [addOpen, setAddOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [form, setForm] = useState({ rule_id: '', original_level: 7, tuned_level: 3, reason: '' })
-  const [formError, setFormError] = useState({})
+  const [formError, setFormError] = useState<Record<string, string>>({})
 
-  const { data: tunings = [], isLoading } = useQuery({
+  const { data: tunings = [], isLoading } = useQuery<any[]>({
     queryKey: ['admin-tuning'],
     queryFn: () => adminApi.listTuning().then(r => r.data),
   })
@@ -1006,23 +1048,23 @@ function TuningTab() {
   const addMut = useMutation({
     mutationFn: adminApi.addTuning,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-tuning'] }); setAddOpen(false); setForm({ rule_id: '', original_level: 7, tuned_level: 3, reason: '' }); enqueueSnackbar('เพิ่ม Tuning สำเร็จ', { variant: 'success' }) },
-    onError: e => enqueueSnackbar(e.response?.data?.detail || 'เกิดข้อผิดพลาด', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'เกิดข้อผิดพลาด', { variant: 'error' }),
   })
 
   const statusMut = useMutation({
-    mutationFn: ({ id, status }) => adminApi.updateTuningStatus(id, status),
+    mutationFn: ({ id, status }: { id: string | number; status: string }) => adminApi.updateTuningStatus(id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-tuning'] }),
-    onError: e => enqueueSnackbar(e.response?.data?.detail || 'ไม่สามารถอัปเดตสถานะ', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'ไม่สามารถอัปเดตสถานะ', { variant: 'error' }),
   })
 
   const deleteMut = useMutation({
-    mutationFn: id => adminApi.deleteTuning(id),
+    mutationFn: (id: string | number) => adminApi.deleteTuning(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-tuning'] }); setDeleteTarget(null); enqueueSnackbar('ลบ Tuning สำเร็จ', { variant: 'success' }) },
-    onError: e => enqueueSnackbar(e.response?.data?.detail || 'ลบไม่สำเร็จ', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'ลบไม่สำเร็จ', { variant: 'error' }),
   })
 
   const validateForm = () => {
-    const err = {}
+    const err: Record<string, string> = {}
     if (!form.rule_id.trim()) err.rule_id = 'กรุณาระบุ Rule ID'
     if (form.original_level < 1 || form.original_level > 15) err.original_level = 'ระดับ 1–15'
     if (form.tuned_level < 1 || form.tuned_level > 15) err.tuned_level = 'ระดับ 1–15'
@@ -1162,9 +1204,9 @@ function NotifyTab() {
         alert_level_threshold: configData.alert_level_threshold || '12',
       })
     }
-  }, [configData])
+  }, [configData, dirty])
 
-  const handleChange = (key, value) => { setConfig(c => ({ ...c, [key]: value })); setDirty(true) }
+  const handleChange = (key: string, value: string) => { setConfig(c => ({ ...c, [key]: value })); setDirty(true) }
 
   const handleSave = async () => {
     setSaving(true)
@@ -1172,7 +1214,7 @@ function NotifyTab() {
       await adminApi.saveConfig(config)
       setDirty(false)
       enqueueSnackbar('บันทึกการตั้งค่าสำเร็จ', { variant: 'success' })
-    } catch (e) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
+    } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }
     setSaving(false)
   }
 
@@ -1237,7 +1279,7 @@ function NotifyTab() {
               <FormControl fullWidth size="small">
                 <InputLabel>ระดับความรุนแรงขั้นต่ำ</InputLabel>
                 <Select value={config.alert_level_threshold} label="ระดับความรุนแรงขั้นต่ำ"
-                  onChange={e => handleChange('alert_level_threshold', e.target.value)}>
+                  onChange={e => handleChange('alert_level_threshold', e.target.value as string)}>
                   {[
                     { value: '7',  label: 'ระดับ 7+ (Medium–Critical)' },
                     { value: '10', label: 'ระดับ 10+ (High–Critical)' },
@@ -1273,12 +1315,12 @@ function UsersTab() {
   const qc = useQueryClient()
   const { enqueueSnackbar } = useSnackbar()
   const [addOpen, setAddOpen] = useState(false)
-  const [pwdTarget, setPwdTarget] = useState(null)
+  const [pwdTarget, setPwdTarget] = useState<any>(null)
   const [pwdValue, setPwdValue] = useState('')
-  const [form, setForm] = useState({ username: '', email: '', full_name: '', password: '', role: 'viewer' })
-  const [formError, setFormError] = useState({})
+  const [form, setForm] = useState({ username: '', email: '', full_name: '', password: '', role: 'viewer' as UserRole })
+  const [formError, setFormError] = useState<Record<string, string>>({})
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery<any[]>({
     queryKey: ['admin-users'],
     queryFn: () => adminApi.listUsers().then(r => r.data),
   })
@@ -1286,17 +1328,17 @@ function UsersTab() {
   const addMut = useMutation({
     mutationFn: adminApi.createUser,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); setAddOpen(false); setForm({ username: '', email: '', full_name: '', password: '', role: 'viewer' }); enqueueSnackbar('สร้างผู้ใช้สำเร็จ', { variant: 'success' }) },
-    onError: e => enqueueSnackbar(e.response?.data?.detail || 'เกิดข้อผิดพลาด', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'เกิดข้อผิดพลาด', { variant: 'error' }),
   })
 
   const updateMut = useMutation({
-    mutationFn: ({ id, data }) => adminApi.updateUser(id, data),
+    mutationFn: ({ id, data }: { id: string | number; data: any }) => adminApi.updateUser(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); enqueueSnackbar('อัปเดตสำเร็จ', { variant: 'success' }) },
-    onError: e => enqueueSnackbar(e.response?.data?.detail || 'ไม่สามารถอัปเดต', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'ไม่สามารถอัปเดต', { variant: 'error' }),
   })
 
   const validateForm = () => {
-    const err = {}
+    const err: Record<string, string> = {}
     if (!form.username.trim()) err.username = 'กรุณาระบุ Username'
     if (!form.email.includes('@')) err.email = 'Email ไม่ถูกต้อง'
     if (!form.full_name.trim()) err.full_name = 'กรุณาระบุชื่อเต็ม'
@@ -1348,7 +1390,7 @@ function UsersTab() {
                     onChange={e => updateMut.mutate({ id: u.id, data: { role: e.target.value } })}
                     sx={{ fontSize: 11, height: 26, '& .MuiSelect-select': { py: 0.3 } }}>
                     {['viewer', 'analyst', 'admin', 'superadmin'].map(r => (
-                      <MenuItem key={r} value={r} sx={{ fontSize: 12 }}>{ROLE_TH[r]}</MenuItem>
+                      <MenuItem key={r} value={r} sx={{ fontSize: 12 }}>{ROLE_TH[r as UserRole]}</MenuItem>
                     ))}
                   </Select>
                 </TableCell>
@@ -1394,15 +1436,15 @@ function UsersTab() {
               <Grid item xs={12} sm={6} key={key}>
                 <TextField fullWidth size="small" label={label} type={type}
                   error={!!formError[key]} helperText={formError[key]}
-                  value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+                  value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
               </Grid>
             ))}
             <Grid item xs={12}>
               <FormControl fullWidth size="small">
                 <InputLabel>Role</InputLabel>
-                <Select value={form.role} label="Role" onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <Select value={form.role} label="Role" onChange={e => setForm(f => ({ ...f, role: e.target.value as UserRole }))}>
                   {['viewer', 'analyst', 'admin', 'superadmin'].map(r => (
-                    <MenuItem key={r} value={r}>{ROLE_TH[r]} ({r})</MenuItem>
+                    <MenuItem key={r} value={r}>{ROLE_TH[r as UserRole]} ({r})</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -1440,7 +1482,7 @@ function AuditTab() {
   const [actionFilter, setActionFilter] = useState('')
   const [countdown, setCountdown] = useState(30)
 
-  const { data: logs = [], isLoading } = useQuery({
+  const { data: logs = [], isLoading } = useQuery<any[]>({
     queryKey: ['admin-audit', limit],
     queryFn: () => adminApi.auditLog(limit).then(r => r.data),
     refetchInterval: 30000,
@@ -1466,7 +1508,7 @@ function AuditTab() {
                 {actions.map(a => <MenuItem key={a} value={a} sx={{ fontSize: 12 }}>{a}</MenuItem>)}
               </Select>
             </FormControl>
-            <Select size="small" value={limit} onChange={e => setLimit(e.target.value)} sx={{ fontSize: 12, height: 30, minWidth: 80 }}>
+            <Select size="small" value={limit} onChange={e => setLimit(Number(e.target.value))} sx={{ fontSize: 12, height: 30, minWidth: 80 }}>
               {[50, 100, 200].map(l => <MenuItem key={l} value={l} sx={{ fontSize: 12 }}>{l} รายการ</MenuItem>)}
             </Select>
           </Box>
@@ -1518,7 +1560,7 @@ function AuditTab() {
 }
 
 // ─── Main AdminPage ────────────────────────────────────────────────────────────
-const CONTENT_MAP = {
+const CONTENT_MAP: Record<string, React.ReactNode> = {
   status:   <SystemStatusTab />,
   rules:    <RulesTab />,
   decoders: <DecodersTab />,
@@ -1581,13 +1623,13 @@ export default function AdminPage() {
                       <Box sx={{ color: isActive ? item.color : 'text.disabled', display: 'flex', alignItems: 'center', transition: 'color 0.18s', flexShrink: 0 }}>
                         {item.icon}
                       </Box>
-                      <Typography sx={{
-                        fontSize: 12.5,
-                        fontWeight: isActive ? 700 : 500,
-                        color: isActive ? item.color : 'text.secondary',
-                        transition: 'all 0.18s',
-                        lineHeight: 1.3,
-                      }}>
+                      <Typography
+                        sx={{
+                          fontSize: 12.5, fontWeight: isActive ? 800 : 500,
+                          color: isActive ? 'text.primary' : 'text.secondary',
+                          transition: 'all 0.18s',
+                        }}
+                      >
                         {item.label}
                       </Typography>
                       {isActive && (

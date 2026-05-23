@@ -1,7 +1,12 @@
-import { useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { Box, CircularProgress, Stack, Typography } from '@mui/material'
 
-const COUNTRY_COORDS = {
+interface Coordinate {
+  x: string
+  y: string
+}
+
+const COUNTRY_COORDS: Record<string, Coordinate> = {
   Afghanistan: { x: '66%', y: '40%' },
   Albania: { x: '53%', y: '34%' },
   Algeria: { x: '47%', y: '42%' },
@@ -40,8 +45,28 @@ const COUNTRY_COORDS = {
 
 const MAP_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981']
 
-function WorldMap({ countries = [], loading = false }) {
-  const markers = useMemo(() => {
+export interface CountryData {
+  name: string
+  count: number
+}
+
+interface WorldMapProps {
+  countries?: CountryData[]
+  loading?: boolean
+}
+
+interface MapMarker {
+  name: string
+  count: number
+  x: string
+  y: string
+  size: number
+  color: string
+  glow: number
+}
+
+function WorldMap({ countries = [], loading = false }: WorldMapProps) {
+  const markers = useMemo<MapMarker[]>(() => {
     if (!Array.isArray(countries) || countries.length === 0) return []
 
     const normalized = countries
@@ -56,7 +81,7 @@ function WorldMap({ countries = [], loading = false }) {
           ...position,
         }
       })
-      .filter(Boolean)
+      .filter((x): x is { name: string; count: number; x: string; y: string } => !!x)
       .sort((left, right) => right.count - left.count)
 
     if (normalized.length === 0) return []
@@ -111,10 +136,10 @@ function WorldMap({ countries = [], loading = false }) {
       />
 
       {markers.length === 0 ? (
-        <Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 280, position: 'relative', zIndex: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center', justifyContent: 'center', minHeight: 280, position: 'relative', zIndex: 1 }}>
           <Typography sx={{ fontSize: 24 }}>🌍</Typography>
           <Typography variant="body2" color="text.secondary">No geographical data</Typography>
-        </Stack>
+        </Box>
       ) : (
         <>
           {markers.map(marker => (
@@ -147,7 +172,7 @@ function WorldMap({ countries = [], loading = false }) {
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mb: 0.5 }}>
               Global Attack Map
             </Typography>
-            <Stack spacing={0.5}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {markers.slice(0, 4).map(marker => (
                 <Box key={marker.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: marker.color, flexShrink: 0 }} />
@@ -159,7 +184,7 @@ function WorldMap({ countries = [], loading = false }) {
                   </Typography>
                 </Box>
               ))}
-            </Stack>
+            </Box>
           </Box>
         </>
       )}

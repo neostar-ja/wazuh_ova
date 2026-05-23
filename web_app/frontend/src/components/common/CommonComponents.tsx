@@ -1,9 +1,4 @@
-/**
- * Common UI Components for SOC Center
- * Reusable components with integrated styling and functionality
- */
-
-import React from 'react'
+import React, { ReactNode, ComponentType } from 'react'
 import { Box, Card, Typography, Chip, Button, CircularProgress, Paper, Drawer } from '@mui/material'
 import ErrorIcon from '@mui/icons-material/Error'
 import WarningIcon from '@mui/icons-material/Warning'
@@ -11,12 +6,13 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import InfoIcon from '@mui/icons-material/Info'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 
-/**
- * Severity Badge Component
- * Displays alert severity with appropriate color coding
- */
-export function SeverityBadge({ level, size = 'small' }) {
-  const config = {
+interface SeverityBadgeProps {
+  level: 'critical' | 'high' | 'medium' | 'low' | 'info' | string
+  size?: 'small' | 'medium'
+}
+
+export function SeverityBadge({ level, size = 'small' }: SeverityBadgeProps) {
+  const config: Record<string, { label: string; color: 'error' | 'warning' | 'success' | 'info'; icon: React.ReactElement }> = {
     critical: { label: 'Critical', color: 'error', icon: <ErrorIcon /> },
     high: { label: 'High', color: 'warning', icon: <WarningIcon /> },
     medium: { label: 'Medium', color: 'warning', icon: <InfoIcon /> },
@@ -38,12 +34,16 @@ export function SeverityBadge({ level, size = 'small' }) {
   )
 }
 
-/**
- * Status Card Component
- * Displays a status indicator with label and value
- */
-export function StatusCard({ title, value, status = 'neutral', icon: Icon, onClick }) {
-  const statusColors = {
+interface StatusCardProps {
+  title: string
+  value: string | number
+  status?: 'critical' | 'high' | 'medium' | 'low' | 'success' | 'warning' | 'error' | 'neutral' | 'info'
+  icon?: ComponentType<any>
+  onClick?: () => void
+}
+
+export function StatusCard({ title, value, status = 'neutral', icon: Icon, onClick }: StatusCardProps) {
+  const statusColors: Record<string, string> = {
     critical: '#ef4444',
     high: '#f59e0b',
     medium: '#eab308',
@@ -52,6 +52,7 @@ export function StatusCard({ title, value, status = 'neutral', icon: Icon, onCli
     warning: '#f59e0b',
     error: '#ef4444',
     neutral: '#6b7280',
+    info: '#3b82f6',
   }
 
   return (
@@ -68,7 +69,7 @@ export function StatusCard({ title, value, status = 'neutral', icon: Icon, onCli
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         {Icon && (
           <Box sx={{ color: statusColors[status], display: 'flex', fontSize: '32px' }}>
-            {<Icon fontSize="large" />}
+            <Icon fontSize="large" />
           </Box>
         )}
         <Box sx={{ flex: 1 }}>
@@ -84,7 +85,13 @@ export function StatusCard({ title, value, status = 'neutral', icon: Icon, onCli
   )
 }
 
-export function StatusDot({ color = 'success.main', label, pulse = false }) {
+interface StatusDotProps {
+  color?: string
+  label?: string
+  pulse?: boolean
+}
+
+export function StatusDot({ color = 'success.main', label, pulse = false }: StatusDotProps) {
   return (
     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
       <FiberManualRecordIcon
@@ -99,11 +106,15 @@ export function StatusDot({ color = 'success.main', label, pulse = false }) {
   )
 }
 
-/**
- * Alert Message Component
- * Displays alerts with appropriate styling
- */
-export function AlertMessage({ type = 'info', title, message, action, onClose }) {
+interface AlertMessageProps {
+  type?: 'success' | 'warning' | 'error' | 'info'
+  title?: string
+  message?: string
+  action?: ReactNode
+  onClose?: () => void
+}
+
+export function AlertMessage({ type = 'info', title, message, action, onClose }: AlertMessageProps) {
   const config = {
     success: { color: '#10b981', bgcolor: 'rgba(16, 185, 129, 0.1)', Icon: CheckCircleIcon },
     warning: { color: '#f59e0b', bgcolor: 'rgba(245, 158, 11, 0.1)', Icon: WarningIcon },
@@ -144,11 +155,12 @@ export function AlertMessage({ type = 'info', title, message, action, onClose })
   )
 }
 
-/**
- * Loading Spinner Component
- * Displays a centered loading indicator
- */
-export function LoadingSpinner({ size = 40, message }) {
+interface LoadingSpinnerProps {
+  size?: number
+  message?: string
+}
+
+export function LoadingSpinner({ size = 40, message }: LoadingSpinnerProps) {
   return (
     <Box
       sx={{
@@ -170,11 +182,14 @@ export function LoadingSpinner({ size = 40, message }) {
   )
 }
 
-/**
- * Empty State Component
- * Shows message when no data is available
- */
-export function EmptyState({ icon: Icon, title, message, action }) {
+interface EmptyStateProps {
+  icon?: ComponentType<any>
+  title: string
+  message?: string
+  action?: ReactNode
+}
+
+export function EmptyState({ icon: Icon, title, message, action }: EmptyStateProps) {
   return (
     <Box
       sx={{
@@ -188,31 +203,44 @@ export function EmptyState({ icon: Icon, title, message, action }) {
     >
       {Icon && <Icon sx={{ fontSize: 64, opacity: 0.3 }} />}
       <Typography variant="h6">{title}</Typography>
-      <Typography variant="body2" color="textSecondary">
-        {message}
-      </Typography>
+      {message && (
+        <Typography variant="body2" color="textSecondary">
+          {message}
+        </Typography>
+      )}
       {action && <Box>{action}</Box>}
     </Box>
   )
 }
 
-export function DetailPanel({ open, title, subtitle, onClose, children, width = 480 }) {
+interface DetailPanelProps {
+  open: boolean
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: ReactNode
+  width?: number
+}
+
+export function DetailPanel({ open, title, subtitle, onClose, children, width = 480 }: DetailPanelProps) {
   return (
     <Drawer
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: { xs: '100%', sm: width },
-          maxWidth: '100%',
-          display: 'flex',
-          flexDirection: 'column',
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: '100%', sm: width },
+            maxWidth: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          },
         },
       }}
     >
       <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="subtitle1" fontWeight={700}>{title}</Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{title}</Typography>
         {subtitle ? <Typography variant="caption" color="text.secondary">{subtitle}</Typography> : null}
       </Box>
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -222,11 +250,14 @@ export function DetailPanel({ open, title, subtitle, onClose, children, width = 
   )
 }
 
-/**
- * Data Grid Footer Component
- * Shows pagination and record count info
- */
-export function DataGridFooter({ rowCount, pageSize, page, onPageChange }) {
+interface DataGridFooterProps {
+  rowCount: number
+  pageSize: number
+  page: number
+  onPageChange: (newPage: number) => void
+}
+
+export function DataGridFooter({ rowCount, pageSize, page, onPageChange }: DataGridFooterProps) {
   const totalPages = Math.ceil(rowCount / pageSize)
 
   return (
@@ -269,8 +300,16 @@ export function DataGridFooter({ rowCount, pageSize, page, onPageChange }) {
   )
 }
 
-export class ErrorBoundary extends React.Component {
-  constructor(props) {
+interface ErrorBoundaryProps {
+  children: ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props)
     this.state = { hasError: false }
   }
@@ -279,7 +318,7 @@ export class ErrorBoundary extends React.Component {
     return { hasError: true }
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('SOC Center ErrorBoundary:', error, errorInfo)
   }
 
@@ -298,7 +337,7 @@ export class ErrorBoundary extends React.Component {
   }
 }
 
-export default {
+const CommonComponents = {
   SeverityBadge,
   StatusCard,
   StatusDot,
@@ -309,3 +348,5 @@ export default {
   DataGridFooter,
   ErrorBoundary,
 }
+
+export default CommonComponents

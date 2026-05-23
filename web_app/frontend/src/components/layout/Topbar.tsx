@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Box, IconButton, Typography, Badge, Avatar,
-  Menu, MenuItem, Tooltip, Chip, Divider, useTheme, useMediaQuery,
+  Menu, MenuItem, Tooltip, Divider, useTheme, useMediaQuery,
 } from '@mui/material'
 import MenuRoundedIcon           from '@mui/icons-material/MenuRounded'
 import DarkModeRoundedIcon       from '@mui/icons-material/DarkModeRounded'
@@ -17,10 +17,17 @@ import { useThemeMode } from '../../theme/ThemeContext'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate, useLocation } from 'react-router-dom'
 
-const ROLE_COLORS = { superadmin: '#EF4444', admin: '#F59E0B', analyst: '#3B82F6', viewer: '#9A90BF' }
-const ROLE_LABELS = { superadmin: 'Super Admin', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
+const ROLE_COLORS: Record<string, string> = { superadmin: '#EF4444', admin: '#F59E0B', analyst: '#3B82F6', viewer: '#9A90BF' }
+const ROLE_LABELS: Record<string, string> = { superadmin: 'Super Admin', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
 
-const PAGE_INFO = {
+interface PageInfoItem {
+  th: string
+  en: string
+  color: string
+  bg: string
+}
+
+const PAGE_INFO: Record<string, PageInfoItem> = {
   '/':            { th: 'ภาพรวมระบบ',           en: 'Dashboard',          color: '#7B5BA4', bg: 'rgba(123,91,164,0.12)' },
   '/alerts':      { th: 'การแจ้งเตือน',          en: 'Threat Alerts',      color: '#EF4444', bg: 'rgba(239,68,68,0.1)'   },
   '/investigate': { th: 'วิเคราะห์เหตุการณ์',    en: 'Investigate',        color: '#3B82F6', bg: 'rgba(59,130,246,0.1)'  },
@@ -50,8 +57,12 @@ function LiveClock() {
   )
 }
 
+interface TopbarProps {
+  onMenuClick: () => void
+}
+
 // ── Main Topbar ───────────────────────────────────────────────────────────────
-export default function Topbar({ onMenuClick }) {
+export default function Topbar({ onMenuClick }: TopbarProps) {
   const theme    = useTheme()
   const isDark   = theme.palette.mode === 'dark'
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -59,13 +70,13 @@ export default function Topbar({ onMenuClick }) {
   const { user, logout } = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const [anchorEl, setAnchorEl] = useState(null)
-  const [newAlerts, setNewAlerts] = useState(0)
-  const [wsConnected, setWsConnected] = useState(false)
-  const wsRef = useRef(null)
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [newAlerts, setNewAlerts] = useState<number>(0)
+  const [wsConnected, setWsConnected] = useState<boolean>(false)
+  const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    let timer = null
+    let timer: any = null
     const connect = () => {
       try {
         const BASE = import.meta.env.VITE_BASE_PATH || '/wazuh'
@@ -76,12 +87,18 @@ export default function Topbar({ onMenuClick }) {
         ws.onclose = () => { setWsConnected(false); timer = setTimeout(connect, 5000) }
         ws.onerror = () => ws.close()
         ws.onmessage = e => {
-          try { const d = JSON.parse(e.data); if (d.count > 0) setNewAlerts(c => c + d.count) } catch {}
+          try {
+            const d = JSON.parse(e.data)
+            if (d.count > 0) setNewAlerts(c => c + d.count)
+          } catch {}
         }
       } catch {}
     }
     connect()
-    return () => { clearTimeout(timer); wsRef.current?.close() }
+    return () => {
+      clearTimeout(timer)
+      wsRef.current?.close()
+    }
   }, [])
 
   const matchedPath = Object.keys(PAGE_INFO)
@@ -89,9 +106,9 @@ export default function Topbar({ onMenuClick }) {
     .find(p => p === '/' ? location.pathname === '/' : location.pathname.startsWith(p))
   const pageInfo = PAGE_INFO[matchedPath || '/'] || PAGE_INFO['/']
 
-  const initials = (user?.full_name || user?.username || 'U')
+  const initials = (user?.name || user?.username || 'U')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const roleColor = ROLE_COLORS[user?.role] || '#9A90BF'
+  const roleColor = ROLE_COLORS[user?.role || ''] || '#9A90BF'
 
   const handleLogout = async () => { setAnchorEl(null); await logout(); navigate('/login') }
 
@@ -242,7 +259,7 @@ export default function Topbar({ onMenuClick }) {
           </Tooltip>
 
           {/* Dark mode toggle */}
-          <Tooltip title={isDark ? 'โหมดสว่าง' : 'โหมดมืด'}>
+          <Tooltip title={mode === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}>
             <IconButton onClick={toggleTheme}
               sx={{
                 ...iconBtnSx,
@@ -252,7 +269,7 @@ export default function Topbar({ onMenuClick }) {
                   transform: 'rotate(20deg) scale(1.05)',
                 }
               }}>
-              {isDark
+              {mode === 'dark'
                 ? <LightModeRoundedIcon sx={{ fontSize: 19 }} />
                 : <DarkModeRoundedIcon sx={{ fontSize: 19 }} />}
             </IconButton>
@@ -282,10 +299,10 @@ export default function Topbar({ onMenuClick }) {
               {!isMobile && (
                 <Box sx={{ display: { xs: 'none', lg: 'block' } }}>
                   <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.2, color: 'text.primary' }}>
-                    {user?.full_name?.split(' ')[0] || user?.username}
+                    {user?.name?.split(' ')[0] || user?.username}
                   </Typography>
                   <Typography sx={{ fontSize: 10, color: roleColor, fontWeight: 600, lineHeight: 1.2 }}>
-                    {ROLE_LABELS[user?.role] || user?.role}
+                    {ROLE_LABELS[user?.role || ''] || user?.role}
                   </Typography>
                 </Box>
               )}
@@ -324,15 +341,14 @@ export default function Topbar({ onMenuClick }) {
             </Avatar>
             <Box>
               <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.3px' }}>
-                {user?.full_name || user?.username}
+                {user?.name || user?.username}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
                 <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: roleColor }} />
                 <Typography sx={{ fontSize: 11.5, color: roleColor, fontWeight: 600 }}>
-                  {ROLE_LABELS[user?.role] || user?.role}
+                  {ROLE_LABELS[user?.role || ''] || user?.role}
                 </Typography>
               </Box>
-              {user?.email && <Typography sx={{ fontSize: 11, color: 'text.disabled', mt: 0.2 }}>{user.email}</Typography>}
             </Box>
           </Box>
         </Box>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Box, TextField, Button, Typography, Alert,
@@ -27,9 +27,11 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
-  const onChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+  }
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!form.username || !form.password) {
       setError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน')
@@ -40,7 +42,7 @@ export default function LoginPage() {
     try {
       await login(form.username, form.password)
       navigate('/')
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.detail || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
     } finally {
       setLoading(false)
@@ -349,7 +351,7 @@ export default function LoginPage() {
         <Typography
           sx={{ position: 'absolute', bottom: 20, fontSize: 11, color: 'rgba(237,233,250,0.2)' }}
         >
-          © 2025 มหาวิทยาลัยวลัยลักษณ์ · IT Security Division
+          © 2026 มหาวิทยาลัยวลัยลักษณ์ · IT Security Division
         </Typography>
       </Box>
     </Box>

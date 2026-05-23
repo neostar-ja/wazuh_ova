@@ -7,8 +7,17 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts'
 import { kpiApi } from '../../services/api'
+import { KpiSummary, KpiTimelinePoint } from '../../types'
 
-function KPICard({ title, value, unit, color = 'primary.main', loading }) {
+interface KPICardProps {
+  title: string
+  value?: number
+  unit: string
+  color?: string
+  loading: boolean
+}
+
+function KPICard({ title, value, unit, color = 'primary.main', loading }: KPICardProps) {
   return (
     <Card>
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -22,12 +31,12 @@ function KPICard({ title, value, unit, color = 'primary.main', loading }) {
 }
 
 export default function KPIPage() {
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading } = useQuery<KpiSummary>({
     queryKey: ['kpi-summary'],
     queryFn: () => kpiApi.summary().then(r => r.data),
     refetchInterval: 300000,
   })
-  const { data: timeline = [] } = useQuery({
+  const { data: timeline = [] } = useQuery<KpiTimelinePoint[]>({
     queryKey: ['kpi-timeline'],
     queryFn: () => kpiApi.timeline(30).then(r => r.data),
   })
@@ -92,7 +101,7 @@ export default function KPIPage() {
                   <Bar dataKey="medium" fill="#3b82f6" stackId="a" name="Medium" radius={[0, 2, 2, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-              <Box mt={1} sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+              <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label="Critical" sx={{ bgcolor: '#ef4444', color: '#fff', fontSize: 11 }} />
                 <Chip size="small" label="High" sx={{ bgcolor: '#f59e0b', color: '#fff', fontSize: 11 }} />
                 <Chip size="small" label="Medium" sx={{ bgcolor: '#7B5BA4', color: '#fff', fontSize: 11 }} />

@@ -1,12 +1,8 @@
-/**
- * Example Component: Dashboard Card
- * Demonstrates the use of new theme system, Tailwind CSS, and MUI components
- */
-
+import React from 'react'
 import { Card, CardHeader, CardContent, Box, Typography, Button, Chip, Grid } from '@mui/material'
-import { SeverityBadge, StatusCard } from './common/CommonComponents'
+import { SeverityBadge, StatusCard } from '../common/CommonComponents'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
-import AlertIcon from '@mui/icons-material/Alert'
+import AlertIcon from '@mui/icons-material/WarningRounded'
 
 /**
  * Example: Security Status Dashboard
