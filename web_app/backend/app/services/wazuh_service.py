@@ -81,3 +81,86 @@ async def get_sca_results(agent_id: str = "000"):
 
 async def get_vulnerabilities(agent_id: str = "000"):
     return await wazuh_get(f"/vulnerability/{agent_id}?limit=100")
+
+
+# ─── Decoders ────────────────────────────────────────────────────────────────
+
+async def get_decoders_files():
+    return await wazuh_get("/decoders/files?limit=500")
+
+
+async def get_decoder_file(filename: str) -> str:
+    token = await get_token()
+    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+        r = await c.get(
+            f"{BASE}/decoders/files/{filename}?raw=true",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        ct = r.headers.get("content-type", "")
+        if r.status_code == 200 and ("xml" in ct or "text" in ct):
+            return r.text
+        try:
+            return r.json().get("data", {}).get("affected_items", [{}])[0].get("content", "")
+        except Exception:
+            return r.text
+
+
+async def put_decoder_file(filename: str, content: str) -> dict:
+    return await wazuh_put(f"/decoders/files/{filename}", content)
+
+
+# ─── CDB Lists ────────────────────────────────────────────────────────────────
+
+async def get_lists_files():
+    return await wazuh_get("/lists/files?limit=500")
+
+
+async def get_list_file(filename: str) -> str:
+    token = await get_token()
+    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+        r = await c.get(
+            f"{BASE}/lists/files/{filename}?raw=true",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return r.text
+
+
+async def put_list_file(filename: str, content: str) -> dict:
+    token = await get_token()
+    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+        r = await c.put(
+            f"{BASE}/lists/files/{filename}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"},
+            content=content.encode(),
+        )
+        return r.json()
+
+
+# ─── Manager Config ───────────────────────────────────────────────────────────
+
+async def get_manager_config_raw() -> str:
+    token = await get_token()
+    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+        r = await c.get(
+            f"{BASE}/manager/configuration?raw=true",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        return r.text
+
+
+async def put_manager_config(content: str) -> dict:
+    return await wazuh_put("/manager/configuration", content)
+
+
+# ─── Manager Status & Info ────────────────────────────────────────────────────
+
+async def get_manager_status() -> dict:
+    return await wazuh_get("/manager/status")
+
+
+async def get_manager_info() -> dict:
+    return await wazuh_get("/manager/info")
+
+
+async def get_agents_summary() -> dict:
+    return await wazuh_get("/agents/summary/status")

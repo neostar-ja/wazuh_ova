@@ -15,24 +15,50 @@ def get_client():
     )
 
 
-async def get_alerts(size=50, level_min=1, sources=None, time_range="24h", query_str=None):
+async def get_alerts(
+    size=50,
+    level_min=1,
+    level_max=None,
+    sources=None,
+    time_range="24h",
+    query_str=None,
+    agent_name=None,
+    rule_id=None,
+    country=None,
+    mitre_tactic=None,
+):
     client = get_client()
     must = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
     if level_min > 1:
-        must.append({"range": {"rule.level": {"gte": level_min}}})
+        level_range = {"gte": level_min}
+        if level_max:
+            level_range["lte"] = level_max
+        must.append({"range": {"rule.level": level_range}})
     if sources:
         must.append({"terms": {"predecoder.program_name.keyword": sources}})
     if query_str:
-        must.append({"query_string": {"query": query_str}})
+        must.append({"query_string": {"query": query_str, "default_operator": "AND"}})
+    if agent_name:
+        must.append({"term": {"agent.name.keyword": agent_name}})
+    if rule_id:
+        must.append({"term": {"rule.id": rule_id}})
+    if country:
+        must.append({"term": {"GeoLocation.country_name.keyword": country}})
+    if mitre_tactic:
+        must.append({"term": {"rule.mitre.tactic.keyword": mitre_tactic}})
     body = {
         "size": size,
         "sort": [{"@timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": must}},
         "_source": [
             "@timestamp", "rule.id", "rule.level", "rule.description",
-            "rule.groups", "data.srcip", "data.dstip", "agent.name",
-            "GeoLocation", "rule.pci_dss", "rule.nist_800_53",
-            "predecoder.program_name", "rule.mitre",
+            "rule.groups", "rule.mitre", "rule.pci_dss", "rule.hipaa",
+            "rule.nist_800_53", "rule.gdpr", "rule.tsc",
+            "data.srcip", "data.dstip", "data.srcport", "data.dstport",
+            "data.srcuser", "data.dstuser", "data.url", "data.command",
+            "data.win.system.eventID", "data.win.eventdata.targetUserName",
+            "agent.name", "agent.id",
+            "GeoLocation", "predecoder.program_name", "full_log",
         ],
     }
     try:
@@ -40,6 +66,66 @@ async def get_alerts(size=50, level_min=1, sources=None, time_range="24h", query
         return [h["_source"] for h in resp["hits"]["hits"]]
     except Exception:
         return []
+
+
+async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
+    """Aggregations for alerts stats page: timeline, top rules, top agents, top countries, top sources, MITRE."""
+    client = get_client()
+    must = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
+    if level_min > 1:
+        must.append({"range": {"rule.level": {"gte": level_min}}})
+    body = {
+        "size": 0,
+        "query": {"bool": {"must": must}},
+        "aggs": {
+            "by_level": {
+                "range": {
+                    "field": "rule.level",
+                    "ranges": [
+                        {"key": "critical", "from": 15},
+                        {"key": "high",     "from": 12, "to": 15},
+                        {"key": "medium",   "from": 7,  "to": 12},
+                        {"key": "low",      "from": 1,  "to": 7},
+                    ],
+                }
+            },
+            "timeline": {
+                "date_histogram": {
+                    "field": "@timestamp",
+                    "fixed_interval": _pick_interval(time_range),
+                    "min_doc_count": 0,
+                    "extended_bounds": {"min": f"now-{time_range}", "max": "now"},
+                },
+                "aggs": {
+                    "by_severity": {
+                        "range": {
+                            "field": "rule.level",
+                            "ranges": [
+                                {"key": "critical", "from": 15},
+                                {"key": "high",     "from": 12, "to": 15},
+                                {"key": "medium",   "from": 7,  "to": 12},
+                            ],
+                        }
+                    }
+                },
+            },
+            "by_source":  {"terms": {"field": "predecoder.program_name.keyword", "size": 10}},
+            "by_rule":    {"terms": {"field": "rule.id", "size": 15}},
+            "by_agent":   {"terms": {"field": "agent.name.keyword", "size": 10}},
+            "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
+            "by_mitre":   {"terms": {"field": "rule.mitre.tactic.keyword", "size": 10}},
+            "by_srcip":   {"terms": {"field": "data.srcip.keyword", "size": 10}},
+        },
+    }
+    try:
+        return client.search(index=settings.opensearch_index, body=body)
+    except Exception:
+        return {}
+
+
+def _pick_interval(time_range: str) -> str:
+    mapping = {"1h": "5m", "6h": "15m", "24h": "1h", "7d": "6h", "30d": "1d", "90d": "3d"}
+    return mapping.get(time_range, "1h")
 
 
 async def get_alert_stats(time_range="24h"):
@@ -77,15 +163,26 @@ async def get_alert_stats(time_range="24h"):
         return {}
 
 
-async def investigate_entity(value: str, entity_type: str = "auto", time_range: str = "30d"):
+async def investigate_entity(value: str, entity_type: str = "auto", time_range: str = "30d", size: int = 500):
     client = get_client()
-    q = (
-        f'data.srcip:"{value}" OR data.dhcp_ip:"{value}" OR data.mac:"{value}" '
-        f'OR data.dstuser:"{value}" OR data.dhcp_mac:"{value}" '
-        f'OR data.dhcp_hostname:"{value}" OR src_ip:"{value}"'
-    )
+    # Build query based on entity_type
+    if entity_type == "ip":
+        q = f'data.srcip:"{value}" OR data.dstip:"{value}" OR data.dhcp_ip:"{value}"'
+    elif entity_type == "mac":
+        q = f'data.mac:"{value}" OR data.dhcp_mac:"{value}" OR data.ap_mac:"{value}"'
+    elif entity_type == "user":
+        q = f'data.dstuser:"{value}" OR data.srcuser:"{value}"'
+    elif entity_type == "host":
+        q = f'data.dhcp_hostname:"{value}" OR agent.name:"{value}"'
+    else:  # auto
+        q = (
+            f'data.srcip:"{value}" OR data.dstip:"{value}" OR data.dhcp_ip:"{value}" '
+            f'OR data.mac:"{value}" OR data.dhcp_mac:"{value}" '
+            f'OR data.dstuser:"{value}" OR data.srcuser:"{value}" '
+            f'OR data.dhcp_hostname:"{value}" OR agent.name:"{value}"'
+        )
     body = {
-        "size": 100,
+        "size": size,
         "sort": [{"@timestamp": {"order": "desc"}}],
         "query": {
             "bool": {
@@ -96,11 +193,14 @@ async def investigate_entity(value: str, entity_type: str = "auto", time_range: 
             }
         },
         "_source": [
-            "@timestamp", "rule.description", "rule.groups", "rule.level",
-            "data.srcip", "data.dstip", "data.dhcp_ip", "data.dhcp_mac",
-            "data.dhcp_hostname", "data.dstuser", "data.mac", "data.ap_mac",
-            "data.ac_msg_type", "data.dhcp_action", "GeoLocation",
-            "predecoder.program_name", "agent.name",
+            "@timestamp", "rule.id", "rule.description", "rule.groups",
+            "rule.level", "rule.mitre", "rule.pci_dss", "rule.hipaa",
+            "data.srcip", "data.dstip", "data.srcport", "data.dstport",
+            "data.dhcp_ip", "data.dhcp_mac", "data.dhcp_hostname",
+            "data.dstuser", "data.srcuser", "data.mac", "data.ap_mac",
+            "data.ac_msg_type", "data.dhcp_action", "data.url", "data.command",
+            "GeoLocation", "predecoder.program_name", "agent.name", "agent.id",
+            "full_log",
         ],
     }
     try:

@@ -95,7 +95,7 @@ export default function KPIPage() {
               <Box mt={1} sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label="Critical" sx={{ bgcolor: '#ef4444', color: '#fff', fontSize: 11 }} />
                 <Chip size="small" label="High" sx={{ bgcolor: '#f59e0b', color: '#fff', fontSize: 11 }} />
-                <Chip size="small" label="Medium" sx={{ bgcolor: '#3b82f6', color: '#fff', fontSize: 11 }} />
+                <Chip size="small" label="Medium" sx={{ bgcolor: '#7B5BA4', color: '#fff', fontSize: 11 }} />
               </Box>
             </CardContent>
           </Card>

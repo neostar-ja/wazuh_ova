@@ -1,344 +1,1047 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
-  Box, Card, Typography, Chip, TextField, Select, MenuItem,
-  FormControl, InputLabel, Button, Grid, Drawer, IconButton,
-  Divider, CircularProgress, Tabs, Tab, Tooltip, Badge,
-  Alert, Checkbox, Table, TableBody, TableCell, TableHead, TableRow,
+  Box, Card, CardContent, Typography, Chip, TextField, Select, MenuItem,
+  FormControl, Button, Grid, Drawer, IconButton, Divider, CircularProgress,
+  Tooltip, Alert, Table, TableBody, TableCell, TableHead, TableRow,
+  LinearProgress, Collapse, InputAdornment, Badge, useTheme,
 } from '@mui/material'
-import { DataGrid } from '@mui/x-data-grid'
-import FilterListIcon from '@mui/icons-material/FilterList'
-import RefreshIcon from '@mui/icons-material/Refresh'
-import CloseIcon from '@mui/icons-material/Close'
-import SearchIcon from '@mui/icons-material/Search'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import SecurityIcon from '@mui/icons-material/Security'
-import BugReportIcon from '@mui/icons-material/BugReport'
-import GppBadIcon from '@mui/icons-material/GppBad'
-import DataObjectIcon from '@mui/icons-material/DataObject'
-import TimelineIcon from '@mui/icons-material/Timeline'
-import TuneIcon from '@mui/icons-material/Tune'
-import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd'
-import { format } from 'date-fns'
+import SearchRoundedIcon       from '@mui/icons-material/SearchRounded'
+import RefreshRoundedIcon      from '@mui/icons-material/RefreshRounded'
+import CloseRoundedIcon        from '@mui/icons-material/CloseRounded'
+import FilterListRoundedIcon   from '@mui/icons-material/FilterListRounded'
+import DownloadRoundedIcon     from '@mui/icons-material/DownloadRounded'
+import OpenInNewRoundedIcon    from '@mui/icons-material/OpenInNewRounded'
+import ContentCopyRoundedIcon  from '@mui/icons-material/ContentCopyRounded'
+import VisibilityRoundedIcon   from '@mui/icons-material/VisibilityRounded'
+import SecurityRoundedIcon     from '@mui/icons-material/SecurityRounded'
+import DataObjectRoundedIcon   from '@mui/icons-material/DataObjectRounded'
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
+import ShieldRoundedIcon       from '@mui/icons-material/ShieldRounded'
+import GppBadRoundedIcon       from '@mui/icons-material/GppBadRounded'
+import GppGoodRoundedIcon      from '@mui/icons-material/GppGoodRounded'
+import RouterRoundedIcon       from '@mui/icons-material/RouterRounded'
+import FiberManualRecordIcon   from '@mui/icons-material/FiberManualRecord'
+import TuneRoundedIcon         from '@mui/icons-material/TuneRounded'
+import BookmarkAddRoundedIcon  from '@mui/icons-material/BookmarkAddRounded'
+import PublicRoundedIcon       from '@mui/icons-material/PublicRounded'
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartTip, ResponsiveContainer, Cell,
+} from 'recharts'
 import { alertsApi, investigateApi } from '../../services/api'
+import { format, formatDistanceToNow } from 'date-fns'
+import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 
-// ─── Level Badge ──────────────────────────────────────────────────────────────
-function LevelBadge({ level }) {
-  const l = Number(level)
-  if (l >= 15) return <Chip label={`${l} CRIT`} size="small" sx={{ bgcolor: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 700, animation: 'pulse-critical 3s ease-in-out infinite' }} />
-  if (l >= 12) return <Chip label={`${l} HIGH`} size="small" sx={{ bgcolor: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700 }} />
-  if (l >= 7)  return <Chip label={`${l} MED`}  size="small" sx={{ bgcolor: '#3b82f6', color: '#fff', fontSize: 11, fontWeight: 600 }} />
-  return <Chip label={`${l} LOW`} size="small" sx={{ bgcolor: '#10b981', color: '#fff', fontSize: 11 }} />
+// ── Constants ─────────────────────────────────────────────────────────────────
+const BRAND  = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
+const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
+
+const SEV = [
+  { key: 'critical', label: 'Critical', color: '#EF4444', min: 15, max: 99 },
+  { key: 'high',     label: 'High',     color: BRAND.orange, min: 12, max: 14 },
+  { key: 'medium',   label: 'Medium',   color: '#EAB308', min: 7, max: 11 },
+  { key: 'low',      label: 'Low',      color: '#22C55E', min: 1,  max: 6 },
+]
+const LC = (lv) => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? '#EAB308' : '#22C55E'
+const LL = (lv) => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+
+const SOURCES = ['fortigate', 'mikrotik', 'infoblox', 'huawei-ac', 'suricata', 'syscheck', 'ossec', 'syslog']
+const TIME_OPTS = [
+  { value: '1h',  label: '1 ชั่วโมง' },
+  { value: '6h',  label: '6 ชั่วโมง' },
+  { value: '24h', label: '24 ชั่วโมง' },
+  { value: '7d',  label: '7 วัน' },
+  { value: '30d', label: '30 วัน' },
+]
+
+// ── Helper components ─────────────────────────────────────────────────────────
+function LevelChip({ level, animate = false }) {
+  const lv = Number(level || 0)
+  return (
+    <Chip label={`${lv} ${LL(lv)}`} size="small" sx={{
+      height: 20, fontSize: 10, fontWeight: 800,
+      bgcolor: `${LC(lv)}20`, color: LC(lv), border: `1px solid ${LC(lv)}35`,
+      '& .MuiChip-label': { px: 0.75 },
+      animation: animate && lv >= 15 ? 'pulse-critical 2.5s ease-in-out infinite' : 'none',
+    }} />
+  )
 }
 
-// ─── MITRE Tag ────────────────────────────────────────────────────────────────
-function MitreTag({ groups = [] }) {
-  const mitre = groups.filter(g => g.startsWith('mitre') || g.startsWith('attack'))
-  if (mitre.length === 0) return null
+function CopyBtn({ text }) {
+  const { enqueueSnackbar } = useSnackbar()
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-      {mitre.map(m => (
-        <Chip
-          key={m}
-          label={m.replace('mitre-', '').replace('attack.', '')}
-          size="small"
-          variant="outlined"
-          sx={{ height: 18, fontSize: 9, borderColor: '#8b5cf6', color: '#8b5cf6' }}
+    <Tooltip title="คัดลอก">
+      <IconButton size="small"
+        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info', autoHideDuration: 1500 }) }}
+        sx={{ opacity: 0.45, '&:hover': { opacity: 1 }, p: 0.35 }}>
+        <ContentCopyRoundedIcon sx={{ fontSize: 12 }} />
+      </IconButton>
+    </Tooltip>
+  )
+}
+
+function MitreTags({ groups = [], mitre = {} }) {
+  const tags = [
+    ...(mitre?.tactic || []),
+    ...(mitre?.technique || []),
+    ...(groups.filter(g => g.startsWith('attack.') || g.startsWith('mitre')).map(g => g.replace('attack.', ''))),
+  ].filter(Boolean)
+  const unique = [...new Set(tags)].slice(0, 6)
+  if (!unique.length) return null
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.25 }}>
+      {unique.map((t, i) => (
+        <Chip key={t} label={t} size="small" 
+          sx={{ 
+            height: 22, fontSize: 10, fontWeight: 600,
+            bgcolor: t.includes('tactic') || mitre?.tactic?.includes(t) ? 'rgba(239,68,68,0.15)' : 'rgba(123,91,164,0.12)', 
+            color: t.includes('tactic') || mitre?.tactic?.includes(t) ? '#EF4444' : BRAND.purpleLight,
+            border: `1px solid ${t.includes('tactic') || mitre?.tactic?.includes(t) ? '#EF444430' : 'rgba(123,91,164,0.25)'}`,
+            fontFamily: '"IBM Plex Mono"',
+            transition: 'all 0.2s ease',
+            animation: `slideIn 0.3s cubic-bezier(0.4,0,0.2,1) ${i * 0.05}s both`,
+            '&:hover': { 
+              transform: 'translateY(-2px)',
+              boxShadow: t.includes('tactic') || mitre?.tactic?.includes(t) 
+                ? '0 4px 12px rgba(239,68,68,0.3)' 
+                : '0 4px 12px rgba(123,91,164,0.25)',
+            },
+            '& .MuiChip-label': { px: 1, fontWeight: 700 } 
+          }} 
         />
       ))}
     </Box>
   )
 }
 
-// ─── Detail Row ───────────────────────────────────────────────────────────────
-function DetailRow({ label, value, mono = false, copyable = false }) {
-  const { enqueueSnackbar } = useSnackbar()
-  if (!value || value === '-') return null
+// ── Section Header ────────────────────────────────────────────────────────────
+function DrawerSection({ label, children, accent }) {
+  const accentColor = accent || BRAND.purple
   return (
-    <Box sx={{ mb: 0.8 }}>
-      <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {label}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography variant="body2" sx={{ fontSize: 12, fontFamily: mono ? '"IBM Plex Mono", monospace' : 'inherit', wordBreak: 'break-all' }}>
-          {value}
+    <Box sx={{ mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        <Box sx={{ 
+          width: 4, height: 18, borderRadius: 1.5, 
+          bgcolor: accentColor,
+          boxShadow: `0 2px 8px ${accentColor}50`,
+        }} />
+        <Typography sx={{ 
+          fontSize: 11.5, fontWeight: 900, textTransform: 'uppercase', 
+          letterSpacing: '0.12em', color: accentColor,
+        }}>
+          {label}
         </Typography>
-        {copyable && (
-          <Tooltip title="คัดลอก">
-            <IconButton
-              size="small"
-              onClick={() => { navigator.clipboard.writeText(String(value)); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}
-              sx={{ p: 0.3, opacity: 0.5, '&:hover': { opacity: 1 } }}
-            >
-              <ContentCopyIcon sx={{ fontSize: 12 }} />
-            </IconButton>
-          </Tooltip>
-        )}
       </Box>
+      {children}
     </Box>
   )
 }
 
-// ─── Alert Side Panel (Drawer) ────────────────────────────────────────────────
+// ── IP Card (Source / Dest) ───────────────────────────────────────────────────
+function IPCard({ label, ip, port, country, onClick, accent }) {
+  const { enqueueSnackbar } = useSnackbar()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const c = accent || BRAND.purple
+  
+  if (!ip) return (
+    <Box sx={{ 
+      flex: 1, minWidth: 0, p: 2.5, borderRadius: '16px', 
+      border: '2px dashed rgba(123,91,164,0.2)', 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      minHeight: 110,
+      bgcolor: isDark ? 'rgba(123,91,164,0.02)' : 'rgba(123,91,164,0.01)',
+      transition: 'all 0.2s ease',
+      '&:hover': {
+        borderColor: 'rgba(123,91,164,0.35)',
+        bgcolor: isDark ? 'rgba(123,91,164,0.04)' : 'rgba(123,91,164,0.02)',
+      }
+    }}>
+      <Typography sx={{ fontSize: 13, color: 'text.disabled', fontWeight: 600 }}>—</Typography>
+    </Box>
+  )
+
+  const isSrc = label.toLowerCase().includes('src') || label.toLowerCase().includes('source')
+
+  return (
+    <Box sx={{
+      flex: 1, minWidth: 0, p: 2.5, borderRadius: '16px', minHeight: 110,
+      border: `1.5px solid ${c}30`,
+      background: isDark 
+        ? `linear-gradient(135deg, ${c}15 0%, rgba(22,18,42,0.65) 100%)` 
+        : `linear-gradient(135deg, ${c}06 0%, rgba(255,255,255,0.75) 100%)`,
+      backdropFilter: 'blur(10px)',
+      position: 'relative', overflow: 'hidden',
+      boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.15)' : `0 4px 20px ${c}08`,
+      transition: 'all 0.28s cubic-bezier(0.4,0,0.2,1)',
+      '&:hover': { 
+        background: isDark 
+          ? `linear-gradient(135deg, ${c}22 0%, rgba(22,18,42,0.8) 100%)` 
+          : `linear-gradient(135deg, ${c}12 0%, rgba(255,255,255,0.9) 100%)`,
+        borderColor: `${c}60`,
+        transform: 'translateY(-4px)',
+        boxShadow: `0 12px 28px ${c}25`,
+        '& .icon-watermark': {
+          transform: 'scale(1.2) rotate(-5deg)',
+          opacity: 0.15,
+        }
+      },
+    }}>
+      {/* Icon watermark in corner */}
+      <Box 
+        className="icon-watermark"
+        sx={{ 
+          position: 'absolute', top: 12, right: 12, 
+          color: c, opacity: 0.08, 
+          transition: 'all 0.3s ease',
+          pointerEvents: 'none' 
+        }}
+      >
+        {isSrc ? (
+          <ShieldRoundedIcon sx={{ fontSize: 44 }} />
+        ) : (
+          <RouterRoundedIcon sx={{ fontSize: 44 }} />
+        )}
+      </Box>
+
+      <Typography sx={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: c, mb: 1, position: 'relative', zIndex: 1 }}>
+        {label}
+      </Typography>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, position: 'relative', zIndex: 1 }}>
+        <Typography sx={{ fontSize: 15, fontFamily: '"IBM Plex Mono",monospace', fontWeight: 800, color: 'text.primary', wordBreak: 'break-all', lineHeight: 1.3 }}>
+          {ip}
+        </Typography>
+        <Tooltip title="คัดลอก">
+          <IconButton size="small" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(ip); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info', autoHideDuration: 1500 }) }}
+            sx={{ opacity: 0.45, '&:hover': { opacity: 1 }, p: 0.4, transition: 'all 0.2s' }}>
+            <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, position: 'relative', zIndex: 1 }}>
+        {port && <Chip label={`:${port}`} size="small" sx={{ height: 18, fontSize: 10, fontFamily: '"IBM Plex Mono"', bgcolor: `${c}18`, color: c, fontWeight: 700, '& .MuiChip-label': { px: 0.75 } }} />}
+        {country && <Typography sx={{ fontSize: 11, color: 'text.secondary', fontWeight: 600 }}>🌐 {country}</Typography>}
+      </Box>
+
+      {onClick && (
+        <Button size="small" onClick={onClick}
+          sx={{ 
+            mt: 1.5, py: 0.4, px: 1.25, fontSize: 10.5, fontWeight: 800, 
+            color: '#fff', borderRadius: '8px',
+            bgcolor: c, 
+            textTransform: 'none', minWidth: 0,
+            boxShadow: `0 4px 12px ${c}35`,
+            transition: 'all 0.2s ease',
+            position: 'relative', zIndex: 1,
+            '&:hover': { 
+              bgcolor: c,
+              filter: 'brightness(1.1)',
+              transform: 'scale(1.03)',
+              boxShadow: `0 6px 16px ${c}50`,
+            },
+          }}>
+          สืบสวน →
+        </Button>
+      )}
+    </Box>
+  )
+}
+
+// ── Threat feed mini-card ─────────────────────────────────────────────────────
+function FeedMiniCard({ name, color, main, mainLabel, rows = [], extra }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  return (
+    <Box sx={{
+      p: 2.5, borderRadius: '16px', height: '100%', minWidth: 0,
+      border: `1.5px solid ${color}25`,
+      background: isDark 
+        ? `linear-gradient(135deg, ${color}12 0%, rgba(22,18,42,0.6) 100%)` 
+        : `linear-gradient(135deg, ${color}06 0%, rgba(255,255,255,0.75) 100%)`,
+      backdropFilter: 'blur(10px)',
+      position: 'relative', overflow: 'hidden',
+      boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.15)' : `0 4px 20px ${color}08`,
+      transition: 'all 0.28s cubic-bezier(0.4,0,0.2,1)',
+      '&:hover': { 
+        borderColor: `${color}60`, 
+        background: isDark 
+          ? `linear-gradient(135deg, ${color}18 0%, rgba(22,18,42,0.8) 100%)` 
+          : `linear-gradient(135deg, ${color}10 0%, rgba(255,255,255,0.9) 100%)`,
+        transform: 'translateY(-4px)',
+        boxShadow: `0 12px 28px ${color}25`,
+        '& .card-bg-circle': {
+          transform: 'scale(1.3)',
+          opacity: 0.2,
+        }
+      },
+    }}>
+      <Box className="card-bg-circle" sx={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', bgcolor: `${color}15`, transition: 'all 0.3s ease', pointerEvents: 'none' }} />
+      <Typography sx={{ fontSize: 10.5, fontWeight: 900, color, letterSpacing: '0.12em', mb: 1.25, position: 'relative', zIndex: 1, textTransform: 'uppercase' }}>{name}</Typography>
+      {main !== undefined && (
+        <>
+          <Typography sx={{ fontSize: 26, fontWeight: 900, color, lineHeight: 1, mb: 0.5, position: 'relative', zIndex: 1 }}>{main}</Typography>
+          <Typography sx={{ fontSize: 10, color: 'text.disabled', mb: 1.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{mainLabel}</Typography>
+        </>
+      )}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, position: 'relative', zIndex: 1 }}>
+        {rows.filter(([,v]) => v !== undefined && v !== null && v !== '' && v !== 0).slice(0, 4).map(([k, v]) => (
+          <Box key={k} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 0.5, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}` }}>
+            <Typography sx={{ fontSize: 10.5, color: 'text.secondary', fontWeight: 600 }}>{k}</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.primary', fontWeight: 700, maxWidth: 140, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"IBM Plex Mono"' }}>{String(v)}</Typography>
+          </Box>
+        ))}
+      </Box>
+      {extra && <Box sx={{ position: 'relative', zIndex: 1, mt: 1.5 }}>{extra}</Box>}
+    </Box>
+  )
+}
+
+// ── Alert Detail Drawer ───────────────────────────────────────────────────────
 function AlertDrawer({ alert, open, onClose }) {
-  const navigate = useNavigate()
-  const [tab, setTab] = useState(0)
-  const [enrichData, setEnrichData] = useState(null)
+  const navigate   = useNavigate()
+  const { enqueueSnackbar } = useSnackbar()
+  const [tab, setTab]       = useState(0)
+  const [enrichData, setEnrich]       = useState(null)
   const [enrichLoading, setEnrichLoading] = useState(false)
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
-  const srcip = alert?.['data.srcip'] || alert?.data?.srcip
-  const dstip = alert?.['data.dstip'] || alert?.data?.dstip
-  const ruleLevel = Number(alert?.['rule.level'] || alert?.rule?.level || 0)
-  const ruleGroups = alert?.['rule.groups'] || alert?.rule?.groups || []
-  const ruleId = alert?.['rule.id'] || alert?.rule?.id
-  const ruleDesc = alert?.['rule.description'] || alert?.rule?.description
-  const agentName = alert?.['agent.name'] || alert?.agent?.name
-  const timestamp = alert?.['@timestamp']
-  const country = alert?.['GeoLocation.country_name'] || alert?.GeoLocation?.country_name
-  const program = alert?.['predecoder.program_name'] || alert?.predecoder?.program_name
+  const rule   = alert?.rule        || {}
+  const data   = alert?.data        || {}
+  const agent  = alert?.agent       || {}
+  const geo    = alert?.GeoLocation || {}
+  const pre    = alert?.predecoder  || {}
 
-  const fetchEnrich = async () => {
-    if (!srcip) return
+  const lv       = Number(rule.level || 0)
+  const color    = LC(lv)
+  const srcip    = data.srcip
+  const dstip    = data.dstip
+  const country  = geo.country_name || geo.country_code
+  const program  = pre.program_name
+  const groups   = rule.groups || []
+
+  const compliance = [
+    { key: 'PCI-DSS', items: rule.pci_dss    || [] },
+    { key: 'HIPAA',   items: rule.hipaa       || [] },
+    { key: 'NIST',    items: rule.nist_800_53 || [] },
+    { key: 'GDPR',    items: rule.gdpr        || [] },
+  ].filter(c => c.items.length > 0)
+
+  const hasMitre = rule.mitre?.tactic?.length || rule.mitre?.technique?.length
+
+  const fetchEnrich = useCallback(async () => {
+    if (!srcip || enrichLoading || enrichData) return
     setEnrichLoading(true)
     try {
       const r = await investigateApi.enrich(srcip)
-      setEnrichData(r.data)
+      setEnrich(r.data)
     } catch {}
     setEnrichLoading(false)
-  }
+  }, [srcip, enrichLoading, enrichData])
 
-  useEffect(() => {
-    if (open && srcip && !enrichData) fetchEnrich()
-  }, [open, srcip, enrichData])
+  useEffect(() => { if (open && srcip && tab === 1) fetchEnrich() }, [open, srcip, tab])
+  useEffect(() => { if (!open) { setTab(0); setEnrich(null) } }, [open])
+
+  const TABS = [
+    { label: 'รายละเอียด', icon: <VisibilityRoundedIcon sx={{ fontSize: 13 }} />, hint: 'Network · Rules · MITRE' },
+    { label: 'Threat Intel', icon: <SecurityRoundedIcon sx={{ fontSize: 13 }} />, hint: 'AbuseIPDB · OTX · Shodan · VT' },
+    { label: 'Raw Log',     icon: <DataObjectRoundedIcon sx={{ fontSize: 13 }} />, hint: 'JSON' },
+  ]
+
+  // Fixed sidebar width across all tabs
+  const DRAWER_WIDTH = 'min(800px, 95vw)'
 
   return (
     <Drawer
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{ sx: { width: { xs: '100%', sm: 520 }, display: 'flex', flexDirection: 'column' } }}
+      sx={{
+        width: DRAWER_WIDTH,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: DRAWER_WIDTH,
+          minWidth: DRAWER_WIDTH,
+          maxWidth: DRAWER_WIDTH,
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
+        },
+      }}
+      PaperProps={{
+        sx: {
+          width: DRAWER_WIDTH,
+          minWidth: DRAWER_WIDTH,
+          maxWidth: DRAWER_WIDTH,
+          display: 'flex', flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(22, 18, 42, 0.95)' : 'rgba(255, 255, 255, 0.97)',
+          backdropFilter: 'blur(20px)',
+          borderLeft: `4px solid ${color}`,
+          boxShadow: isDark 
+            ? `0 24px 64px rgba(0,0,0,0.65), inset 1px 0 0 0 rgba(255,255,255,0.06), 0 0 30px ${color}18`
+            : `0 24px 64px rgba(123,91,164,0.18), inset 1px 0 0 0 rgba(255,255,255,0.4), 0 0 30px ${color}12`,
+          overflowX: 'hidden',
+        },
+      }}
     >
       {alert && (
         <>
-          {/* Header */}
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: ruleLevel >= 15 ? 'rgba(239,68,68,0.06)' : ruleLevel >= 12 ? 'rgba(245,158,11,0.04)' : 'transparent' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-              <LevelBadge level={ruleLevel} />
-              <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
-            </Box>
-            <Typography variant="body1" fontWeight={700} sx={{ fontSize: 14, lineHeight: 1.3, mb: 0.5 }}>
-              {ruleDesc}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-              <Chip label={`Rule #${ruleId}`} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
-              {timestamp && (
-                <Typography variant="caption" color="text.disabled" sx={{ fontSize: 11 }}>
-                  {format(new Date(timestamp), 'dd/MM/yyyy HH:mm:ss')}
-                </Typography>
-              )}
-            </Box>
-            <MitreTag groups={ruleGroups} />
-          </Box>
+          {/* ══ HEADER ══════════════════════════════════════════════════════ */}
+          <Box sx={{
+            flexShrink: 0,
+            background: lv >= 15
+              ? `linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(239,68,68,0.05) 60%, transparent 100%)`
+              : lv >= 12
+              ? `linear-gradient(135deg, rgba(241,116,34,0.12) 0%, rgba(241,116,34,0.04) 60%, transparent 100%)`
+              : lv >= 7
+              ? `linear-gradient(135deg, rgba(234,179,8,0.1) 0%, transparent 60%)`
+              : `linear-gradient(135deg, rgba(34,197,94,0.08) 0%, transparent 60%)`,
+            borderBottom: `1px solid ${color}22`,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            {/* Decorative gradient orb */}
+            <Box sx={{
+              position: 'absolute', top: -50, right: -50,
+              width: 200, height: 200, borderRadius: '50%',
+              background: `radial-gradient(circle, ${color}20 0%, transparent 70%)`,
+              pointerEvents: 'none',
+              animation: 'float 8s ease-in-out infinite',
+            }} />
 
-          {/* Tabs */}
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ minHeight: 36, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { minHeight: 36, fontSize: 12, py: 0 } }}
-          >
-            <Tab icon={<VisibilityIcon sx={{ fontSize: 14 }} />} iconPosition="start" label="รายละเอียด" />
-            <Tab icon={<SecurityIcon sx={{ fontSize: 14 }} />} iconPosition="start" label="Threat Intel" />
-            <Tab icon={<DataObjectIcon sx={{ fontSize: 14 }} />} iconPosition="start" label="Raw JSON" />
-          </Tabs>
-
-          {/* Tab Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-            {/* Tab 0: Details */}
-            {tab === 0 && (
-              <Box>
-                <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, mb: 1, display: 'block', color: 'text.secondary', textTransform: 'uppercase' }}>
-                  แหล่งที่มาและเป้าหมาย
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                  <DetailRow label="Source IP" value={srcip} mono copyable />
-                  <DetailRow label="Destination IP" value={dstip} mono copyable />
-                  <DetailRow label="ประเทศ" value={country} />
-                  <DetailRow label="โปรแกรม" value={program} />
-                  <DetailRow label="Agent" value={agentName} />
-                  <DetailRow label="Rule ID" value={ruleId} mono />
-                </Box>
-
-                <Divider sx={{ my: 1.5 }} />
-                <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, mb: 1, display: 'block', color: 'text.secondary', textTransform: 'uppercase' }}>
-                  Rule Groups
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {ruleGroups.length > 0 ? ruleGroups.map(g => (
-                    <Chip key={g} label={g} size="small" variant="outlined" sx={{ height: 20, fontSize: 10 }} />
-                  )) : (
-                    <Typography variant="caption" color="text.disabled">ไม่มีข้อมูล groups</Typography>
+            <Box sx={{ p: { xs: 2.5, sm: 3 }, position: 'relative', zIndex: 1 }}>
+              {/* Top row: level + rule# + source + close */}
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  {/* Level badge — large */}
+                  <Box sx={{
+                    px: 1.75, py: 0.6, borderRadius: '12px',
+                    bgcolor: `${color}20`, border: `2.5px solid ${color}45`,
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    animation: lv >= 15 ? 'pulse-critical 2.5s ease-in-out infinite' : 'none',
+                    boxShadow: `0 4px 14px ${color}25`,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 8px ${color}` }} />
+                    <Typography sx={{ fontSize: 13, fontWeight: 900, color, letterSpacing: '0.06em' }}>
+                      LEVEL {lv} · {LL(lv)}
+                    </Typography>
+                  </Box>
+                  {rule.id && (
+                    <Chip label={`Rule #${rule.id}`} size="small" variant="outlined"
+                      sx={{ height: 26, fontSize: 11, borderColor: `${color}40`, color: color, fontWeight: 700 }} />
+                  )}
+                  {program && (
+                    <Chip label={program} size="small"
+                      sx={{ height: 26, fontSize: 11, bgcolor: 'rgba(123,91,164,0.14)', color: BRAND.purpleLight, fontWeight: 600 }} />
                   )}
                 </Box>
+                <IconButton size="small" onClick={onClose}
+                  sx={{ 
+                    borderRadius: '12px', 
+                    bgcolor: 'rgba(123,91,164,0.1)',
+                    p: 0.8,
+                    transition: 'all 0.2s ease',
+                    '&:hover': { 
+                      bgcolor: 'rgba(123,91,164,0.2)',
+                      transform: 'rotate(90deg)',
+                    } 
+                  }}>
+                  <CloseRoundedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
 
-                {alert?.['data.win.eventdata.targetUserName'] && (
-                  <>
-                    <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, mb: 1, display: 'block', color: 'text.secondary', textTransform: 'uppercase' }}>
-                      Windows Event
-                    </Typography>
-                    <DetailRow label="Target User" value={alert['data.win.eventdata.targetUserName']} />
-                    <DetailRow label="Logon Type" value={alert['data.win.eventdata.logonType']} />
-                  </>
-                )}
+              {/* Rule description */}
+              <Typography sx={{ 
+                fontSize: { xs: 14, sm: 16 }, 
+                fontWeight: 700, 
+                lineHeight: 1.5, 
+                mb: 1.5, 
+                color: 'text.primary',
+                letterSpacing: '-0.3px',
+              }}>
+                {rule.description || '—'}
+              </Typography>
 
-                {/* Full Alert Data — expandable */}
-                <Divider sx={{ my: 1.5 }} />
-                <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, mb: 1, display: 'block', color: 'text.secondary', textTransform: 'uppercase' }}>
-                  ข้อมูลดิบ (ย่อ)
-                </Typography>
-                <Box sx={{ bgcolor: 'background.default', p: 1, borderRadius: 1, maxHeight: 200, overflow: 'auto' }}>
-                  <Typography variant="caption" component="pre" sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono", monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {JSON.stringify(alert, null, 2).slice(0, 2000)}
+              {/* Timestamp + Agent */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <FiberManualRecordIcon sx={{ fontSize: 6, color: color, opacity: 0.6 }} />
+                  <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontFamily: '"IBM Plex Mono",monospace', fontWeight: 500 }}>
+                    {alert['@timestamp'] ? format(new Date(alert['@timestamp']), 'dd MMM yyyy · HH:mm:ss') : '—'}
                   </Typography>
                 </Box>
+                {agent.name && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} />
+                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontWeight: 500 }}>{agent.name}</Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {/* MITRE inline tags */}
+              <MitreTags groups={groups} mitre={rule.mitre} />
+            </Box>
+
+            {/* Tab bar — segmented pill control */}
+            <Box sx={{ px: { xs: 2.5, sm: 3 }, pb: 2, pt: 0.5, borderTop: `1px solid ${color}15` }}>
+              <Box sx={{
+                display: 'flex', p: 0.5, gap: 0.5,
+                bgcolor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+                borderRadius: '14px',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`,
+              }}>
+                {TABS.map((t, i) => (
+                  <Tooltip key={i} title={t.hint} placement="bottom" arrow>
+                    <Button size="small"
+                      startIcon={t.icon}
+                      onClick={() => setTab(i)}
+                      sx={{
+                        flex: 1,
+                        borderRadius: '11px',
+                        py: 1, px: { xs: 0.5, sm: 1.5 },
+                        fontSize: { xs: 11, sm: 12.5 },
+                        fontWeight: tab === i ? 800 : 600,
+                        color: tab === i ? '#fff' : (isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)'),
+                        bgcolor: tab === i ? color : 'transparent',
+                        boxShadow: tab === i ? `0 4px 14px ${color}45, 0 1px 3px rgba(0,0,0,0.15)` : 'none',
+                        transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+                        '&:hover': {
+                          bgcolor: tab === i ? color : `${color}15`,
+                          color: tab === i ? '#fff' : color,
+                        },
+                        '& .MuiButton-startIcon': { mr: { xs: 0.4, sm: 0.8 } },
+                        minWidth: 0, textTransform: 'none',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.label}
+                    </Button>
+                  </Tooltip>
+                ))}
+              </Box>
+            </Box>
+          </Box>
+
+          {/* ══ CONTENT ══════════════════════════════════════════════════════ */}
+          <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', p: { xs: 2.5, sm: 3 }, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} className="scrollbar-thin">
+
+            {/* ─── TAB 0: Details ─────────────────────────────────────────── */}
+            {tab === 0 && (
+              <Box sx={{ animation: 'tabContentIn 0.22s cubic-bezier(0.4,0,0.2,1) both', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
+                {/* Network section: Src → Dst */}
+                <DrawerSection label="ต้นทาง → ปลายทาง" accent={color}>
+                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'stretch', flexDirection: { xs: 'column', sm: 'row' } }}>
+                    <IPCard
+                      label="Source IP"
+                      ip={srcip}
+                      port={data.srcport}
+                      country={country}
+                      accent="#EF4444"
+                      onClick={srcip ? () => { onClose(); navigate(`/investigate?q=${srcip}`) } : null}
+                    />
+
+                    {/* Arrow */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: color, opacity: 0.6, transform: { xs: 'rotate(90deg)', sm: 'none' } }}>
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" opacity="0.7">
+                        <path d="M8 5l8 7-8 7V5z"/>
+                      </svg>
+                    </Box>
+
+                    <IPCard
+                      label="Dest IP"
+                      ip={dstip}
+                      port={data.dstport}
+                      accent={BRAND.purple}
+                    />
+                  </Box>
+
+                  {/* Extra network fields */}
+                  {(data.srcuser || data.dstuser || agent.name) && (
+                    <Box sx={{ display: 'flex', gap: 1.25, mt: 1.5, flexWrap: 'wrap' }}>
+                      {[
+                        ['Src User', data.srcuser], ['Dst User', data.dstuser], ['Agent', agent.name],
+                      ].filter(([,v]) => v).map(([k, v]) => (
+                        <Box key={k} sx={{ 
+                          flex: { xs: '1 1 100%', sm: '1 1 auto' },
+                          px: 1.5, py: 1, borderRadius: '12px', 
+                          bgcolor: isDark ? 'rgba(123,91,164,0.08)' : 'rgba(123,91,164,0.06)',
+                          border: '1px solid rgba(123,91,164,0.15)',
+                          transition: 'all 0.2s ease',
+                          '&:hover': { 
+                            bgcolor: isDark ? 'rgba(123,91,164,0.14)' : 'rgba(123,91,164,0.1)',
+                            borderColor: 'rgba(123,91,164,0.3)',
+                          }
+                        }}>
+                          <Typography sx={{ fontSize: 9.5, color: 'text.disabled', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>{k}</Typography>
+                          <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.primary' }}>{v}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </DrawerSection>
+
+                {/* Rule Groups */}
+                {groups.length > 0 && (
+                  <DrawerSection label="Rule Groups" accent={BRAND.purple}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                      {groups.map(g => (
+                        <Chip key={g} label={g} size="small" variant="outlined"
+                          sx={{ 
+                            height: 26, fontSize: 11, fontWeight: 600,
+                            borderColor: 'rgba(123,91,164,0.3)', 
+                            color: 'text.secondary',
+                            bgcolor: isDark ? 'rgba(123,91,164,0.05)' : 'rgba(123,91,164,0.03)',
+                            transition: 'all 0.2s ease',
+                            '&:hover': { 
+                              bgcolor: 'rgba(123,91,164,0.12)', 
+                              borderColor: BRAND.purple, 
+                              color: BRAND.purpleLight,
+                              transform: 'translateY(-2px)',
+                            } 
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </DrawerSection>
+                )}
+
+                {/* MITRE ATT&CK */}
+                {hasMitre && (
+                  <DrawerSection label="MITRE ATT&CK" accent="#EF4444">
+                    <Box sx={{ 
+                      p: 2, borderRadius: '14px', 
+                      bgcolor: isDark ? 'rgba(239,68,68,0.06)' : 'rgba(239,68,68,0.04)',
+                      border: '1.5px solid rgba(239,68,68,0.2)',
+                      transition: 'all 0.2s ease',
+                    }}>
+                      {rule.mitre?.tactic?.length > 0 && (
+                        <Box sx={{ mb: 1.5 }}>
+                          <Typography sx={{ fontSize: 10, color: '#EF4444', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.75 }}>Tactics</Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                            {rule.mitre.tactic.map(t => (
+                              <Box key={t} sx={{ 
+                                px: 1.25, py: 0.6, borderRadius: '8px', 
+                                bgcolor: 'rgba(239,68,68,0.18)', 
+                                border: '1px solid rgba(239,68,68,0.35)',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: 'rgba(239,68,68,0.25)',
+                                  transform: 'scale(1.05)',
+                                }
+                              }}>
+                                <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#EF4444' }}>{t}</Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                      {rule.mitre?.technique?.length > 0 && (
+                        <Box>
+                          <Typography sx={{ fontSize: 10, color: 'rgba(239,68,68,0.75)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.75 }}>Techniques</Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                            {rule.mitre.technique.map(t => (
+                              <Chip key={t} label={t} size="small" variant="outlined"
+                                sx={{ 
+                                  height: 26, fontSize: 11, fontWeight: 600,
+                                  borderColor: 'rgba(239,68,68,0.4)', 
+                                  color: '#EF4444',
+                                  bgcolor: 'rgba(239,68,68,0.08)',
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    bgcolor: 'rgba(239,68,68,0.15)',
+                                    borderColor: '#EF4444',
+                                    transform: 'translateY(-2px)',
+                                  }
+                                }} 
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  </DrawerSection>
+                )}
+
+                {/* Compliance */}
+                {compliance.length > 0 && (
+                  <DrawerSection label="Compliance Standards" accent={BRAND.purpleLight}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                      {compliance.map(c => (
+                        <Box key={c.key} sx={{ 
+                          p: 1.75, borderRadius: '12px', 
+                          bgcolor: isDark ? 'rgba(123,91,164,0.07)' : 'rgba(123,91,164,0.05)',
+                          border: '1px solid rgba(123,91,164,0.18)',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
+                            borderColor: 'rgba(123,91,164,0.3)',
+                          }
+                        }}>
+                          <Typography sx={{ fontSize: 10, fontWeight: 900, color: BRAND.purpleLight, letterSpacing: '0.08em', mb: 0.75, textTransform: 'uppercase' }}>{c.key}</Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
+                            {c.items.slice(0, 10).map(i => (
+                              <Chip key={i} label={i} size="small"
+                                sx={{ 
+                                  height: 22, fontSize: 10, fontWeight: 600,
+                                  bgcolor: isDark ? 'rgba(123,91,164,0.15)' : 'rgba(123,91,164,0.1)',
+                                  color: BRAND.purpleLight, 
+                                  '& .MuiChip-label': { px: 0.75 },
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    bgcolor: isDark ? 'rgba(123,91,164,0.25)' : 'rgba(123,91,164,0.18)',
+                                    transform: 'scale(1.05)',
+                                  }
+                                }} 
+                              />
+                            ))}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </DrawerSection>
+                )}
+
+                {/* GeoIP */}
+                {Object.keys(geo).filter(k => geo[k]).length > 0 && (
+                  <DrawerSection label="GeoIP Location" accent="#38BDF8">
+                    <Box sx={{ 
+                      p: 2, borderRadius: '14px', 
+                      bgcolor: isDark ? 'rgba(56,189,248,0.06)' : 'rgba(56,189,248,0.04)',
+                      border: '1.5px solid rgba(56,189,248,0.2)',
+                    }}>
+                      <Grid container spacing={1.5}>
+                        {[
+                          ['🌍 Country',  geo.country_name],
+                          ['🏙 City',     geo.city_name],
+                          ['🗺 Region',   geo.region_name],
+                          ['📍 Coords',   geo.location?.lat ? `${geo.location.lat?.toFixed(2)}, ${geo.location.lon?.toFixed(2)}` : null],
+                        ].filter(([,v]) => v).map(([k, v]) => (
+                          <Grid item xs={6} key={k} sm={6}>
+                            <Box>
+                              <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.4 }}>{k}</Typography>
+                              <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: 'text.primary' }}>{v}</Typography>
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  </DrawerSection>
+                )}
+
+                {/* Full log */}
+                {alert.full_log && (
+                  <DrawerSection label="Full Log" accent="text.disabled">
+                    <Box sx={{ position: 'relative', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+                      <Tooltip title="คัดลอก">
+                        <IconButton size="small"
+                          sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1, bgcolor: 'rgba(123,91,164,0.12)', transition: 'all 0.2s',
+                            '&:hover': { bgcolor: 'rgba(123,91,164,0.2)', transform: 'scale(1.1)' } }}
+                          onClick={() => { navigator.clipboard.writeText(alert.full_log); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info' }) }}>
+                          <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Box sx={{
+                        p: 2, pr: 4.5, borderRadius: '12px', maxHeight: 200, overflowY: 'auto', overflowX: 'hidden',
+                        bgcolor: isDark ? 'rgba(12,10,20,0.8)' : 'rgba(123,91,164,0.05)',
+                        border: '1px solid rgba(123,91,164,0.15)',
+                        transition: 'all 0.2s ease',
+                        '&:hover': { borderColor: 'rgba(123,91,164,0.25)' },
+                        width: '100%', maxWidth: '100%', boxSizing: 'border-box',
+                      }} className="scrollbar-thin">
+                        <Typography component="pre" sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono",monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.secondary', lineHeight: 1.7, width: '100%', maxWidth: '100%' }}>
+                          {alert.full_log}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </DrawerSection>
+                )}
               </Box>
             )}
 
-            {/* Tab 1: Threat Intel */}
+            {/* ─── TAB 1: Threat Intel ────────────────────────────────────── */}
             {tab === 1 && (
-              <Box>
+              <Box sx={{ animation: 'tabContentIn 0.22s cubic-bezier(0.4,0,0.2,1) both', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
                 {!srcip ? (
-                  <Alert severity="info" sx={{ fontSize: 12 }}>ไม่มี Source IP สำหรับตรวจสอบ</Alert>
+                  <Box sx={{ textAlign: 'center', py: 6 }}>
+                    <SecurityRoundedIcon sx={{ fontSize: 44, color: 'rgba(123,91,164,0.25)', mb: 1.5 }} />
+                    <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 600 }}>ไม่มี Source IP</Typography>
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.5 }}>Alert นี้ไม่มีข้อมูล Source IP สำหรับตรวจสอบ</Typography>
+                  </Box>
                 ) : enrichLoading ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 1 }}>
-                    <CircularProgress size={32} />
-                    <Typography variant="caption" color="text.secondary">กำลังตรวจสอบ {srcip}...</Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 2 }}>
+                    <Box sx={{ position: 'relative' }}>
+                      <CircularProgress size={48} thickness={3} sx={{ color: BRAND.purple }} />
+                      <SecurityRoundedIcon sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', fontSize: 20, color: BRAND.purpleLight }} />
+                    </Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary' }}>กำลังตรวจสอบ Threat Intelligence</Typography>
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled', fontFamily: '"IBM Plex Mono"' }}>{srcip}</Typography>
+                    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {['AbuseIPDB', 'OTX', 'Shodan', 'VirusTotal'].map((f, i) => (
+                        <Chip key={f} label={f} size="small"
+                          sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.1)', color: BRAND.purpleLight,
+                            animation: `pageFadeIn 0.3s ease ${i * 0.1}s both` }} />
+                      ))}
+                    </Box>
                   </Box>
                 ) : !enrichData ? (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <Button variant="outlined" onClick={fetchEnrich} startIcon={<SecurityIcon />}>
-                      ตรวจสอบ Threat Intel สำหรับ {srcip}
+                  <Box sx={{ textAlign: 'center', py: 5 }}>
+                    <Box sx={{ width: 56, height: 56, borderRadius: '16px', bgcolor: 'rgba(123,91,164,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 1.5 }}>
+                      <SecurityRoundedIcon sx={{ fontSize: 28, color: BRAND.purple }} />
+                    </Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', mb: 0.5 }}>ตรวจสอบ {srcip}</Typography>
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled', mb: 2 }}>AbuseIPDB · OTX · Shodan · VirusTotal</Typography>
+                    <Button variant="contained" onClick={fetchEnrich} startIcon={<SecurityRoundedIcon sx={{ fontSize: 15 }} />}
+                      sx={{ borderRadius: '10px', fontSize: 12 }}>
+                      เริ่มตรวจสอบ
                     </Button>
                   </Box>
                 ) : enrichData.is_private ? (
                   <Alert severity="info" sx={{ fontSize: 12 }}>
-                    {srcip} เป็น Private IP — ไม่ตรวจสอบ Threat Intelligence
+                    <b>{srcip}</b> เป็น Private IP — ไม่ตรวจสอบใน external threat feeds
                   </Alert>
                 ) : (
                   <Box>
-                    {/* AbuseIPDB */}
-                    <Card variant="outlined" sx={{ mb: 1.5 }}>
-                      <Box sx={{ p: 1.5 }}>
-                        <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, color: 'text.secondary' }}>
-                          🛡️ AbuseIPDB
-                        </Typography>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 0.5 }}>
-                          <Box>
-                            <Typography variant="caption" color="text.disabled" display="block" fontSize={10}>Confidence Score</Typography>
-                            <Typography variant="h5" fontWeight={700} color={
-                              (enrichData.abuseipdb?.abuseConfidenceScore || 0) > 50 ? 'error.main' :
-                              (enrichData.abuseipdb?.abuseConfidenceScore || 0) > 20 ? 'warning.main' : 'success.main'
-                            }>
-                              {enrichData.abuseipdb?.abuseConfidenceScore ?? 'N/A'}%
-                            </Typography>
+                    {/* Verdict banner */}
+                    {(() => {
+                      const feeds  = enrichData.feeds || {}
+                      const abuse  = feeds.abuseipdb?.abuseConfidenceScore || 0
+                      const vt     = feeds.virustotal
+                      const vtBad  = vt?.found ? (vt.malicious || 0) : 0
+                      const otx    = feeds.otx?.pulse_count || 0
+                      const riskPct = Math.max(abuse, vtBad >= 5 ? 80 : vtBad * 10, otx >= 3 ? 60 : otx * 15)
+                      const verdict = (abuse >= 75 || vtBad >= 5) ? 'malicious' : (abuse >= 30 || otx >= 3) ? 'suspicious' : 'clean'
+                      const vc = { malicious: '#EF4444', suspicious: BRAND.orange, clean: '#22C55E' }
+                      const vIcon = verdict === 'clean'
+                        ? <GppGoodRoundedIcon sx={{ fontSize: 32, color: '#22C55E' }} />
+                        : <GppBadRoundedIcon sx={{ fontSize: 32, color: vc[verdict] }} />
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5, p: 2, borderRadius: '14px',
+                          background: `linear-gradient(135deg, ${vc[verdict]}12 0%, ${vc[verdict]}04 100%)`,
+                          border: `1.5px solid ${vc[verdict]}30` }}>
+                          {vIcon}
+                          <Box sx={{ flex: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                              <Chip label={verdict.toUpperCase()} size="small"
+                                sx={{ bgcolor: `${vc[verdict]}20`, color: vc[verdict], fontWeight: 900, fontSize: 11, height: 22 }} />
+                              <Typography sx={{ fontSize: 13, fontFamily: '"IBM Plex Mono"', fontWeight: 700, color: 'text.secondary' }}>{srcip}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box sx={{ flex: 1, height: 6, borderRadius: 3, bgcolor: 'rgba(123,91,164,0.1)', overflow: 'hidden' }}>
+                                <Box sx={{ height: '100%', width: `${Math.min(riskPct, 100)}%`, bgcolor: vc[verdict], borderRadius: 3, transition: 'width 0.8s ease' }} />
+                              </Box>
+                              <Typography sx={{ fontSize: 11, fontWeight: 800, color: vc[verdict], minWidth: 36 }}>{Math.round(riskPct)}%</Typography>
+                            </Box>
                           </Box>
-                          <Box>
-                            <Typography variant="caption" color="text.disabled" display="block" fontSize={10}>Reports</Typography>
-                            <Typography variant="h5" fontWeight={700}>
-                              {enrichData.abuseipdb?.totalReports ?? 'N/A'}
-                            </Typography>
-                          </Box>
                         </Box>
-                        <Box sx={{ mt: 0.5 }}>
-                          <DetailRow label="ประเทศ" value={enrichData.abuseipdb?.countryCode} />
-                          <DetailRow label="ISP" value={enrichData.abuseipdb?.isp} />
-                          <DetailRow label="Domain" value={enrichData.abuseipdb?.domain} />
-                          <DetailRow label="Usage Type" value={enrichData.abuseipdb?.usageType} />
-                        </Box>
-                      </Box>
-                    </Card>
+                      )
+                    })()}
 
-                    {/* OTX */}
-                    <Card variant="outlined" sx={{ mb: 1.5 }}>
-                      <Box sx={{ p: 1.5 }}>
-                        <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, color: 'text.secondary' }}>
-                          🌐 AlienVault OTX
-                        </Typography>
-                        <Box sx={{ mt: 0.5 }}>
-                          {enrichData.otx && Object.keys(enrichData.otx).length > 0 ? (
-                            <Typography variant="body2" sx={{ fontSize: 12 }}>
-                              พบข้อมูล OTX — {JSON.stringify(enrichData.otx).length > 20 ? 'มี IOC ที่เกี่ยวข้อง' : 'ไม่พบภัยคุกคาม'}
-                            </Typography>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">ไม่พบข้อมูล OTX</Typography>
-                          )}
-                        </Box>
-                      </Box>
-                    </Card>
-
-                    {/* GeoIP */}
-                    {country && (
-                      <Card variant="outlined">
-                        <Box sx={{ p: 1.5 }}>
-                          <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, color: 'text.secondary' }}>
-                            📍 GeoIP
-                          </Typography>
-                          <DetailRow label="Country" value={country} />
-                        </Box>
-                      </Card>
-                    )}
+                    {/* Feed cards 2×2 grid */}
+                    <Grid container spacing={1.25}>
+                      {[
+                        {
+                          name: 'ABUSEIPDB', color: '#EF4444',
+                          d: enrichData.feeds?.abuseipdb,
+                          main: enrichData.feeds?.abuseipdb?.available ? `${enrichData.feeds.abuseipdb.abuseConfidenceScore ?? '—'}%` : '—',
+                          mainLabel: 'Abuse Confidence',
+                          rows: [
+                            ['Reports',  enrichData.feeds?.abuseipdb?.totalReports],
+                            ['Country',  enrichData.feeds?.abuseipdb?.countryName || enrichData.feeds?.abuseipdb?.countryCode],
+                            ['ISP',      enrichData.feeds?.abuseipdb?.isp],
+                            ['Domain',   enrichData.feeds?.abuseipdb?.domain],
+                            ['Usage',    enrichData.feeds?.abuseipdb?.usageType],
+                          ],
+                          extra: enrichData.feeds?.abuseipdb?.available && (
+                            <Box sx={{ mt: 0.75 }}>
+                              <LinearProgress variant="determinate"
+                                value={enrichData.feeds.abuseipdb.abuseConfidenceScore || 0}
+                                sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(239,68,68,0.12)',
+                                  '& .MuiLinearProgress-bar': { bgcolor: '#EF4444', borderRadius: 2 } }} />
+                            </Box>
+                          ),
+                        },
+                        {
+                          name: 'ALIENVAULT OTX', color: '#FF7A00',
+                          d: enrichData.feeds?.otx,
+                          main: enrichData.feeds?.otx?.available ? enrichData.feeds.otx.pulse_count || 0 : '—',
+                          mainLabel: 'Threat Pulses',
+                          rows: [
+                            ['Country', enrichData.feeds?.otx?.country_name],
+                            ['ASN',     enrichData.feeds?.otx?.asn],
+                            ['Malware', enrichData.feeds?.otx?.malware_count],
+                          ],
+                          extra: enrichData.feeds?.otx?.pulse_refs?.length > 0 && (
+                            <Box sx={{ mt: 0.5 }}>
+                              {enrichData.feeds.otx.pulse_refs.slice(0, 2).map((p, i) => (
+                                <Typography key={i} sx={{ fontSize: 9, color: '#FF7A00', lineHeight: 1.4, mt: 0.3 }} className="line-clamp-2">• {p.name}</Typography>
+                              ))}
+                            </Box>
+                          ),
+                        },
+                        {
+                          name: 'SHODAN', color: '#CC0000',
+                          d: enrichData.feeds?.shodan,
+                          main: enrichData.feeds?.shodan?.available ? enrichData.feeds.shodan.ports?.length ?? 0 : '—',
+                          mainLabel: 'Open Ports',
+                          rows: [
+                            ['Org',     enrichData.feeds?.shodan?.org],
+                            ['Country', enrichData.feeds?.shodan?.country_name],
+                            ['CVEs',    enrichData.feeds?.shodan?.vulns?.length],
+                          ],
+                          extra: enrichData.feeds?.shodan?.ports?.length > 0 && (
+                            <Box sx={{ mt: 0.75 }}>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3 }}>
+                                {enrichData.feeds.shodan.ports.slice(0, 8).map(p => (
+                                  <Chip key={p} label={p} size="small"
+                                    sx={{ height: 15, fontSize: 8, fontFamily: '"IBM Plex Mono"',
+                                      bgcolor: [22,23,3389,4444,6379].includes(p) ? 'rgba(239,68,68,0.18)' : 'rgba(123,91,164,0.12)',
+                                      color: [22,23,3389,4444,6379].includes(p) ? '#EF4444' : 'text.secondary',
+                                      '& .MuiChip-label': { px: 0.5 } }} />
+                                ))}
+                              </Box>
+                            </Box>
+                          ),
+                        },
+                        {
+                          name: 'VIRUSTOTAL', color: '#395BA9',
+                          d: enrichData.feeds?.virustotal,
+                          main: enrichData.feeds?.virustotal?.available && enrichData.feeds.virustotal.found
+                            ? `${enrichData.feeds.virustotal.malicious || 0}/${enrichData.feeds.virustotal.total || 0}`
+                            : '—',
+                          mainLabel: 'Detections',
+                          rows: [
+                            ['Country',   enrichData.feeds?.virustotal?.country],
+                            ['AS Owner',  enrichData.feeds?.virustotal?.as_owner],
+                            ['Suspicious',enrichData.feeds?.virustotal?.suspicious],
+                          ],
+                          extra: enrichData.feeds?.virustotal?.malicious_engines?.length > 0 && (
+                            <Box sx={{ mt: 0.75 }}>
+                              {enrichData.feeds.virustotal.malicious_engines.slice(0, 2).map((e, i) => (
+                                <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <Typography sx={{ fontSize: 9, color: 'text.disabled' }}>{e.engine}</Typography>
+                                  <Typography sx={{ fontSize: 9, color: '#395BA9', fontWeight: 700 }} noWrap>{e.result}</Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          ),
+                        },
+                      ].map(fc => (
+                        <Grid item xs={6} key={fc.name}>
+                          <FeedMiniCard
+                            name={fc.name}
+                            color={fc.color}
+                            main={fc.d?.available ? fc.main : '—'}
+                            mainLabel={fc.mainLabel}
+                            rows={fc.d?.available ? fc.rows : []}
+                            extra={fc.d?.available ? fc.extra : null}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
                   </Box>
                 )}
               </Box>
             )}
 
-            {/* Tab 2: Raw JSON */}
+            {/* ─── TAB 2: Raw Log ─────────────────────────────────────────── */}
             {tab === 2 && (
-              <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1, overflow: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
-                <Typography variant="caption" component="pre" sx={{
-                  fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              <Box sx={{ animation: 'tabContentIn 0.22s cubic-bezier(0.4,0,0.2,1) both', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.secondary' }}>Raw JSON Data</Typography>
+                  <Button size="small" startIcon={<ContentCopyRoundedIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => { navigator.clipboard.writeText(JSON.stringify(alert, null, 2)); enqueueSnackbar('คัดลอก JSON แล้ว', { variant: 'info' }) }}
+                    sx={{ fontSize: 11.5, borderRadius: '8px', px: 1.5, py: 0.6 }}>
+                    คัดลอก JSON
+                  </Button>
+                </Box>
+                <Box sx={{
+                  borderRadius: '16px', overflow: 'hidden',
+                  border: '1.5px solid rgba(123,91,164,0.18)',
+                  background: isDark ? 'rgba(10,8,18,0.9)' : 'rgba(255,255,255,0.75)',
+                  backdropFilter: 'blur(10px)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                  width: '100%', maxWidth: '100%', boxSizing: 'border-box',
                 }}>
-                  {JSON.stringify(alert, null, 2)}
-                </Typography>
+                  {/* Code header bar */}
+                  <Box sx={{ px: 2, py: 1, bgcolor: isDark ? 'rgba(123,91,164,0.08)' : 'rgba(123,91,164,0.05)', borderBottom: '1px solid rgba(123,91,164,0.15)', display: 'flex', alignItems: 'center', gap: 0.75, width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+                    {['#EF4444', '#EAB308', '#22C55E'].map(c => (
+                      <Box key={c} sx={{ width: 11, height: 11, borderRadius: '50%', bgcolor: c, opacity: 0.8, cursor: 'pointer', transition: 'opacity 0.2s', '&:hover': { opacity: 1 } }} />
+                    ))}
+                    <Typography sx={{ fontSize: 11.5, color: 'text.disabled', ml: 1.5, fontWeight: 700, fontFamily: '"IBM Plex Mono"' }}>alert.json</Typography>
+                  </Box>
+                  <Box sx={{ p: 2.25, overflowY: 'auto', overflowX: 'hidden', maxHeight: 'calc(100vh - 350px)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }} className="scrollbar-thin">
+                    <Typography component="pre" sx={{
+                      fontSize: 12, fontFamily: '"IBM Plex Mono",monospace',
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                      color: isDark ? '#EDE9FA' : '#334155',
+                      lineHeight: 1.8, m: 0,
+                      width: '100%', maxWidth: '100%',
+                    }}>
+                      {JSON.stringify(alert, null, 2)}
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
             )}
           </Box>
 
-          {/* Action Buttons Footer */}
-          <Box sx={{ p: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
+          <Box sx={{
+            px: { xs: 2.5, sm: 3 }, py: 2,
+            borderTop: '1px solid', borderColor: 'divider',
+            display: 'flex', gap: 1.5, flexWrap: 'wrap',
+            bgcolor: isDark ? 'rgba(12,10,20,0.5)' : 'rgba(123,91,164,0.04)',
+            flexShrink: 0,
+          }}>
             {srcip && (
-              <Button
-                size="small" variant="contained" color="primary"
-                startIcon={<OpenInNewIcon />}
+              <Button variant="contained" size="small"
+                startIcon={<OpenInNewRoundedIcon sx={{ fontSize: 15 }} />}
                 onClick={() => { onClose(); navigate(`/investigate?q=${srcip}`) }}
-                sx={{ borderRadius: 2, fontSize: 11 }}
-              >
+                sx={{ 
+                  borderRadius: '10px', fontSize: 12.5, py: 1.1, px: 2.5,
+                  background: 'linear-gradient(135deg, #7B5BA4 0%, #5A3E85 100%)',
+                  boxShadow: '0 4px 14px rgba(123, 91, 164, 0.4)',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 6px 18px rgba(123, 91, 164, 0.55)',
+                    filter: 'brightness(1.1)'
+                  }
+                }}>
                 สืบสวน IP
               </Button>
             )}
             {srcip && (
-              <Button
-                size="small" variant="outlined" color="warning"
-                startIcon={<BookmarkAddIcon />}
+              <Button variant="outlined" size="small" color="warning"
+                startIcon={<BookmarkAddRoundedIcon sx={{ fontSize: 15 }} />}
                 onClick={() => { onClose(); navigate(`/ioc?add=${srcip}`) }}
-                sx={{ borderRadius: 2, fontSize: 11 }}
-              >
+                sx={{ 
+                  borderRadius: '10px', fontSize: 12.5, py: 1.1,
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 4px 12px rgba(241, 116, 34, 0.2)',
+                  }
+                }}>
                 เพิ่ม IOC
               </Button>
             )}
-            <Button
-              size="small" variant="outlined"
-              startIcon={<TuneIcon />}
-              onClick={() => { onClose(); navigate(`/admin?tab=1&rule=${ruleId}`) }}
-              sx={{ borderRadius: 2, fontSize: 11 }}
-            >
-              Tuning
+            <Button variant="outlined" size="small"
+              startIcon={<TuneRoundedIcon sx={{ fontSize: 15 }} />}
+              onClick={() => { onClose(); navigate(`/admin?tab=1`) }}
+              sx={{ 
+                borderRadius: '10px', fontSize: 12.5, py: 1.1,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 12px rgba(123, 91, 164, 0.15)',
+                }
+              }}>
+              Rule Tuning
             </Button>
           </Box>
         </>
@@ -347,263 +1050,577 @@ function AlertDrawer({ alert, open, onClose }) {
   )
 }
 
-// ─── Sources ──────────────────────────────────────────────────────────────────
-const SOURCES = ['fortigate', 'mikrotik', 'infoblox', 'huawei-ac', 'suricata', 'syscheck', 'ossec']
+// ── Number formatter (K / M) ──────────────────────────────────────────────────
+const fmtNum = (n) => {
+  if (n == null) return '—'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 10_000)    return `${(n / 1_000).toFixed(0)}K`
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`
+  return n.toLocaleString()
+}
 
-// ─── Alerts Page ──────────────────────────────────────────────────────────────
+// Inline mini-sparkline (pure SVG, no lib)
+function Sparkline({ data = [], color, height = 32 }) {
+  if (!data.length) return null
+  const values = data.map(d => d.total || 0)
+  const max = Math.max(...values, 1)
+  const w = 80, h = height
+  const pts = values.map((v, i) => {
+    const x = (i / Math.max(values.length - 1, 1)) * w
+    const y = h - (v / max) * (h - 4) - 2
+    return `${x},${y}`
+  }).join(' ')
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={`sp-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+// ── Stats Bar ─────────────────────────────────────────────────────────────────
+function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }) {
+  const timeline = stats?.timeline || []
+  const total    = stats?.total || 0
+
+  const SEV_ICON = {
+    critical: <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>,
+    high:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12V11c0 4.52-3.02 8.79-7 10.07C8.02 19.79 5 15.52 5 11V6.3l7-3.12z"/><path d="M11 7h2v6h-2zM11 15h2v2h-2z"/></svg>,
+    medium:   <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/></svg>,
+    low:      <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-9l-2.5-2.5-1.42 1.42L11 16.84l7.08-7.08-1.42-1.41L11 13z"/></svg>,
+  }
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      {/* ── 4 severity cards ── */}
+      <Grid container spacing={{ xs: 1, sm: 1.5 }} sx={{ mb: 1.5 }}>
+        {SEV.map(s => {
+          const count    = stats?.by_level?.[s.key] || 0
+          const pct      = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
+          const isActive = (s.key === 'critical' && activeLevel === 15) ||
+                           (s.key === 'high'     && activeLevel === 12) ||
+                           (s.key === 'medium'   && activeLevel === 7)  ||
+                           (s.key === 'low'      && activeLevel === 1)
+          return (
+            <Grid item xs={6} sm={3} key={s.key}>
+              <Card
+                onClick={() => onLevelClick(s.min)}
+                sx={{
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  border: isActive ? `1.5px solid ${s.color}` : '1px solid',
+                  borderColor: isActive ? s.color : 'divider',
+                  background: isActive
+                    ? `linear-gradient(135deg, ${s.color}18 0%, ${s.color}06 100%)`
+                    : undefined,
+                  boxShadow: isActive
+                    ? `0 0 0 3px ${s.color}20, 0 8px 24px ${s.color}22`
+                    : '0 2px 8px rgba(0,0,0,0.08)',
+                  transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
+                  '&:hover': {
+                    transform: 'translateY(-3px)',
+                    boxShadow: `0 0 0 2px ${s.color}30, 0 10px 28px ${s.color}28`,
+                    borderColor: s.color,
+                  },
+                }}
+              >
+                {/* Background icon watermark */}
+                <Box sx={{
+                  position: 'absolute', bottom: -6, right: -4,
+                  color: s.color, opacity: 0.08, lineHeight: 1,
+                  transform: 'scale(2.8)', transformOrigin: 'bottom right',
+                  pointerEvents: 'none',
+                }}>
+                  {SEV_ICON[s.key]}
+                </Box>
+
+                <CardContent sx={{ p: { xs: '12px 14px !important', sm: '14px 18px !important' }, position: 'relative', zIndex: 1 }}>
+                  {/* Label row */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                    <Typography sx={{
+                      fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
+                      letterSpacing: '0.09em',
+                      color: isActive ? s.color : 'text.disabled',
+                    }}>
+                      {s.label}
+                    </Typography>
+                    {isActive && (
+                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: s.color, boxShadow: `0 0 6px ${s.color}` }} />
+                    )}
+                  </Box>
+
+                  {/* Main count */}
+                  {loadingStats ? (
+                    <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}>
+                      <CircularProgress size={22} sx={{ color: s.color }} />
+                    </Box>
+                  ) : (
+                    <Typography sx={{
+                      fontSize: { xs: 26, sm: 30 },
+                      fontWeight: 900, color: s.color, lineHeight: 1,
+                      letterSpacing: '-0.03em', mb: 0.25,
+                    }}>
+                      {fmtNum(count)}
+                    </Typography>
+                  )}
+
+                  {/* Bottom row: sparkline + pct */}
+                  <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.5 }}>
+                    <Box sx={{ opacity: 0.8 }}>
+                      <Sparkline data={timeline} color={s.color} height={28} />
+                    </Box>
+                    {!loadingStats && (
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: s.color, lineHeight: 1 }}>{pct}<span style={{ fontSize: 9, fontWeight: 600 }}>%</span></Typography>
+                        <Typography sx={{ fontSize: 9, color: 'text.disabled', lineHeight: 1.2 }}>of total</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </CardContent>
+
+                {/* Bottom severity bar */}
+                <Box sx={{
+                  height: 3,
+                  background: isActive
+                    ? `linear-gradient(90deg, ${s.color} 0%, ${s.color}80 100%)`
+                    : `${s.color}40`,
+                  transition: 'all 0.22s ease',
+                }} />
+              </Card>
+            </Grid>
+          )
+        })}
+      </Grid>
+
+      {/* ── Timeline chart ── */}
+      {timeline.length > 1 && (
+        <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+          <CardContent sx={{ p: { xs: '12px 14px !important', sm: '12px 20px !important' } }}>
+            {/* Chart header */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary' }}>
+                Alert Timeline
+                {total > 0 && (
+                  <Box component="span" sx={{ ml: 1, fontSize: 11, fontWeight: 400, color: 'text.disabled' }}>
+                    · รวม {fmtNum(total)} รายการ
+                  </Box>
+                )}
+              </Typography>
+              {/* Legend */}
+              <Box sx={{ display: 'flex', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Critical', color: '#EF4444' },
+                  { label: 'High',     color: BRAND.orange },
+                  { label: 'Medium',   color: '#EAB308' },
+                  { label: 'Total',    color: BRAND.purple },
+                ].map(l => (
+                  <Box key={l.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Box sx={{ width: 10, height: 3, borderRadius: 2, bgcolor: l.color }} />
+                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l.label}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            <ResponsiveContainer width="100%" height={110}>
+              <AreaChart data={timeline} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
+                <defs>
+                  {[
+                    { id: 'g-total',    color: BRAND.purple, o1: 0.22, o2: 0.01 },
+                    { id: 'g-critical', color: '#EF4444',    o1: 0.45, o2: 0.02 },
+                    { id: 'g-high',     color: BRAND.orange, o1: 0.35, o2: 0.02 },
+                    { id: 'g-medium',   color: '#EAB308',    o1: 0.25, o2: 0.01 },
+                  ].map(g => (
+                    <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"   stopColor={g.color} stopOpacity={g.o1} />
+                      <stop offset="100%" stopColor={g.color} stopOpacity={g.o2} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
+                <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
+                  tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
+                  interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} />
+                <RechartTip contentStyle={ChartTip} formatter={(v, n) => [fmtNum(v), n]}
+                  labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
+                <Area type="monotone" dataKey="total"    stroke={BRAND.purple} strokeWidth={2}   fill="url(#g-total)"    dot={false} name="Total" />
+                <Area type="monotone" dataKey="critical" stroke="#EF4444"     strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
+                <Area type="monotone" dataKey="high"     stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)"     dot={false} name="High" />
+                <Area type="monotone" dataKey="medium"   stroke="#EAB308"     strokeWidth={1}   fill="url(#g-medium)"   dot={false} name="Medium" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
+  )
+}
+
+// ── Main Alerts Page ──────────────────────────────────────────────────────────
 export default function AlertsPage() {
   const navigate = useNavigate()
-  const [level, setLevel] = useState(1)
-  const [source, setSource] = useState('')
-  const [timeRange, setTimeRange] = useState('24h')
-  const [search, setSearch] = useState('')
-  const [selectedAlert, setSelectedAlert] = useState(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [selectionModel, setSelectionModel] = useState([])
-  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 50 })
+  const { enqueueSnackbar } = useSnackbar()
+  const qc = useQueryClient()
 
-  const { data: alerts = [], isLoading, refetch } = useQuery({
-    queryKey: ['alerts', level, source, timeRange, search],
+  // Filter state
+  const [level,        setLevel]       = useState(1)
+  const [source,       setSource]      = useState('')
+  const [timeRange,    setTimeRange]   = useState('24h')
+  const [search,       setSearch]      = useState('')
+  const [searchInput,  setSearchInput] = useState('')
+  const [agentFilter,  setAgentFilter] = useState('')
+  const [mitreFilter,  setMitreFilter] = useState('')
+  const [showFilters,  setShowFilters] = useState(false)
+
+  // Alert detail
+  const [selectedAlert, setSelected] = useState(null)
+  const [drawerOpen,    setDrawer]   = useState(false)
+
+  // Live alert indicator
+  const [newCount, setNewCount] = useState(0)
+  const [liveActive, setLiveActive] = useState(true)
+  const [lastTotal,  setLastTotal]  = useState(null)
+
+  // Alerts query
+  const { data: alerts = [], isLoading, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ['alerts', level, source, timeRange, search, agentFilter, mitreFilter],
     queryFn: () => alertsApi.list({
-      level,
-      source: source || undefined,
-      time_range: timeRange,
-      q: search || undefined,
-      limit: 500,
+      level, source: source || undefined, time_range: timeRange,
+      q: search || undefined, agent: agentFilter || undefined,
+      mitre_tactic: mitreFilter || undefined, limit: 500,
     }).then(r => r.data),
-    refetchInterval: 60000,
+    refetchInterval: liveActive ? 30000 : false,
+    staleTime: 15000,
   })
 
-  // Count by severity
+  // Stats query
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['alert-stats', timeRange, level],
+    queryFn: () => alertsApi.stats(timeRange, level).then(r => r.data),
+    refetchInterval: liveActive ? 60000 : false,
+    staleTime: 30000,
+  })
+
+  // Detect new alerts (compare total)
+  useEffect(() => {
+    const total = stats?.total || 0
+    if (lastTotal !== null && total > lastTotal) setNewCount(n => n + (total - lastTotal))
+    setLastTotal(total)
+  }, [stats?.total])
+
+  const commitSearch = () => setSearch(searchInput)
+
+  // Counts from current filtered results
   const counts = useMemo(() => {
     const c = { critical: 0, high: 0, medium: 0, low: 0 }
     alerts.forEach(a => {
-      const l = Number(a['rule.level'] || a?.rule?.level || 0)
+      const l = Number(a.rule?.level || 0)
       if (l >= 15) c.critical++
       else if (l >= 12) c.high++
-      else if (l >= 7) c.medium++
+      else if (l >= 7)  c.medium++
       else c.low++
     })
     return c
   }, [alerts])
 
-  const columns = [
-    {
-      field: '@timestamp', headerName: 'เวลา', width: 140,
-      renderCell: p => (
-        <Typography variant="caption" sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace' }}>
-          {p.value ? format(new Date(p.value), 'MM/dd HH:mm:ss') : '-'}
-        </Typography>
-      ),
-    },
-    {
-      field: 'rule.level', headerName: 'ระดับ', width: 100,
-      renderCell: p => <LevelBadge level={p.value || p.row?.rule?.level} />,
-      sortable: true,
-    },
-    {
-      field: 'rule.description', headerName: 'คำอธิบาย', flex: 1, minWidth: 220,
-      renderCell: p => (
-        <Box>
-          <Typography variant="caption" sx={{ fontSize: 12, display: 'block', lineHeight: 1.3 }}>
-            {p.value || p.row?.rule?.description || ''}
-          </Typography>
-          {(p.row?.['rule.groups'] || p.row?.rule?.groups || []).some(g => g.startsWith('mitre')) && (
-            <MitreTag groups={p.row?.['rule.groups'] || p.row?.rule?.groups || []} />
-          )}
-        </Box>
-      ),
-    },
-    {
-      field: 'predecoder.program_name', headerName: 'แหล่งที่มา', width: 120,
-      renderCell: p => (
-        <Chip
-          label={p.value || p.row?.predecoder?.program_name || '-'}
-          size="small"
-          variant="outlined"
-          sx={{ height: 20, fontSize: 10 }}
-        />
-      ),
-    },
-    {
-      field: 'data.srcip', headerName: 'Source IP', width: 130,
-      renderCell: p => (
-        <Typography
-          variant="caption"
-          sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-          onClick={e => {
-            e.stopPropagation()
-            const ip = p.value || p.row?.data?.srcip
-            if (ip) navigate(`/investigate?q=${ip}`)
-          }}
-        >
-          {p.value || p.row?.data?.srcip || '-'}
-        </Typography>
-      ),
-    },
-    {
-      field: 'GeoLocation', headerName: 'ประเทศ', width: 100,
-      renderCell: p => (
-        <Typography variant="caption" sx={{ fontSize: 11 }}>
-          {(p.value || p.row?.GeoLocation)?.country_name || '-'}
-        </Typography>
-      ),
-    },
-    {
-      field: 'agent.name', headerName: 'Agent', width: 110,
-      renderCell: p => (
-        <Typography variant="caption" sx={{ fontSize: 11 }}>
-          {p.value || p.row?.agent?.name || '-'}
-        </Typography>
-      ),
-    },
-  ]
+  // Active filter chips
+  const activeFilters = [
+    source && { label: `Source: ${source}`, clear: () => setSource('') },
+    agentFilter && { label: `Agent: ${agentFilter}`, clear: () => setAgentFilter('') },
+    mitreFilter && { label: `MITRE: ${mitreFilter}`, clear: () => setMitreFilter('') },
+    search && { label: `ค้นหา: "${search}"`, clear: () => { setSearch(''); setSearchInput('') } },
+  ].filter(Boolean)
 
-  const rows = alerts.map((a, i) => ({ id: i, ...a }))
+  const handleExport = async (fmt) => {
+    try {
+      const r = await alertsApi.export({ level, source: source||undefined, time_range: timeRange, q: search||undefined, fmt })
+      const url  = URL.createObjectURL(new Blob([r.data]))
+      const link = document.createElement('a')
+      link.href = url; link.download = `alerts-${timeRange}.${fmt}`; link.click()
+      enqueueSnackbar(`Export ${fmt.toUpperCase()} สำเร็จ`, { variant: 'success' })
+    } catch { enqueueSnackbar('Export ล้มเหลว', { variant: 'error' }) }
+  }
 
   return (
     <Box className="page-enter">
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+      {/* ── Header ── */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Box>
-          <Typography variant="h6" fontWeight={700}>แจ้งเตือนภัยคุกคาม</Typography>
-          <Typography variant="caption" color="text.secondary">Alert Management — กรองและจัดการภัยคุกคาม</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>การแจ้งเตือน</Typography>
+            {newCount > 0 && (
+              <Chip label={`+${newCount} ใหม่`} size="small" color="error" onClick={() => { setNewCount(0); refetch() }}
+                sx={{ height: 22, fontSize: 11, fontWeight: 800, animation: 'pulse-critical 2s ease-in-out infinite', cursor: 'pointer' }} />
+            )}
+            {/* Live indicator */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <FiberManualRecordIcon sx={{ fontSize: 9, color: liveActive ? '#22C55E' : 'text.disabled',
+                animation: liveActive ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
+              <Typography sx={{ fontSize: 10, fontWeight: 600, color: liveActive ? '#22C55E' : 'text.disabled', cursor: 'pointer' }}
+                onClick={() => setLiveActive(l => !l)}>
+                {liveActive ? 'LIVE' : 'Paused'}
+              </Typography>
+            </Box>
+          </Box>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
+            Threat Alerts — {alerts.length.toLocaleString()} รายการ · อัปเดตทุก {timeRange}
+          </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          {selectionModel.length > 0 && (
-            <Chip
-              label={`เลือก ${selectionModel.length} รายการ`}
-              color="primary"
-              size="small"
-              onDelete={() => setSelectionModel([])}
-              sx={{ fontWeight: 600 }}
-            />
-          )}
-          <Button size="small" startIcon={<RefreshIcon />} onClick={() => refetch()} variant="outlined" sx={{ borderRadius: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button size="small" startIcon={<RefreshRoundedIcon sx={{ fontSize: 15 }} />}
+            onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ['alert-stats'] }); setNewCount(0) }}
+            variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }}>
             รีเฟรช
+          </Button>
+          <Button size="small" startIcon={<DownloadRoundedIcon sx={{ fontSize: 15 }} />}
+            onClick={() => handleExport('csv')} variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }}>
+            CSV
           </Button>
         </Box>
       </Box>
 
-      {/* Severity Counter Cards */}
-      <Grid container spacing={1} sx={{ mb: 2 }}>
-        {[
-          { key: 'critical', label: 'Critical', color: '#ef4444', count: counts.critical },
-          { key: 'high', label: 'High', color: '#f59e0b', count: counts.high },
-          { key: 'medium', label: 'Medium', color: '#3b82f6', count: counts.medium },
-          { key: 'low', label: 'Low', color: '#10b981', count: counts.low },
-        ].map(s => (
-          <Grid item xs={3} key={s.key}>
-            <Card
-              onClick={() => setLevel(s.key === 'critical' ? 15 : s.key === 'high' ? 12 : s.key === 'medium' ? 7 : 1)}
-              sx={{
-                cursor: 'pointer', textAlign: 'center', py: 1,
-                borderBottom: `3px solid ${s.color}`,
-                transition: 'all 0.2s',
-                '&:hover': { transform: 'translateY(-2px)', boxShadow: `0 4px 12px ${s.color}33` },
-              }}
-            >
-              <Typography variant="h5" fontWeight={700} sx={{ color: s.color }}>
-                {s.count.toLocaleString()}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, textTransform: 'uppercase' }}>
-                {s.label}
-              </Typography>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      {/* ── Stats row ── */}
+      <StatsBar stats={stats} loadingStats={loadingStats} activeLevel={level}
+        onLevelClick={lv => setLevel(prev => prev === lv ? 1 : lv)} />
 
-      {/* Filter Bar */}
-      <Card sx={{ mb: 2, p: 1.5 }}>
-        <Grid container spacing={1.5} alignItems="center">
-          <Grid item xs={12} sm={3}>
-            <TextField
-              fullWidth size="small" label="ค้นหา" value={search}
-              onChange={e => setSearch(e.target.value)}
-              InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} /> }}
-            />
-          </Grid>
-          <Grid item xs={6} sm={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>ระดับขั้นต่ำ</InputLabel>
-              <Select value={level} label="ระดับขั้นต่ำ" onChange={e => setLevel(e.target.value)}>
-                {[1,3,7,12,15].map(l => <MenuItem key={l} value={l}>Level {l}+</MenuItem>)}
+      {/* ── Filter Bar ── */}
+      <Card sx={{ mb: 2, p: 1.5, border: '1px solid rgba(123,91,164,0.15)' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: activeFilters.length ? 1 : 0 }}>
+          {/* Search */}
+          <TextField size="small" placeholder="ค้นหา IP, Rule, Description..." value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && commitSearch()}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} /></InputAdornment> }}
+            sx={{ minWidth: 220, flex: 1 }} />
+
+          {/* Level */}
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <Select value={level} onChange={e => setLevel(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+              <MenuItem value={1}>ทุก Level</MenuItem>
+              {SEV.map(s => <MenuItem key={s.key} value={s.min}><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color }} />{s.label} ({s.min}+)</Box></MenuItem>)}
+            </Select>
+          </FormControl>
+
+          {/* Source */}
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <Select value={source} onChange={e => setSource(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+              <MenuItem value="">ทุก Source</MenuItem>
+              {SOURCES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          {/* Time range */}
+          <FormControl size="small" sx={{ minWidth: 110 }}>
+            <Select value={timeRange} onChange={e => setTimeRange(e.target.value)} sx={{ fontSize: 12 }}>
+              {TIME_OPTS.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+            </Select>
+          </FormControl>
+
+          {/* More filters toggle */}
+          <Tooltip title="ตัวกรองเพิ่มเติม">
+            <IconButton size="small" onClick={() => setShowFilters(o => !o)}
+              sx={{ bgcolor: showFilters ? 'rgba(123,91,164,0.15)' : 'transparent', color: showFilters ? BRAND.purpleLight : 'text.secondary' }}>
+              <Badge badgeContent={[agentFilter, mitreFilter].filter(Boolean).length} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 9 } }}>
+                <FilterListRoundedIcon sx={{ fontSize: 18 }} />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+
+          <Button size="small" variant="contained" onClick={commitSearch} sx={{ borderRadius: '9px', fontSize: 12, py: 0.8, px: 2, minWidth: 80 }}>
+            ค้นหา
+          </Button>
+        </Box>
+
+        {/* Extra filters */}
+        <Collapse in={showFilters}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+            {/* Agent filter */}
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <Select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+                <MenuItem value="">ทุก Agent</MenuItem>
+                {(stats?.by_agent || []).map(a => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count})</MenuItem>)}
               </Select>
             </FormControl>
-          </Grid>
-          <Grid item xs={6} sm={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>แหล่งที่มา</InputLabel>
-              <Select value={source} label="แหล่งที่มา" onChange={e => setSource(e.target.value)}>
-                <MenuItem value="">ทั้งหมด</MenuItem>
-                {SOURCES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+
+            {/* MITRE tactic */}
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <Select value={mitreFilter} onChange={e => setMitreFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+                <MenuItem value="">ทุก MITRE Tactic</MenuItem>
+                {(stats?.by_mitre || []).map(m => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count})</MenuItem>)}
               </Select>
             </FormControl>
-          </Grid>
-          <Grid item xs={6} sm={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>ช่วงเวลา</InputLabel>
-              <Select value={timeRange} label="ช่วงเวลา" onChange={e => setTimeRange(e.target.value)}>
-                {['1h','6h','24h','7d','30d'].map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Chip
-                label={`${alerts.length} รายการ`}
-                color="primary"
-                size="small"
-                sx={{ fontWeight: 600 }}
-              />
-              <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10 }}>
-                {timeRange}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
+
+            {/* Top attackers quick-filter */}
+            {(stats?.by_srcip || []).length > 0 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: 10, color: 'text.disabled', mr: 0.5 }}>Top Attackers:</Typography>
+                {(stats.by_srcip || []).slice(0, 5).map(ip => (
+                  <Chip key={ip.name} label={ip.name} size="small" onClick={() => setSearchInput(ip.name)}
+                    sx={{ height: 18, fontSize: 9, fontFamily: '"IBM Plex Mono"', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                      '&:hover': { bgcolor: 'rgba(239,68,68,0.2)' } }} />
+                ))}
+              </Box>
+            )}
+          </Box>
+        </Collapse>
+
+        {/* Active filter chips */}
+        {activeFilters.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Typography sx={{ fontSize: 10, color: 'text.disabled', alignSelf: 'center' }}>กรองด้วย:</Typography>
+            {activeFilters.map((f, i) => (
+              <Chip key={i} label={f.label} size="small" onDelete={f.clear}
+                sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.12)', color: BRAND.purpleLight, '& .MuiChip-deleteIcon': { fontSize: 14, color: BRAND.purpleLight } }} />
+            ))}
+            <Chip label="ล้างทั้งหมด" size="small" onClick={() => { setSource(''); setSearch(''); setSearchInput(''); setAgentFilter(''); setMitreFilter(''); setLevel(1) }}
+              sx={{ height: 20, fontSize: 10, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
+          </Box>
+        )}
       </Card>
 
-      {/* DataGrid */}
-      <Card sx={{ height: 'calc(100vh - 380px)', minHeight: 400 }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          loading={isLoading}
-          density="compact"
-          checkboxSelection
-          disableRowSelectionOnClick
-          rowSelectionModel={selectionModel}
-          onRowSelectionModelChange={setSelectionModel}
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          pageSizeOptions={[25, 50, 100]}
-          onRowClick={p => { setSelectedAlert(p.row); setDrawerOpen(true) }}
-          sx={{
-            border: 'none',
-            '& .MuiDataGrid-row:hover': { cursor: 'pointer', bgcolor: 'action.hover' },
-            '& .MuiDataGrid-columnHeaders': { bgcolor: 'background.default' },
-            '& .MuiDataGrid-row.row-critical': { bgcolor: 'rgba(239,68,68,0.06)', '&:hover': { bgcolor: 'rgba(239,68,68,0.1)' } },
-            '& .MuiDataGrid-row.row-high': { bgcolor: 'rgba(245,158,11,0.04)', '&:hover': { bgcolor: 'rgba(245,158,11,0.08)' } },
-            fontSize: 12,
-          }}
-          getRowClassName={p => {
-            const l = Number(p.row['rule.level'] || p.row?.rule?.level || 0)
-            if (l >= 15) return 'row-critical'
-            if (l >= 12) return 'row-high'
-            return ''
-          }}
-          getRowHeight={() => 'auto'}
-        />
+      {/* ── Alert count + Top stats mini row ── */}
+      {stats && !loadingStats && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
+            {alerts.length.toLocaleString()} alerts · ทั้งระบบ {(stats.total || 0).toLocaleString()}
+          </Typography>
+          {(stats.by_source || []).slice(0, 5).map(s => (
+            <Chip key={s.name} label={`${s.name}: ${s.count}`} size="small"
+              onClick={() => setSource(s.name)}
+              sx={{ height: 18, fontSize: 9, cursor: 'pointer', bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }} />
+          ))}
+        </Box>
+      )}
+
+      {/* ── Alerts Table ── */}
+      <Card>
+        {isLoading && <LinearProgress sx={{ '& .MuiLinearProgress-bar': { bgcolor: BRAND.purple } }} />}
+        <Box sx={{ overflow: 'auto' }} className="scrollbar-thin">
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                {['เวลา', 'Level', 'คำอธิบาย', 'Source', 'Src IP', 'ประเทศ', 'Agent'].map(h => (
+                  <TableCell key={h} sx={{ fontSize: 9, fontWeight: 800, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', py: 1, whiteSpace: 'nowrap', bgcolor: 'inherit' }}>{h}</TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {!isLoading && alerts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} sx={{ textAlign: 'center', py: 8 }}>
+                    <NotificationsActiveRoundedIcon sx={{ fontSize: 40, color: 'rgba(123,91,164,0.25)', mb: 1 }} />
+                    <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>ไม่พบ alerts ตามเงื่อนไขที่กำหนด</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                alerts.map((a, i) => {
+                  const lv      = Number(a.rule?.level || 0)
+                  const srcip   = a.data?.srcip
+                  const country = a.GeoLocation?.country_name
+                  const groups  = a.rule?.groups || []
+                  const mitre   = a.rule?.mitre || {}
+                  const isCrit  = lv >= 15
+                  return (
+                    <TableRow
+                      key={i}
+                      hover
+                      onClick={() => { setSelected(a); setDrawer(true) }}
+                      sx={{
+                        cursor: 'pointer',
+                        bgcolor: isCrit ? 'rgba(239,68,68,0.04)' : lv >= 12 ? 'rgba(241,116,34,0.03)' : 'transparent',
+                        '&:hover': { bgcolor: isCrit ? 'rgba(239,68,68,0.08)' : 'rgba(123,91,164,0.06)' },
+                        borderLeft: `3px solid ${isCrit ? '#EF4444' : lv >= 12 ? BRAND.orange : 'transparent'}`,
+                      }}
+                    >
+                      {/* Time */}
+                      <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1, color: 'text.secondary' }}>
+                        {a['@timestamp'] ? format(new Date(a['@timestamp']), 'dd/MM HH:mm:ss') : '-'}
+                      </TableCell>
+
+                      {/* Level */}
+                      <TableCell sx={{ py: 1 }}>
+                        <LevelChip level={lv} animate={isCrit} />
+                      </TableCell>
+
+                      {/* Description + MITRE */}
+                      <TableCell sx={{ py: 1, maxWidth: 300 }}>
+                        <Typography sx={{ fontSize: 12, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }}>
+                          {a.rule?.description || '-'}
+                        </Typography>
+                        <MitreTags groups={groups} mitre={mitre} />
+                      </TableCell>
+
+                      {/* Source */}
+                      <TableCell sx={{ py: 1 }}>
+                        <Chip label={a.predecoder?.program_name || '-'} size="small" variant="outlined"
+                          sx={{ height: 18, fontSize: 9, borderColor: 'rgba(123,91,164,0.2)', color: 'text.secondary', cursor: 'pointer' }}
+                          onClick={e => { e.stopPropagation(); setSource(a.predecoder?.program_name || '') }} />
+                      </TableCell>
+
+                      {/* Src IP */}
+                      <TableCell sx={{ py: 1 }}>
+                        {srcip ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+                            <Typography sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight,
+                              cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                              onClick={e => { e.stopPropagation(); navigate(`/investigate?q=${srcip}`) }}>
+                              {srcip}
+                            </Typography>
+                            <CopyBtn text={srcip} />
+                          </Box>
+                        ) : <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>}
+                      </TableCell>
+
+                      {/* Country */}
+                      <TableCell sx={{ fontSize: 11, py: 1, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                        {country || '—'}
+                      </TableCell>
+
+                      {/* Agent */}
+                      <TableCell sx={{ fontSize: 11, py: 1, color: 'text.secondary' }}>
+                        {a.agent?.name || '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+
+        {/* Table footer */}
+        <Box sx={{ px: 2, py: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
+            แสดง {Math.min(alerts.length, 500)} / {(stats?.total || alerts.length).toLocaleString()} รายการ
+            {dataUpdatedAt ? ` · อัปเดต ${formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true, locale: th })}` : ''}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {[['CSV', 'csv'], ['JSON', 'json']].map(([label, fmt]) => (
+              <Button key={fmt} size="small" onClick={() => handleExport(fmt)}
+                sx={{ fontSize: 10, py: 0.4, px: 1, borderRadius: '7px', color: 'text.disabled', '&:hover': { color: BRAND.purpleLight } }}>
+                Export {label}
+              </Button>
+            ))}
+          </Box>
+        </Box>
       </Card>
 
-      {/* Alert Side Panel */}
-      <AlertDrawer
-        alert={selectedAlert}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      {/* Alert Drawer */}
+      <AlertDrawer alert={selectedAlert} open={drawerOpen} onClose={() => setDrawer(false)} />
     </Box>
   )
 }

@@ -108,7 +108,7 @@ export function AlertMessage({ type = 'info', title, message, action, onClose })
     success: { color: '#10b981', bgcolor: 'rgba(16, 185, 129, 0.1)', Icon: CheckCircleIcon },
     warning: { color: '#f59e0b', bgcolor: 'rgba(245, 158, 11, 0.1)', Icon: WarningIcon },
     error: { color: '#ef4444', bgcolor: 'rgba(239, 68, 68, 0.1)', Icon: ErrorIcon },
-    info: { color: '#3b82f6', bgcolor: 'rgba(59, 130, 246, 0.1)', Icon: InfoIcon },
+    info: { color: '#7B5BA4', bgcolor: 'rgba(59, 130, 246, 0.1)', Icon: InfoIcon },
   }
 
   const c = config[type] || config.info

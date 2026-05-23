@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -87,6 +88,122 @@ async def deploy(
     _write_audit(db, current_user, "deploy_restart",
                  ip=request.client.host if request.client else None)
     return result
+
+
+# ─── Decoders ─────────────────────────────────────────────────────────────────
+
+@router.get("/decoders")
+async def list_decoders(current_user=Depends(require_admin)):
+    try:
+        return await wazuh_service.get_decoders_files()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/decoders/{filename}")
+async def get_decoder(filename: str, current_user=Depends(require_admin)):
+    try:
+        content = await wazuh_service.get_decoder_file(filename)
+        return {"filename": filename, "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/decoders/{filename}")
+async def save_decoder(
+    filename: str,
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    content = body.decode("utf-8")
+    result = await wazuh_service.put_decoder_file(filename, content)
+    _write_audit(db, current_user, "save_decoder", filename,
+                 f"Saved {len(content)} bytes",
+                 request.client.host if request.client else None)
+    return result
+
+
+# ─── CDB Lists ────────────────────────────────────────────────────────────────
+
+@router.get("/lists")
+async def list_cdb_lists(current_user=Depends(require_admin)):
+    try:
+        return await wazuh_service.get_lists_files()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/lists/{filename:path}")
+async def get_cdb_list(filename: str, current_user=Depends(require_admin)):
+    try:
+        content = await wazuh_service.get_list_file(filename)
+        return {"filename": filename, "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/lists/{filename:path}")
+async def save_cdb_list(
+    filename: str,
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    content = body.decode("utf-8")
+    result = await wazuh_service.put_list_file(filename, content)
+    _write_audit(db, current_user, "save_list", filename,
+                 f"Saved {len(content)} bytes",
+                 request.client.host if request.client else None)
+    return result
+
+
+# ─── Wazuh Configuration ──────────────────────────────────────────────────────
+
+@router.get("/wazuh-config")
+async def get_wazuh_config(current_user=Depends(require_admin)):
+    try:
+        content = await wazuh_service.get_manager_config_raw()
+        return {"content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/wazuh-config")
+async def save_wazuh_config(
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    content = body.decode("utf-8")
+    result = await wazuh_service.put_manager_config(content)
+    _write_audit(db, current_user, "save_wazuh_config", "ossec.conf",
+                 f"Saved {len(content)} bytes",
+                 request.client.host if request.client else None)
+    return result
+
+
+# ─── System Status ────────────────────────────────────────────────────────────
+
+@router.get("/system-status")
+async def get_system_status(current_user=Depends(require_admin)):
+    try:
+        results = await asyncio.gather(
+            wazuh_service.get_manager_status(),
+            wazuh_service.get_manager_info(),
+            wazuh_service.get_agents_summary(),
+            return_exceptions=True,
+        )
+        return {
+            "manager_status": results[0] if not isinstance(results[0], Exception) else None,
+            "manager_info": results[1] if not isinstance(results[1], Exception) else None,
+            "agents_summary": results[2] if not isinstance(results[2], Exception) else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── Alert Tuning ─────────────────────────────────────────────────────────────

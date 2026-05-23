@@ -1,423 +1,825 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
 import {
-  Box, Card, CardContent, Typography, TextField, Button,
-  Grid, Chip, Table, TableBody, TableCell, TableHead, TableRow,
-  Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem,
-  FormControl, InputLabel, Alert, CircularProgress, IconButton, Tooltip,
-  Tabs, Tab, Divider, LinearProgress,
+  Box, Card, CardContent, Typography, TextField, Button, Grid,
+  Chip, Table, TableBody, TableCell, TableHead, TableRow,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  Select, MenuItem, FormControl, InputLabel, Alert, CircularProgress,
+  IconButton, Tooltip, LinearProgress, Divider, Skeleton, Collapse,
+  InputAdornment, Badge, useTheme,
 } from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
-import AddIcon from '@mui/icons-material/Add'
-import DeleteIcon from '@mui/icons-material/Delete'
-import SecurityIcon from '@mui/icons-material/Security'
-import ListAltIcon from '@mui/icons-material/ListAlt'
-import BarChartIcon from '@mui/icons-material/BarChart'
-import HistoryIcon from '@mui/icons-material/History'
-import GppBadIcon from '@mui/icons-material/GppBad'
-import GppGoodIcon from '@mui/icons-material/GppGood'
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
+import AddRoundedIcon from '@mui/icons-material/AddRounded'
+import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded'
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded'
+import GppBadRoundedIcon from '@mui/icons-material/GppBadRounded'
+import GppGoodRoundedIcon from '@mui/icons-material/GppGoodRounded'
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
+import WarningRoundedIcon from '@mui/icons-material/WarningRounded'
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
+import RouterRoundedIcon from '@mui/icons-material/RouterRounded'
+import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded'
+import BugReportRoundedIcon from '@mui/icons-material/BugReportRounded'
+import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded'
+import BarChartRoundedIcon from '@mui/icons-material/BarChartRounded'
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
+import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded'
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded'
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartTooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip,
+  ResponsiveContainer, Legend,
 } from 'recharts'
 import { iocApi } from '../../services/api'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
+import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 
-const PIE_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899']
-const ChartTooltipStyle = { background: 'rgba(30,41,59,0.95)', border: '1px solid #334155', borderRadius: 8, fontSize: 12, color: '#e2e8f0' }
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-// ─── Search Tab ───────────────────────────────────────────────────────────────
-function SearchTab({ onSearchComplete }) {
-  const [searchVal, setSearchVal] = useState('')
-  const [searchResult, setSearchResult] = useState(null)
-  const [searchLoading, setSearchLoading] = useState(false)
+const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
+const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
 
-  const handleSearch = async () => {
-    if (!searchVal.trim()) return
-    setSearchLoading(true)
-    try {
-      const r = await iocApi.search(searchVal)
-      setSearchResult(r.data)
-      onSearchComplete?.(searchVal)
-    } catch {}
-    setSearchLoading(false)
-  }
+const VERDICT_CONFIG = {
+  blocked:    { color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   label: 'BLOCKED',    icon: <GppBadRoundedIcon />,  desc: 'พบใน Custom IOC Block-list' },
+  malicious:  { color: '#EF4444', bg: 'rgba(239,68,68,0.08)',   label: 'MALICIOUS',  icon: <GppBadRoundedIcon />,  desc: 'ตรวจพบว่าเป็นภัยคุกคาม' },
+  suspicious: { color: '#F17422', bg: 'rgba(241,116,34,0.10)',  label: 'SUSPICIOUS', icon: <WarningRoundedIcon />, desc: 'พบสัญญาณที่น่าสงสัย' },
+  clean:      { color: '#22C55E', bg: 'rgba(34,197,94,0.08)',   label: 'CLEAN',      icon: <GppGoodRoundedIcon />, desc: 'ไม่พบภัยคุกคามในฐานข้อมูล' },
+}
 
-  const abuseScore = searchResult?.feeds?.abuseipdb?.abuseConfidenceScore
-  const scoreColor = abuseScore > 50 ? '#ef4444' : abuseScore > 20 ? '#f59e0b' : '#10b981'
+const IOC_TYPE_ICON = {
+  ip:          <RouterRoundedIcon    sx={{ fontSize: 14 }} />,
+  domain:      <LanguageRoundedIcon  sx={{ fontSize: 14 }} />,
+  hash_md5:    <FingerprintRoundedIcon sx={{ fontSize: 14 }} />,
+  hash_sha1:   <FingerprintRoundedIcon sx={{ fontSize: 14 }} />,
+  hash_sha256: <FingerprintRoundedIcon sx={{ fontSize: 14 }} />,
+  url:         <LinkRoundedIcon      sx={{ fontSize: 14 }} />,
+  unknown:     <ManageSearchRoundedIcon sx={{ fontSize: 14 }} />,
+}
+
+const TYPE_LABEL = {
+  ip: 'IP Address', domain: 'Domain', hash_md5: 'MD5 Hash',
+  hash_sha1: 'SHA1 Hash', hash_sha256: 'SHA256 Hash', url: 'URL',
+}
+
+const SEV_COLORS = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
+const PIE_PALETTE = [BRAND.purple, BRAND.orange, '#38BDF8', '#22C55E', '#EAB308', '#EC4899']
+
+// ── Risk Score Gauge ──────────────────────────────────────────────────────────
+
+function RiskGauge({ score = 0, verdict = 'clean', size = 120 }) {
+  const cfg = VERDICT_CONFIG[verdict] || VERDICT_CONFIG.clean
+  const circumference = 2 * Math.PI * 44
+  const dashOffset = circumference - (score / 100) * circumference
 
   return (
-    <Box>
-      <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11, mb: 1.5, display: 'block', textTransform: 'uppercase' }}>
-        ค้นหา IOC ใน Threat Intelligence Feeds
-      </Typography>
-      <Grid container spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth size="small" label="IP Address / Domain / Hash / URL"
-            value={searchVal} onChange={e => setSearchVal(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} /> }}
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ position: 'relative', width: size, height: size }}>
+        <svg width={size} height={size} viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(123,91,164,0.12)" strokeWidth="8" />
+          <circle
+            cx="50" cy="50" r="44" fill="none"
+            stroke={cfg.color} strokeWidth="8"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+            transform="rotate(-90 50 50)"
+            style={{ transition: 'stroke-dashoffset 0.8s ease', filter: `drop-shadow(0 0 6px ${cfg.color}80)` }}
           />
-        </Grid>
-        <Grid item xs={12} sm={3}>
-          <Button
-            fullWidth variant="contained"
-            startIcon={searchLoading ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
-            onClick={handleSearch} disabled={searchLoading}
-            sx={{ borderRadius: 2 }}
-          >
-            ตรวจสอบ
-          </Button>
-        </Grid>
-      </Grid>
-
-      {searchResult && (
-        <Box>
-          {/* Risk Score Card */}
-          <Card variant="outlined" sx={{ mb: 2 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                <Box sx={{ textAlign: 'center', minWidth: 80 }}>
-                  <Box sx={{
-                    width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    border: `3px solid ${searchResult.custom_match ? '#ef4444' : abuseScore > 50 ? '#ef4444' : abuseScore > 20 ? '#f59e0b' : '#10b981'}`,
-                    mx: 'auto', mb: 0.5,
-                  }}>
-                    {searchResult.custom_match
-                      ? <GppBadIcon sx={{ fontSize: 28, color: '#ef4444' }} />
-                      : abuseScore > 50
-                        ? <GppBadIcon sx={{ fontSize: 28, color: '#ef4444' }} />
-                        : <GppGoodIcon sx={{ fontSize: 28, color: '#10b981' }} />
-                    }
-                  </Box>
-                  <Typography variant="caption" fontWeight={700} sx={{ fontSize: 10, textTransform: 'uppercase' }}>
-                    {searchResult.custom_match ? 'BLOCKED' : abuseScore > 50 ? 'MALICIOUS' : abuseScore > 20 ? 'SUSPICIOUS' : 'CLEAN'}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6" fontWeight={700} sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 16 }}>
-                    {searchResult.value}
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                    {searchResult.custom_match && (
-                      <Chip label="Custom IOC Match" size="small" color="error" sx={{ fontSize: 10, height: 20 }} />
-                    )}
-                    {abuseScore !== undefined && (
-                      <Chip label={`AbuseIPDB: ${abuseScore}%`} size="small" sx={{ fontSize: 10, height: 20, bgcolor: scoreColor, color: '#fff' }} />
-                    )}
-                  </Box>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* Custom IOC Match Alert */}
-          {searchResult.custom_match && (
-            <Alert severity="error" sx={{ mb: 2, fontSize: 12 }}>
-              <strong>พบใน Custom IOC:</strong> {searchResult.custom_ioc?.description} (Severity: {searchResult.custom_ioc?.severity})
-            </Alert>
-          )}
-
-          {/* Feed Results */}
-          <Grid container spacing={2}>
-            {/* AbuseIPDB */}
-            {searchResult.feeds?.abuseipdb && !searchResult.feeds.abuseipdb.error && (
-              <Grid item xs={12} sm={6}>
-                <Card variant="outlined">
-                  <CardContent sx={{ p: 1.5 }}>
-                    <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11 }}>🛡️ AbuseIPDB</Typography>
-                    <Box sx={{ mt: 0.5 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.disabled">Confidence</Typography>
-                        <Typography variant="body2" fontWeight={700} sx={{ color: scoreColor }}>
-                          {searchResult.feeds.abuseipdb.abuseConfidenceScore}%
-                        </Typography>
-                      </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={searchResult.feeds.abuseipdb.abuseConfidenceScore || 0}
-                        sx={{ height: 4, borderRadius: 2, my: 0.5, '& .MuiLinearProgress-bar': { bgcolor: scoreColor } }}
-                      />
-                      <Typography variant="caption" display="block" fontSize={11}>
-                        ประเทศ: {searchResult.feeds.abuseipdb.countryCode || 'N/A'} | ISP: {searchResult.feeds.abuseipdb.isp || 'N/A'}
-                      </Typography>
-                      <Typography variant="caption" display="block" fontSize={11}>
-                        Reports: {searchResult.feeds.abuseipdb.totalReports || 0} | Domain: {searchResult.feeds.abuseipdb.domain || '-'}
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-
-            {/* OTX */}
-            <Grid item xs={12} sm={6}>
-              <Card variant="outlined">
-                <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11 }}>🌐 AlienVault OTX</Typography>
-                  <Box sx={{ mt: 0.5 }}>
-                    {searchResult.feeds?.otx && Object.keys(searchResult.feeds.otx).length > 2 ? (
-                      <Typography variant="body2" sx={{ fontSize: 12 }}>
-                        พบข้อมูลใน OTX — IOC ที่เกี่ยวข้อง
-                      </Typography>
-                    ) : (
-                      <Typography variant="caption" color="text.disabled">ไม่พบข้อมูลใน OTX</Typography>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {!searchResult.custom_match && !abuseScore && (
-            <Alert severity="success" sx={{ mt: 2, fontSize: 12 }}>ไม่พบใน IOC feeds ที่ตรวจสอบ</Alert>
-          )}
-        </Box>
-      )}
+          <text x="50" y="44" textAnchor="middle" fill={cfg.color} fontSize="20" fontWeight="800" fontFamily="IBM Plex Sans Thai, sans-serif">
+            {score}
+          </text>
+          <text x="50" y="58" textAnchor="middle" fill="rgba(237,233,250,0.5)" fontSize="9" fontFamily="IBM Plex Sans Thai, sans-serif">
+            Risk Score
+          </text>
+        </svg>
+      </Box>
+      <Chip
+        label={cfg.label}
+        size="small"
+        icon={cfg.icon}
+        sx={{
+          bgcolor: cfg.bg, color: cfg.color,
+          fontWeight: 800, fontSize: 11, height: 24,
+          border: `1px solid ${cfg.color}40`,
+          '& .MuiChip-icon': { color: cfg.color, fontSize: 16 },
+        }}
+      />
     </Box>
   )
 }
 
-function HistoryTab({ activeValue }) {
-  const [query, setQuery] = useState(activeValue || '')
-  const [timeRange, setTimeRange] = useState('30d')
-  const [history, setHistory] = useState(null)
-  const [loading, setLoading] = useState(false)
-
-  const handleLookup = async (value = query) => {
-    if (!value?.trim()) return
-    setLoading(true)
-    try {
-      const response = await iocApi.history(value, timeRange)
-      setHistory(response.data)
-      setQuery(value)
-    } catch {
-      setHistory({ value, count: 0, matches: [] })
-    } finally {
-      setLoading(false)
-    }
-  }
-
+// ── Copy Button ───────────────────────────────────────────────────────────────
+function CopyBtn({ text }) {
+  const { enqueueSnackbar } = useSnackbar()
   return (
-    <Box>
-      <Grid container spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-        <Grid item xs={12} sm={6}>
-          <TextField
-            fullWidth
-            size="small"
-            label="IOC Value"
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            onKeyDown={event => event.key === 'Enter' && handleLookup()}
-          />
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <FormControl fullWidth size="small">
-            <InputLabel>ย้อนหลัง</InputLabel>
-            <Select value={timeRange} label="ย้อนหลัง" onChange={event => setTimeRange(event.target.value)}>
-              {['7d', '30d', '90d'].map(range => (
-                <MenuItem key={range} value={range}>{range}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={6} sm={3}>
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <HistoryIcon />}
-            onClick={() => handleLookup()}
-            disabled={loading}
-          >
-            ค้นย้อนหลัง
-          </Button>
-        </Grid>
+    <Tooltip title="คัดลอก">
+      <IconButton
+        size="small"
+        onClick={() => { navigator.clipboard.writeText(text); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info', autoHideDuration: 1500 }) }}
+        sx={{ opacity: 0.45, '&:hover': { opacity: 1 }, p: 0.4 }}
+      >
+        <ContentCopyRoundedIcon sx={{ fontSize: 13 }} />
+      </IconButton>
+    </Tooltip>
+  )
+}
+
+// ── Feed Card base ────────────────────────────────────────────────────────────
+function FeedCard({ title, logo, available, children, accentColor }) {
+  const color = accentColor || BRAND.purple
+  return (
+    <Card sx={{
+      height: '100%',
+      border: `1px solid ${available ? `${color}30` : 'rgba(123,91,164,0.1)'}`,
+      '&:hover': { borderColor: `${color}50` },
+    }}>
+      <CardContent sx={{ p: '14px 16px !important' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+          <Box sx={{
+            px: 1, py: 0.3, borderRadius: '6px',
+            bgcolor: available ? `${color}18` : 'rgba(123,91,164,0.06)',
+            border: `1px solid ${color}25`,
+          }}>
+            <Typography sx={{ fontSize: 10, fontWeight: 800, color: available ? color : 'text.disabled', letterSpacing: '0.06em' }}>
+              {logo}
+            </Typography>
+          </Box>
+          {!available && <Chip label="ไม่พร้อมใช้" size="small" sx={{ height: 16, fontSize: 9, opacity: 0.5 }} />}
+        </Box>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── AbuseIPDB Card ────────────────────────────────────────────────────────────
+function AbuseIPDBCard({ data }) {
+  if (!data?.available) {
+    return (
+      <FeedCard title="AbuseIPDB" logo="ABUSEIPDB" available={false} accentColor="#EF4444">
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </FeedCard>
+    )
+  }
+  const score = data.abuseConfidenceScore || 0
+  const scoreColor = score >= 75 ? '#EF4444' : score >= 30 ? BRAND.orange : '#22C55E'
+  return (
+    <FeedCard title="AbuseIPDB" logo="ABUSEIPDB" available accentColor="#EF4444">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography sx={{ fontSize: 26, fontWeight: 900, color: scoreColor, lineHeight: 1 }}>{score}</Typography>
+          <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 600 }}>Confidence %</Typography>
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <LinearProgress variant="determinate" value={score} sx={{
+            height: 6, borderRadius: 3, mb: 0.5,
+            bgcolor: 'rgba(239,68,68,0.1)',
+            '& .MuiLinearProgress-bar': { bgcolor: scoreColor, borderRadius: 3 },
+          }} />
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {data.isWhitelisted && <Chip label="Whitelisted" size="small" color="success" sx={{ height: 16, fontSize: 9 }} />}
+            <Chip label={`${data.totalReports || 0} Reports`} size="small" sx={{ height: 16, fontSize: 9, bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
+          </Box>
+        </Box>
+      </Box>
+      <Grid container spacing={0.5}>
+        {[
+          ['ประเทศ', data.countryName || data.countryCode || '-'],
+          ['ISP', data.isp || '-'],
+          ['Domain', data.domain || '-'],
+          ['Usage', data.usageType || '-'],
+          ['Users', data.numDistinctUsers?.toLocaleString() || '0'],
+          ['Last Report', data.lastReportedAt ? format(new Date(data.lastReportedAt), 'dd MMM yy') : '-'],
+        ].map(([k, v]) => (
+          <Grid item xs={6} key={k}>
+            <Typography sx={{ fontSize: 9, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k}</Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: 1.3, wordBreak: 'break-all' }}>{v}</Typography>
+          </Grid>
+        ))}
       </Grid>
-
-      {activeValue && !history && (
-        <Alert severity="info" sx={{ mb: 2, fontSize: 12 }}>
-          พร้อมค้นย้อนหลังจาก IOC ล่าสุด: <strong>{activeValue}</strong>
-        </Alert>
+      {data.reports?.length > 0 && (
+        <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 600, mb: 0.5 }}>RECENT REPORTS</Typography>
+          {data.reports.slice(0, 2).map((r, i) => (
+            <Typography key={i} sx={{ fontSize: 10, color: 'text.secondary', lineHeight: 1.4 }} noWrap>
+              {r.comment || '(no comment)'}
+            </Typography>
+          ))}
+        </Box>
       )}
+    </FeedCard>
+  )
+}
 
-      {history && (
+// ── AlienVault OTX Card ───────────────────────────────────────────────────────
+function OTXCard({ data }) {
+  const hasPulses = data?.available && (data?.pulse_count || 0) > 0
+  return (
+    <FeedCard title="OTX" logo="ALIENVAULT OTX" available={!!data?.available} accentColor="#FF7A00">
+      {!data?.available ? (
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      ) : (
         <>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            พบ {history.count} alerts ที่เกี่ยวข้องกับ {history.value}
-          </Typography>
-          {history.matches?.length === 0 ? (
-            <Alert severity="success" sx={{ fontSize: 12 }}>ไม่พบประวัติการ match ในช่วงเวลาที่เลือก</Alert>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>เวลา</TableCell>
-                  <TableCell>รายละเอียด</TableCell>
-                  <TableCell>Source</TableCell>
-                  <TableCell>Level</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {history.matches.map((match, index) => (
-                  <TableRow key={`${match.timestamp}-${index}`} hover>
-                    <TableCell sx={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                      {match.timestamp ? format(new Date(match.timestamp), 'dd/MM HH:mm') : '-'}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>
-                      <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
-                        {match.description || '-'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {match.agent || '-'} · {match.srcip || '-'} → {match.dstip || '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>{match.source || '-'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={match.level || 0}
-                        size="small"
-                        sx={{
-                          height: 18,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          bgcolor: match.level >= 15 ? '#ef4444' : match.level >= 12 ? '#f59e0b' : match.level >= 7 ? '#3b82f6' : '#10b981',
-                          color: '#fff',
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.25 }}>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography sx={{ fontSize: 26, fontWeight: 900, color: hasPulses ? '#FF7A00' : '#22C55E', lineHeight: 1 }}>
+                {data.pulse_count || 0}
+              </Typography>
+              <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 600 }}>Pulses</Typography>
+            </Box>
+            <Box>
+              {data.country_name && (
+                <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{data.country_name}</Typography>
+              )}
+              {data.asn && (
+                <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>{data.asn}</Typography>
+              )}
+              {data.malware_count > 0 && (
+                <Chip label={`${data.malware_count} Malware`} size="small" color="error" sx={{ mt: 0.5, height: 16, fontSize: 9 }} />
+              )}
+            </Box>
+          </Box>
+          {data.pulse_refs?.length > 0 && (
+            <Box>
+              <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+                THREAT PULSES
+              </Typography>
+              {data.pulse_refs.map((p, i) => (
+                <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
+                  <BugReportRoundedIcon sx={{ fontSize: 12, color: '#FF7A00', mt: 0.15, flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: 10, lineHeight: 1.4, color: 'text.secondary' }} className="line-clamp-2">
+                    {p.name}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+          {!hasPulses && (
+            <Alert severity="success" sx={{ fontSize: 11, py: 0.5 }}>ไม่พบ pulse ที่เกี่ยวข้อง</Alert>
           )}
         </>
       )}
+    </FeedCard>
+  )
+}
+
+// ── Shodan Card ───────────────────────────────────────────────────────────────
+function ShodanCard({ data }) {
+  if (!data?.available) {
+    return (
+      <FeedCard title="Shodan" logo="SHODAN" available={false} accentColor="#CC0000">
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </FeedCard>
+    )
+  }
+  return (
+    <FeedCard title="Shodan" logo="SHODAN" available accentColor="#CC0000">
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 1.25, flexWrap: 'wrap' }}>
+        {data.org && <Typography sx={{ fontSize: 11 }}><b>Org:</b> {data.org}</Typography>}
+        {data.country_name && <Typography sx={{ fontSize: 11 }}><b>Country:</b> {data.country_name}</Typography>}
+        {data.os && <Chip label={data.os} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />}
+      </Box>
+      {data.ports?.length > 0 && (
+        <Box sx={{ mb: 1 }}>
+          <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+            OPEN PORTS ({data.ports.length})
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+            {data.ports.slice(0, 16).map(p => (
+              <Chip key={p} label={p} size="small" sx={{
+                height: 18, fontSize: 10, fontFamily: '"IBM Plex Mono", monospace',
+                bgcolor: [21, 22, 23, 25, 443, 3389, 4444, 6379, 27017].includes(p)
+                  ? 'rgba(239,68,68,0.15)' : 'rgba(123,91,164,0.1)',
+                color: [21, 22, 23, 25, 443, 3389, 4444, 6379, 27017].includes(p) ? '#EF4444' : 'text.secondary',
+              }} />
+            ))}
+          </Box>
+        </Box>
+      )}
+      {data.vulns?.length > 0 && (
+        <Box sx={{ mb: 1 }}>
+          <Typography sx={{ fontSize: 9, color: '#EF4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+            CVEs ({data.vulns.length})
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+            {data.vulns.slice(0, 8).map(v => (
+              <Chip key={v} label={v} size="small" sx={{
+                height: 18, fontSize: 9, bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
+              }} />
+            ))}
+          </Box>
+        </Box>
+      )}
+      {data.services?.length > 0 && (
+        <Box>
+          <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+            SERVICES
+          </Typography>
+          {data.services.slice(0, 3).map((s, i) => (
+            <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.3 }}>
+              <Chip label={`${s.port}/${s.transport}`} size="small" sx={{ height: 16, fontSize: 9, fontFamily: '"IBM Plex Mono"', bgcolor: 'rgba(123,91,164,0.1)', color: 'text.secondary' }} />
+              <Typography sx={{ fontSize: 10, color: 'text.secondary' }} noWrap>
+                {[s.product, s.version].filter(Boolean).join(' ') || 'unknown'}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
+      {data.last_update && (
+        <Typography sx={{ fontSize: 10, color: 'text.disabled', mt: 1 }}>
+          Updated: {formatDistanceToNow(new Date(data.last_update), { addSuffix: true, locale: th })}
+        </Typography>
+      )}
+    </FeedCard>
+  )
+}
+
+// ── VirusTotal Card ───────────────────────────────────────────────────────────
+function VirusTotalCard({ data }) {
+  if (!data?.available) {
+    return (
+      <FeedCard title="VirusTotal" logo="VIRUSTOTAL" available={false} accentColor="#395BA9">
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </FeedCard>
+    )
+  }
+  if (!data.found) {
+    return (
+      <FeedCard title="VirusTotal" logo="VIRUSTOTAL" available accentColor="#395BA9">
+        <Alert severity="success" sx={{ fontSize: 11, py: 0.5 }}>ไม่พบในฐานข้อมูล VirusTotal</Alert>
+      </FeedCard>
+    )
+  }
+  const pct = data.total > 0 ? Math.round((data.malicious / data.total) * 100) : 0
+  const scoreColor = pct >= 30 ? '#EF4444' : pct >= 10 ? BRAND.orange : '#22C55E'
+  return (
+    <FeedCard title="VirusTotal" logo="VIRUSTOTAL" available accentColor="#395BA9">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.25 }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography sx={{ fontSize: 22, fontWeight: 900, color: scoreColor, lineHeight: 1 }}>
+            {data.malicious}<span style={{ fontSize: 13, color: 'rgba(237,233,250,0.4)' }}>/{data.total}</span>
+          </Typography>
+          <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 600 }}>Detections</Typography>
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <LinearProgress variant="determinate" value={pct} sx={{
+            height: 6, borderRadius: 3, mb: 0.5,
+            bgcolor: 'rgba(57,91,169,0.1)',
+            '& .MuiLinearProgress-bar': { bgcolor: scoreColor, borderRadius: 3 },
+          }} />
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+            {data.suspicious > 0 && <Chip label={`${data.suspicious} Suspicious`} size="small" sx={{ height: 16, fontSize: 9, bgcolor: 'rgba(241,116,34,0.15)', color: BRAND.orange }} />}
+            {data.harmless > 0   && <Chip label={`${data.harmless} Clean`}     size="small" sx={{ height: 16, fontSize: 9, bgcolor: 'rgba(34,197,94,0.1)', color: '#22C55E' }} />}
+          </Box>
+        </Box>
+      </Box>
+      {data.country && (
+        <Typography sx={{ fontSize: 11, mb: 0.5 }}><b>Country:</b> {data.country}</Typography>
+      )}
+      {data.as_owner && (
+        <Typography sx={{ fontSize: 11, mb: 0.75 }}><b>AS Owner:</b> {data.as_owner}</Typography>
+      )}
+      {data.malicious_engines?.length > 0 && (
+        <Box>
+          <Typography sx={{ fontSize: 9, color: '#EF4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', mb: 0.5 }}>
+            DETECTED BY
+          </Typography>
+          {data.malicious_engines.slice(0, 4).map((e, i) => (
+            <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+              <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>{e.engine}</Typography>
+              <Typography sx={{ fontSize: 10, color: '#EF4444', fontFamily: '"IBM Plex Mono"', fontWeight: 600 }} noWrap>{e.result}</Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
+      {data.name && (
+        <Typography sx={{ fontSize: 10, color: 'text.secondary', mt: 0.75 }}>
+          <b>Name:</b> {data.name}
+          {data.type_description && ` (${data.type_description})`}
+        </Typography>
+      )}
+    </FeedCard>
+  )
+}
+
+// ── Search Results Panel ──────────────────────────────────────────────────────
+function SearchResults({ result, onClose }) {
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [histTimeRange, setHistTimeRange] = useState('30d')
+  const { enqueueSnackbar } = useSnackbar()
+
+  const { data: histData, isFetching: histLoading, refetch: fetchHistory } = useQuery({
+    queryKey: ['ioc-history', result?.value, histTimeRange],
+    queryFn: () => iocApi.history(result.value, histTimeRange).then(r => r.data),
+    enabled: historyOpen && !!result?.value,
+    staleTime: 60000,
+  })
+
+  if (!result) return null
+  const feeds   = result.feeds || {}
+  const verdict = result.verdict || 'clean'
+  const cfg     = VERDICT_CONFIG[verdict] || VERDICT_CONFIG.clean
+
+  return (
+    <Box sx={{ mt: 2, animation: 'pageFadeIn 0.35s ease-out' }}>
+      {/* ── Verdict banner ── */}
+      <Card sx={{
+        mb: 2, border: `1px solid ${cfg.color}35`,
+        background: cfg.bg,
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <Box sx={{
+          position: 'absolute', top: -30, right: -30,
+          width: 140, height: 140, borderRadius: '50%',
+          background: `radial-gradient(circle, ${cfg.color}18 0%, transparent 70%)`,
+        }} />
+        <CardContent sx={{ p: '16px 20px !important' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+            <RiskGauge score={result.risk_score || 0} verdict={verdict} size={110} />
+            <Box sx={{ flex: 1, minWidth: 200 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 16, fontWeight: 700, color: 'text.primary', wordBreak: 'break-all' }}>
+                  {result.value}
+                </Typography>
+                <CopyBtn text={result.value} />
+                <Chip
+                  size="small"
+                  icon={IOC_TYPE_ICON[result.ioc_type] || IOC_TYPE_ICON.unknown}
+                  label={TYPE_LABEL[result.ioc_type] || result.ioc_type}
+                  sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.15)', color: BRAND.purpleLight }}
+                />
+              </Box>
+              <Typography sx={{ fontSize: 13, color: cfg.color, fontWeight: 700, mb: 1 }}>
+                {cfg.desc}
+              </Typography>
+
+              {/* Custom IOC alert */}
+              {result.custom_match && result.custom_ioc && (
+                <Alert severity="error" sx={{ fontSize: 12, py: 0.5, mb: 1 }}>
+                  <b>Custom IOC Blocklist:</b> {result.custom_ioc.description}
+                  {result.custom_ioc.severity && ` — Severity: ${result.custom_ioc.severity.toUpperCase()}`}
+                </Alert>
+              )}
+              {result.is_private && (
+                <Alert severity="info" sx={{ fontSize: 12, py: 0.5 }}>IP address ภายในเครือข่าย (Private) — ไม่ตรวจสอบในฐานข้อมูลภายนอก</Alert>
+              )}
+
+              {/* Feed availability pills */}
+              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                {[
+                  { key: 'abuseipdb', label: 'AbuseIPDB', color: '#EF4444' },
+                  { key: 'otx',       label: 'OTX',       color: '#FF7A00' },
+                  { key: 'shodan',    label: 'Shodan',     color: '#CC0000' },
+                  { key: 'virustotal',label: 'VirusTotal', color: '#395BA9' },
+                ].filter(f => feeds[f.key]).map(f => (
+                  <Chip
+                    key={f.key}
+                    size="small"
+                    label={f.label}
+                    sx={{
+                      height: 18, fontSize: 9, fontWeight: 700,
+                      bgcolor: feeds[f.key]?.available ? `${f.color}18` : 'rgba(123,91,164,0.06)',
+                      color: feeds[f.key]?.available ? f.color : 'text.disabled',
+                      border: `1px solid ${feeds[f.key]?.available ? `${f.color}30` : 'transparent'}`,
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            <IconButton size="small" onClick={onClose} sx={{ alignSelf: 'flex-start', ml: 'auto' }}>
+              <CloseRoundedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* ── Feed cards grid ── */}
+      {!result.is_private && (
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          {feeds.abuseipdb  !== undefined && (
+            <Grid item xs={12} sm={6} lg={3}><AbuseIPDBCard  data={feeds.abuseipdb}  /></Grid>
+          )}
+          {feeds.otx        !== undefined && (
+            <Grid item xs={12} sm={6} lg={3}><OTXCard        data={feeds.otx}        /></Grid>
+          )}
+          {feeds.shodan     !== undefined && (
+            <Grid item xs={12} sm={6} lg={3}><ShodanCard     data={feeds.shodan}     /></Grid>
+          )}
+          {feeds.virustotal !== undefined && (
+            <Grid item xs={12} sm={6} lg={3}><VirusTotalCard data={feeds.virustotal} /></Grid>
+          )}
+        </Grid>
+      )}
+
+      {/* ── Alert History toggle ── */}
+      <Card sx={{ border: '1px solid', borderColor: 'divider' }}>
+        <Box
+          sx={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            px: 2, py: 1.25, cursor: 'pointer',
+            '&:hover': { bgcolor: 'rgba(123,91,164,0.04)' },
+          }}
+          onClick={() => setHistoryOpen(o => !o)}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HistoryRoundedIcon sx={{ fontSize: 16, color: BRAND.purple }} />
+            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>ประวัติ Alert ใน Wazuh</Typography>
+            {histData?.count > 0 && (
+              <Chip label={histData.count} size="small" color="primary" sx={{ height: 18, fontSize: 10 }} />
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {historyOpen && (
+              <FormControl size="small" sx={{ minWidth: 90 }} onClick={e => e.stopPropagation()}>
+                <Select
+                  value={histTimeRange}
+                  onChange={e => { setHistTimeRange(e.target.value); fetchHistory() }}
+                  sx={{ fontSize: 12 }}
+                >
+                  {['7d', '30d', '90d'].map(r => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                </Select>
+              </FormControl>
+            )}
+            <Chip label={historyOpen ? 'ซ่อน' : 'ดูประวัติ'} size="small"
+              sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.1)', color: BRAND.purpleLight, cursor: 'pointer' }} />
+          </Box>
+        </Box>
+
+        <Collapse in={historyOpen}>
+          <Divider />
+          <CardContent sx={{ p: '12px 16px !important' }}>
+            {histLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>กำลังค้นหาใน OpenSearch...</Typography>
+              </Box>
+            ) : !histData ? (
+              <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>คลิก "ดูประวัติ" เพื่อค้นหาใน alert logs</Typography>
+            ) : histData.count === 0 ? (
+              <Alert severity="success" sx={{ fontSize: 12 }}>ไม่พบ {result.value} ใน alert logs ในช่วง {histTimeRange}</Alert>
+            ) : (
+              <>
+                {/* Mini timeline chart */}
+                {histData.timeline?.length > 1 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography sx={{ fontSize: 11, color: 'text.disabled', mb: 1 }}>Timeline การพบ</Typography>
+                    <ResponsiveContainer width="100%" height={70}>
+                      <AreaChart data={histData.timeline} margin={{ top: 2, right: 0, left: -40, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%"   stopColor={BRAND.purple} stopOpacity={0.4} />
+                            <stop offset="100%" stopColor={BRAND.purple} stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <RechartTooltip contentStyle={ChartTip} formatter={v => [v, 'Alerts']} />
+                        <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={1.5} fill="url(#histGrad)" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Box>
+                )}
+                {/* Alert table */}
+                <Box sx={{ maxHeight: 260, overflow: 'auto' }} className="scrollbar-thin">
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        {['เวลา', 'Level', 'รายละเอียด', 'Agent', 'Src IP', 'Dst IP'].map(h => (
+                          <TableCell key={h} sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', textTransform: 'uppercase', py: 0.75, letterSpacing: '0.07em' }}>{h}</TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {histData.matches.map((m, i) => {
+                        const lv = m.level || 0
+                        const lc = lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? BRAND.purple : '#22C55E'
+                        return (
+                          <TableRow key={i} hover>
+                            <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 0.8 }}>
+                              {m.timestamp ? format(new Date(m.timestamp), 'dd/MM HH:mm') : '-'}
+                            </TableCell>
+                            <TableCell sx={{ py: 0.8 }}>
+                              <Chip label={lv} size="small" sx={{ height: 16, fontSize: 9, bgcolor: `${lc}20`, color: lc, fontWeight: 700, '& .MuiChip-label': { px: 0.7 } }} />
+                            </TableCell>
+                            <TableCell sx={{ fontSize: 11, maxWidth: 220, py: 0.8 }}>
+                              <Typography sx={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                                {m.description || '-'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.8 }}>{m.agent || '-'}</TableCell>
+                            <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', py: 0.8 }}>{m.srcip || '-'}</TableCell>
+                            <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', py: 0.8 }}>{m.dstip || '-'}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </>
+            )}
+          </CardContent>
+        </Collapse>
+      </Card>
     </Box>
   )
 }
 
-// ─── Custom IOC Tab ───────────────────────────────────────────────────────────
-function CustomIOCTab() {
+// ── Custom IOC Manager ────────────────────────────────────────────────────────
+function CustomIOCPanel() {
   const qc = useQueryClient()
   const { enqueueSnackbar } = useSnackbar()
   const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState({ ioc_type: 'ip', value: '', description: '', severity: 'high' })
+  const [filterType, setFilterType] = useState('')
+  const [filterSev, setFilterSev] = useState('')
+  const [search, setSearch] = useState('')
+  const [form, setForm] = useState({ ioc_type: 'ip', value: '', description: '', severity: 'high', expires_at: '' })
 
-  const { data: customIOCs = [], isLoading } = useQuery({
-    queryKey: ['custom-iocs'],
-    queryFn: () => iocApi.listCustom().then(r => r.data),
+  const { data: iocs = [], isLoading } = useQuery({
+    queryKey: ['custom-iocs', filterType, filterSev],
+    queryFn: () => iocApi.listCustom({ ioc_type: filterType || undefined, severity: filterSev || undefined }).then(r => r.data),
+    staleTime: 30000,
   })
 
-  const addMutation = useMutation({
+  const { data: stats = {} } = useQuery({
+    queryKey: ['ioc-stats'],
+    queryFn: () => iocApi.stats().then(r => r.data),
+    staleTime: 60000,
+  })
+
+  const addMut = useMutation({
     mutationFn: data => iocApi.addCustom(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['custom-iocs'] })
+      qc.invalidateQueries({ queryKey: ['ioc-stats'] })
       setAddOpen(false)
-      setForm({ ioc_type: 'ip', value: '', description: '', severity: 'high' })
+      setForm({ ioc_type: 'ip', value: '', description: '', severity: 'high', expires_at: '' })
       enqueueSnackbar('เพิ่ม IOC สำเร็จ', { variant: 'success' })
     },
+    onError: () => enqueueSnackbar('เกิดข้อผิดพลาด', { variant: 'error' }),
   })
 
-  const deleteMutation = useMutation({
+  const delMut = useMutation({
     mutationFn: id => iocApi.deleteCustom(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['custom-iocs'] })
-      enqueueSnackbar('ลบ IOC สำเร็จ', { variant: 'success' })
+      qc.invalidateQueries({ queryKey: ['ioc-stats'] })
+      enqueueSnackbar('ลบ IOC แล้ว', { variant: 'info' })
     },
   })
 
-  const severityColor = s => ({ high: 'error', medium: 'warning', low: 'success', critical: 'error' }[s] || 'default')
+  const filtered = iocs.filter(i =>
+    !search || i.value.toLowerCase().includes(search.toLowerCase()) || (i.description || '').toLowerCase().includes(search.toLowerCase())
+  )
 
-  // Stats
-  const byType = {}
-  const bySeverity = {}
-  customIOCs.forEach(i => {
-    byType[i.ioc_type] = (byType[i.ioc_type] || 0) + 1
-    bySeverity[i.severity] = (bySeverity[i.severity] || 0) + 1
-  })
+  const sevColor = s => SEV_COLORS[s] || BRAND.purple
 
   return (
     <Box>
-      {/* Stats Row */}
+      {/* Stats bar */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid item xs={6} sm={3}>
-          <Card variant="outlined" sx={{ textAlign: 'center', py: 1 }}>
-            <Typography variant="h5" fontWeight={700} color="primary">{customIOCs.length}</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>Total IOCs</Typography>
-          </Card>
-        </Grid>
-        {Object.entries(byType).map(([type, count]) => (
-          <Grid item xs={6} sm={3} key={type}>
-            <Card variant="outlined" sx={{ textAlign: 'center', py: 1 }}>
-              <Typography variant="h5" fontWeight={700}>{count}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, textTransform: 'uppercase' }}>{type}</Typography>
+        {[
+          { label: 'ทั้งหมด', value: stats.total || 0, color: BRAND.purple },
+          ...((stats.by_severity || []).slice(0, 3).map(s => ({
+            label: s.name.toUpperCase(), value: s.count, color: SEV_COLORS[s.name] || BRAND.purple,
+          }))),
+        ].map((s, i) => (
+          <Grid item xs={6} sm={3} key={i}>
+            <Card sx={{ textAlign: 'center', py: 1.25, borderTop: `3px solid ${s.color}` }}>
+              <Typography sx={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</Typography>
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em', mt: 0.3 }}>{s.label}</Typography>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      {/* Actions */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-        <Button size="small" startIcon={<AddIcon />} variant="outlined" onClick={() => setAddOpen(true)} sx={{ borderRadius: 2 }}>
+      {/* Toolbar */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <TextField
+          size="small" placeholder="ค้นหา IOC..."
+          value={search} onChange={e => setSearch(e.target.value)}
+          InputProps={{ startAdornment: <SearchRoundedIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }} /> }}
+          sx={{ minWidth: 200, flex: 1 }}
+        />
+        <FormControl size="small" sx={{ minWidth: 120 }}>
+          <Select value={filterType} onChange={e => setFilterType(e.target.value)} displayEmpty>
+            <MenuItem value="">ทุกประเภท</MenuItem>
+            {['ip', 'domain', 'hash', 'url'].map(t => <MenuItem key={t} value={t}>{t.toUpperCase()}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 120 }}>
+          <Select value={filterSev} onChange={e => setFilterSev(e.target.value)} displayEmpty>
+            <MenuItem value="">ทุก Severity</MenuItem>
+            {['critical', 'high', 'medium', 'low'].map(s => <MenuItem key={s} value={s}>{s.toUpperCase()}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <Button
+          size="small" variant="contained" startIcon={<AddRoundedIcon />}
+          onClick={() => setAddOpen(true)}
+          sx={{ borderRadius: '10px', whiteSpace: 'nowrap' }}
+        >
           เพิ่ม IOC
         </Button>
       </Box>
 
       {/* Table */}
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>ค่า</TableCell>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>ประเภท</TableCell>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>ความรุนแรง</TableCell>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>คำอธิบาย</TableCell>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>เพิ่มโดย</TableCell>
-            <TableCell sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>วันที่</TableCell>
-            <TableCell></TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {customIOCs.map(ioc => (
-            <TableRow key={ioc.id} hover>
-              <TableCell sx={{ fontSize: 12, fontFamily: '"IBM Plex Mono", monospace' }}>{ioc.value}</TableCell>
-              <TableCell><Chip label={ioc.ioc_type} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} /></TableCell>
-              <TableCell><Chip label={ioc.severity} size="small" color={severityColor(ioc.severity)} sx={{ height: 18, fontSize: 10 }} /></TableCell>
-              <TableCell sx={{ fontSize: 12, maxWidth: 200 }}>{ioc.description || '-'}</TableCell>
-              <TableCell sx={{ fontSize: 12 }}>{ioc.added_by}</TableCell>
-              <TableCell sx={{ fontSize: 11 }}>{ioc.added_at ? format(new Date(ioc.added_at), 'dd/MM/yy') : '-'}</TableCell>
-              <TableCell>
-                <Tooltip title="ลบ">
-                  <IconButton size="small" color="error" onClick={() => deleteMutation.mutate(ioc.id)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
-            </TableRow>
-          ))}
-          {customIOCs.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                ยังไม่มี Custom IOC — คลิก "เพิ่ม IOC" เพื่อเริ่มต้น
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      {isLoading ? (
+        Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} height={40} sx={{ mb: 0.5 }} />)
+      ) : (
+        <Box sx={{ overflow: 'auto' }} className="scrollbar-thin">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                {['ค่า IOC', 'ประเภท', 'Severity', 'คำอธิบาย', 'เพิ่มโดย', 'วันที่', 'หมดอายุ', ''].map(h => (
+                  <TableCell key={h} sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em', py: 0.75 }}>{h}</TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: 'text.disabled', fontSize: 13 }}>
+                    {iocs.length === 0 ? 'ยังไม่มี Custom IOC — คลิก "เพิ่ม IOC" เพื่อเริ่มต้น' : 'ไม่พบ IOC ที่ตรงกัน'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map(ioc => {
+                  const isExpired = ioc.expires_at && new Date(ioc.expires_at) < new Date()
+                  return (
+                    <TableRow key={ioc.id} hover sx={{ opacity: isExpired ? 0.5 : 1 }}>
+                      <TableCell sx={{ py: 0.9 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography sx={{ fontSize: 12, fontFamily: '"IBM Plex Mono"', wordBreak: 'break-all', maxWidth: 220 }}>
+                            {ioc.value}
+                          </Typography>
+                          <CopyBtn text={ioc.value} />
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ py: 0.9 }}>
+                        <Chip label={ioc.ioc_type.toUpperCase()} size="small" variant="outlined"
+                          sx={{ height: 18, fontSize: 9, borderColor: BRAND.purple, color: BRAND.purpleLight }} />
+                      </TableCell>
+                      <TableCell sx={{ py: 0.9 }}>
+                        <Chip label={ioc.severity.toUpperCase()} size="small"
+                          sx={{ height: 18, fontSize: 9, fontWeight: 800,
+                            bgcolor: `${sevColor(ioc.severity)}18`, color: sevColor(ioc.severity) }} />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 11, py: 0.9, maxWidth: 200 }}>
+                        <Typography sx={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+                          {ioc.description || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 11, py: 0.9 }}>{ioc.added_by}</TableCell>
+                      <TableCell sx={{ fontSize: 11, py: 0.9, whiteSpace: 'nowrap' }}>
+                        {ioc.added_at ? format(new Date(ioc.added_at), 'dd/MM/yy') : '-'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 11, py: 0.9, whiteSpace: 'nowrap' }}>
+                        {ioc.expires_at ? (
+                          <Chip label={isExpired ? 'หมดอายุ' : format(new Date(ioc.expires_at), 'dd/MM/yy')}
+                            size="small" color={isExpired ? 'error' : 'default'}
+                            sx={{ height: 16, fontSize: 9 }} />
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell sx={{ py: 0.9 }}>
+                        <Tooltip title="ลบ">
+                          <IconButton size="small" color="error"
+                            onClick={() => delMut.mutate(ioc.id)}
+                            disabled={delMut.isPending}
+                            sx={{ p: 0.5 }}
+                          >
+                            <DeleteRoundedIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
 
       {/* Add Dialog */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>เพิ่ม IOC ใหม่</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 16 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddRoundedIcon sx={{ color: BRAND.purple }} />เพิ่ม Custom IOC
+          </Box>
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
             <Grid item xs={6}>
               <FormControl fullWidth size="small">
-                <InputLabel>ประเภท</InputLabel>
-                <Select value={form.ioc_type} label="ประเภท" onChange={e => setForm(f => ({ ...f, ioc_type: e.target.value }))}>
-                  {['ip', 'domain', 'hash', 'url'].map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                <InputLabel>ประเภท IOC</InputLabel>
+                <Select value={form.ioc_type} label="ประเภท IOC" onChange={e => setForm(f => ({ ...f, ioc_type: e.target.value }))}>
+                  {[['ip', 'IP Address'], ['domain', 'Domain'], ['hash', 'File Hash (MD5/SHA)'], ['url', 'URL']].map(([v, l]) => (
+                    <MenuItem key={v} value={v}>{l}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -425,165 +827,364 @@ function CustomIOCTab() {
               <FormControl fullWidth size="small">
                 <InputLabel>ความรุนแรง</InputLabel>
                 <Select value={form.severity} label="ความรุนแรง" onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
-                  {['critical','high','medium','low'].map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                  {[['critical', '🔴 Critical'], ['high', '🟠 High'], ['medium', '🟡 Medium'], ['low', '🟢 Low']].map(([v, l]) => (
+                    <MenuItem key={v} value={v}>{l}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12}>
-              <TextField fullWidth size="small" label="ค่า IOC" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} />
+              <TextField
+                fullWidth size="small" label="ค่า IOC"
+                placeholder="เช่น 192.168.1.1, example.com, abc123..."
+                value={form.value}
+                onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
+              />
             </Grid>
             <Grid item xs={12}>
-              <TextField fullWidth size="small" label="คำอธิบาย" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              <TextField
+                fullWidth size="small" label="คำอธิบาย (ทางเลือก)"
+                placeholder="ระบุที่มาหรือเหตุผลที่ block"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth size="small" label="วันหมดอายุ (ทางเลือก)"
+                type="datetime-local" value={form.expires_at}
+                onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>ยกเลิก</Button>
-          <Button variant="contained" onClick={() => addMutation.mutate(form)} disabled={!form.value}>บันทึก</Button>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setAddOpen(false)} variant="outlined">ยกเลิก</Button>
+          <Button
+            variant="contained"
+            disabled={!form.value.trim() || addMut.isPending}
+            onClick={() => addMut.mutate({ ...form, expires_at: form.expires_at || null })}
+            startIcon={addMut.isPending ? <CircularProgress size={14} color="inherit" /> : <AddRoundedIcon />}
+          >
+            บันทึก IOC
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
   )
 }
 
-// ─── Statistics Tab ───────────────────────────────────────────────────────────
-function StatisticsTab() {
-  const { data: customIOCs = [] } = useQuery({
-    queryKey: ['custom-iocs'],
-    queryFn: () => iocApi.listCustom().then(r => r.data),
+// ── Statistics Panel ──────────────────────────────────────────────────────────
+function StatsPanel() {
+  const { data: stats = {}, isLoading } = useQuery({
+    queryKey: ['ioc-stats'],
+    queryFn: () => iocApi.stats().then(r => r.data),
+    staleTime: 60000,
   })
+  const sevColors = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
 
-  const byType = {}
-  const bySeverity = {}
-  customIOCs.forEach(i => {
-    byType[i.ioc_type] = (byType[i.ioc_type] || 0) + 1
-    bySeverity[i.severity] = (bySeverity[i.severity] || 0) + 1
-  })
-
-  const typeData = Object.entries(byType).map(([name, value]) => ({ name, value }))
-  const sevData = Object.entries(bySeverity).map(([name, value]) => ({ name, value }))
-  const sevColors = { critical: '#ef4444', high: '#f59e0b', medium: '#3b82f6', low: '#10b981' }
+  if (isLoading) return <Box sx={{ p: 2 }}>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</Box>
+  if (!stats.total) return (
+    <Box sx={{ textAlign: 'center', py: 6 }}>
+      <ShieldRoundedIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+      <Typography color="text.disabled">ยังไม่มีข้อมูล Custom IOC</Typography>
+    </Box>
+  )
 
   return (
-    <Box>
-      <Grid container spacing={2}>
-        {/* Summary Cards */}
-        <Grid item xs={12}>
-          <Grid container spacing={1.5}>
-            <Grid item xs={6} sm={3}>
-              <Card variant="outlined" sx={{ textAlign: 'center', py: 1.5 }}>
-                <Typography variant="h4" fontWeight={700} color="primary">{customIOCs.length}</Typography>
-                <Typography variant="caption" color="text.secondary">Total IOCs</Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <Card variant="outlined" sx={{ textAlign: 'center', py: 1.5 }}>
-                <Typography variant="h4" fontWeight={700} color="error">{bySeverity.critical || 0}</Typography>
-                <Typography variant="caption" color="text.secondary">Critical</Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <Card variant="outlined" sx={{ textAlign: 'center', py: 1.5 }}>
-                <Typography variant="h4" fontWeight={700} color="warning.main">{bySeverity.high || 0}</Typography>
-                <Typography variant="caption" color="text.secondary">High</Typography>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <Card variant="outlined" sx={{ textAlign: 'center', py: 1.5 }}>
-                <Typography variant="h4" fontWeight={700}>{Object.keys(byType).length}</Typography>
-                <Typography variant="caption" color="text.secondary">Types</Typography>
-              </Card>
-            </Grid>
-          </Grid>
-        </Grid>
-
-        {/* By Type Pie */}
-        <Grid item xs={12} sm={6}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} mb={1}>IOC by Type</Typography>
-              {typeData.length === 0 ? (
-                <Alert severity="info" sx={{ fontSize: 12 }}>ไม่มีข้อมูล</Alert>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={30} paddingAngle={3}>
-                      {typeData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <RechartTooltip contentStyle={ChartTooltipStyle} />
-                    <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11 }}>{v}</span>} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* By Severity Bar */}
-        <Grid item xs={12} sm={6}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} mb={1}>IOC by Severity</Typography>
-              {sevData.length === 0 ? (
-                <Alert severity="info" sx={{ fontSize: 12 }}>ไม่มีข้อมูล</Alert>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={sevData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                    <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                    <RechartTooltip contentStyle={ChartTooltipStyle} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {sevData.map((entry, i) => (
-                        <Cell key={i} fill={sevColors[entry.name] || '#6366f1'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+    <Grid container spacing={2}>
+      {/* By Type Pie */}
+      <Grid item xs={12} sm={6}>
+        <Card>
+          <CardContent sx={{ p: '14px 16px !important' }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>IOC ตามประเภท</Typography>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={stats.by_type || []} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={72} innerRadius={36} paddingAngle={3}>
+                  {(stats.by_type || []).map((_, i) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}
+                </Pie>
+                <RechartTooltip contentStyle={ChartTip} formatter={(v, n) => [v, n]} />
+                <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11 }}>{v.toUpperCase()}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </Grid>
-    </Box>
+      {/* By Severity Bar */}
+      <Grid item xs={12} sm={6}>
+        <Card>
+          <CardContent sx={{ p: '14px 16px !important' }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1 }}>IOC ตามความรุนแรง</Typography>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={stats.by_severity || []} margin={{ left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.1)" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
+                  tickFormatter={v => v.toUpperCase()} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <RechartTooltip contentStyle={ChartTip} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {(stats.by_severity || []).map((e, i) => (
+                    <Cell key={i} fill={sevColors[e.name] || BRAND.purple} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </Grid>
+      {/* By User */}
+      {stats.by_user?.length > 0 && (
+        <Grid item xs={12} sm={6}>
+          <Card>
+            <CardContent sx={{ p: '14px 16px !important' }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 1.5 }}>ผู้เพิ่ม IOC</Typography>
+              {stats.by_user.map((u, i) => (
+                <Box key={i} sx={{ mb: 0.75 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                    <Typography sx={{ fontSize: 12 }}>{u.name}</Typography>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: BRAND.purple }}>{u.count}</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate"
+                    value={Math.round((u.count / stats.total) * 100)}
+                    sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(123,91,164,0.1)', '& .MuiLinearProgress-bar': { bgcolor: PIE_PALETTE[i % PIE_PALETTE.length], borderRadius: 2 } }}
+                  />
+                </Box>
+              ))}
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
+    </Grid>
   )
 }
 
-// ─── IOC Page ─────────────────────────────────────────────────────────────────
+// ── Main IOC Page ─────────────────────────────────────────────────────────────
+const RECENT_SEARCHES_KEY = 'soc_ioc_recent'
+const MAX_RECENT = 8
+
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]') } catch { return [] }
+}
+function saveRecent(val) {
+  const prev = getRecent().filter(v => v !== val)
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([val, ...prev].slice(0, MAX_RECENT)))
+}
+
 export default function IOCPage() {
-  const [tab, setTab] = useState(0)
-  const [activeIOC, setActiveIOC] = useState('')
+  const [query, setQuery]           = useState('')
+  const [activeTab, setActiveTab]   = useState(0) // 0=search, 1=custom, 2=stats
+  const [searchResult, setResult]   = useState(null)
+  const [searching, setSearching]   = useState(false)
+  const [searchError, setSearchErr] = useState('')
+  const [recent, setRecent]         = useState(getRecent)
+  const inputRef = useRef(null)
+
+  const handleSearch = useCallback(async (val) => {
+    const q = (val || query).trim()
+    if (!q) return
+    setQuery(q)
+    setSearching(true)
+    setSearchErr('')
+    setResult(null)
+    try {
+      const r = await iocApi.search(q)
+      setResult(r.data)
+      saveRecent(q)
+      setRecent(getRecent())
+    } catch {
+      setSearchErr('เกิดข้อผิดพลาดในการค้นหา กรุณาลองใหม่')
+    } finally {
+      setSearching(false)
+    }
+  }, [query])
+
+  const clearResult = () => { setResult(null); setQuery(''); inputRef.current?.focus() }
+
+  const TABS = [
+    { label: 'ตรวจสอบ IOC',    icon: <ManageSearchRoundedIcon sx={{ fontSize: 16 }} /> },
+    { label: 'Custom Blocklist', icon: <TuneRoundedIcon        sx={{ fontSize: 16 }} /> },
+    { label: 'สถิติ',           icon: <BarChartRoundedIcon     sx={{ fontSize: 16 }} /> },
+  ]
 
   return (
     <Box className="page-enter">
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" fontWeight={700}>ศูนย์ IOC (Indicators of Compromise)</Typography>
-        <Typography variant="caption" color="text.secondary">Threat Intelligence — ค้นหาและจัดการ IOC</Typography>
+      {/* ── Page header ── */}
+      <Box sx={{ mb: 2.5 }}>
+        <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>
+          ตรวจจับภัยคุกคาม (IOC)
+        </Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
+          Threat Intelligence — AbuseIPDB · AlienVault OTX · Shodan · VirusTotal
+        </Typography>
       </Box>
 
-      <Card>
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            borderBottom: 1, borderColor: 'divider',
-            '& .MuiTab-root': { fontSize: 12, minHeight: 40, py: 0 },
-          }}
-        >
-          <Tab icon={<SearchIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="ค้นหา IOC" />
-          <Tab icon={<ListAltIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="Custom IOC" />
-          <Tab icon={<BarChartIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="สถิติ" />
-          <Tab icon={<HistoryIcon sx={{ fontSize: 16 }} />} iconPosition="start" label="History" />
-        </Tabs>
-        <CardContent>
-          {tab === 0 && <SearchTab onSearchComplete={setActiveIOC} />}
-          {tab === 1 && <CustomIOCTab />}
-          {tab === 2 && <StatisticsTab />}
-          {tab === 3 && <HistoryTab activeValue={activeIOC} />}
-        </CardContent>
-      </Card>
+      {/* ── Tab bar ── */}
+      <Box sx={{
+        display: 'flex', gap: 0.5, mb: 2.5,
+        bgcolor: 'rgba(123,91,164,0.06)', p: 0.5, borderRadius: '12px',
+        border: '1px solid rgba(123,91,164,0.12)', width: 'fit-content',
+      }}>
+        {TABS.map((t, i) => (
+          <Button
+            key={i}
+            size="small"
+            startIcon={t.icon}
+            onClick={() => setActiveTab(i)}
+            sx={{
+              borderRadius: '9px', px: 2, py: 0.75,
+              fontSize: 12, fontWeight: 600,
+              color: activeTab === i ? '#fff' : 'text.secondary',
+              background: activeTab === i
+                ? 'linear-gradient(135deg, #7B5BA4 0%, #5A3E85 100%)'
+                : 'transparent',
+              boxShadow: activeTab === i ? '0 4px 12px rgba(123,91,164,0.35)' : 'none',
+              '&:hover': { background: activeTab === i ? undefined : 'rgba(123,91,164,0.1)', color: activeTab === i ? '#fff' : 'text.primary' },
+            }}
+          >
+            {t.label}
+          </Button>
+        ))}
+      </Box>
+
+      {/* ── Tab 0: Search ── */}
+      {activeTab === 0 && (
+        <Box>
+          {/* Hero search */}
+          <Card sx={{
+            mb: 2, overflow: 'hidden', position: 'relative',
+            border: '1px solid rgba(123,91,164,0.2)',
+            background: 'linear-gradient(135deg, rgba(123,91,164,0.08) 0%, rgba(241,116,34,0.04) 100%)',
+          }}>
+            <Box sx={{
+              position: 'absolute', top: -60, right: -60,
+              width: 200, height: 200, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(123,91,164,0.12) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+            <CardContent sx={{ p: '20px 24px !important', position: 'relative', zIndex: 1 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary', mb: 0.75 }}>
+                ค้นหา Indicator of Compromise
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.disabled', mb: 2 }}>
+                รองรับ: IP Address · Domain · MD5/SHA1/SHA256 Hash · URL
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <TextField
+                  inputRef={inputRef}
+                  fullWidth
+                  size="small"
+                  placeholder="ตัวอย่าง: 1.2.3.4 · malware.com · d41d8cd98f00b204e9800998ecf8427e"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchRoundedIcon sx={{ color: BRAND.purple, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: query && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => { setQuery(''); setResult(null) }}>
+                          <CloseRoundedIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    sx: { fontSize: 14, fontFamily: '"IBM Plex Mono", monospace' },
+                  }}
+                  sx={{ flex: 1, minWidth: 280 }}
+                />
+                <Button
+                  variant="contained"
+                  startIcon={searching ? <CircularProgress size={16} color="inherit" /> : <SearchRoundedIcon />}
+                  onClick={() => handleSearch()}
+                  disabled={searching || !query.trim()}
+                  sx={{ py: 0.95, px: 2.5, borderRadius: '10px', whiteSpace: 'nowrap', minWidth: 140 }}
+                >
+                  {searching ? 'กำลังตรวจสอบ...' : 'ตรวจสอบ'}
+                </Button>
+              </Box>
+
+              {/* Recent searches */}
+              {recent.length > 0 && !searchResult && (
+                <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 600, flexShrink: 0 }}>ค้นหาล่าสุด:</Typography>
+                  {recent.map((r, i) => (
+                    <Chip
+                      key={i}
+                      label={r}
+                      size="small"
+                      onClick={() => handleSearch(r)}
+                      sx={{
+                        height: 20, fontSize: 10, fontFamily: '"IBM Plex Mono"', cursor: 'pointer',
+                        bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary',
+                        '&:hover': { bgcolor: 'rgba(123,91,164,0.18)', color: BRAND.purpleLight },
+                      }}
+                    />
+                  ))}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Loading state */}
+          {searching && (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <CircularProgress sx={{ color: BRAND.purple, mb: 2 }} />
+              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>กำลังตรวจสอบกับ Threat Intelligence Feeds...</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                {['AbuseIPDB', 'OTX', 'Shodan', 'VirusTotal'].map(f => (
+                  <Chip key={f} label={f} size="small" sx={{ height: 18, fontSize: 9, bgcolor: 'rgba(123,91,164,0.1)', color: BRAND.purpleLight }} />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {/* Error */}
+          {searchError && !searching && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSearchErr('')}>{searchError}</Alert>
+          )}
+
+          {/* Results */}
+          {!searching && searchResult && (
+            <SearchResults result={searchResult} onClose={clearResult} />
+          )}
+
+          {/* Empty state */}
+          {!searching && !searchResult && !searchError && (
+            <Card sx={{ textAlign: 'center', py: 8, border: '1px dashed', borderColor: 'rgba(123,91,164,0.2)', bgcolor: 'transparent' }}>
+              <ShieldRoundedIcon sx={{ fontSize: 56, color: 'rgba(123,91,164,0.3)', mb: 1.5 }} />
+              <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.secondary' }}>พร้อมตรวจสอบภัยคุกคาม</Typography>
+              <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.5 }}>
+                ใส่ IP, Domain, Hash หรือ URL แล้วกด Enter
+              </Typography>
+              {/* Quick example chips */}
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {['8.8.8.8', 'example.com', 'd41d8cd9...'].map(ex => (
+                  <Chip key={ex} label={`ลอง: ${ex}`} size="small"
+                    onClick={() => { setQuery(ex); inputRef.current?.focus() }}
+                    sx={{ cursor: 'pointer', bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary', fontSize: 11,
+                      '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}
+                  />
+                ))}
+              </Box>
+            </Card>
+          )}
+        </Box>
+      )}
+
+      {/* ── Tab 1: Custom IOC ── */}
+      {activeTab === 1 && (
+        <Card>
+          <CardContent sx={{ p: '16px !important' }}>
+            <CustomIOCPanel />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab 2: Statistics ── */}
+      {activeTab === 2 && <StatsPanel />}
     </Box>
   )
 }

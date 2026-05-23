@@ -4,12 +4,6 @@ import App from './App.jsx'
 import { ThemeProvider } from './theme/ThemeContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SnackbarProvider } from 'notistack'
-import '@fontsource/ibm-plex-sans/300.css'
-import '@fontsource/ibm-plex-sans/400.css'
-import '@fontsource/ibm-plex-sans/500.css'
-import '@fontsource/ibm-plex-sans/600.css'
-import '@fontsource/ibm-plex-sans/700.css'
-import '@fontsource/ibm-plex-mono/400.css'
 import './index.css'
 
 const queryClient = new QueryClient({

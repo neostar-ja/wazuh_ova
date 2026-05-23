@@ -1,631 +1,773 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState, useEffect, useCallback } from 'react'
+/**
+ * SOC Dashboard v3 — Enterprise-grade real-time security overview
+ * MUI + Tailwind CSS combined
+ */
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Grid, Card, CardContent, Typography, Box, Chip, Skeleton,
-  Select, MenuItem, FormControl, Alert, Divider, LinearProgress,
-  Table, TableBody, TableCell, TableHead, TableRow, Tooltip,
-  IconButton, useTheme,
+  Box, Typography, Chip, Skeleton, Select, MenuItem, FormControl,
+  Table, TableBody, TableCell, TableHead, TableRow,
+  IconButton, Tooltip, useTheme, Button, LinearProgress, Alert,
 } from '@mui/material'
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
-import WarningAmberIcon from '@mui/icons-material/WarningAmber'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import StorageIcon from '@mui/icons-material/Storage'
-import TrendingUpIcon from '@mui/icons-material/TrendingUp'
-import TrendingDownIcon from '@mui/icons-material/TrendingDown'
-import TrendingFlatIcon from '@mui/icons-material/TrendingFlat'
-import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutlineRounded'
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlineRounded'
-import PublicIcon from '@mui/icons-material/Public'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineRounded'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
+import WarningAmberRoundedIcon        from '@mui/icons-material/WarningAmberRounded'
+import InfoRoundedIcon                 from '@mui/icons-material/InfoRounded'
+import CheckCircleRoundedIcon          from '@mui/icons-material/CheckCircleRounded'
+import StorageRoundedIcon              from '@mui/icons-material/StorageRounded'
+import TrendingUpRoundedIcon           from '@mui/icons-material/TrendingUpRounded'
+import TrendingDownRoundedIcon         from '@mui/icons-material/TrendingDownRounded'
+import TrendingFlatRoundedIcon         from '@mui/icons-material/TrendingFlatRounded'
+import PauseRoundedIcon                from '@mui/icons-material/PauseRounded'
+import PlayArrowRoundedIcon            from '@mui/icons-material/PlayArrowRounded'
+import RefreshRoundedIcon              from '@mui/icons-material/RefreshRounded'
+import PublicRoundedIcon               from '@mui/icons-material/PublicRounded'
+import ErrorRoundedIcon                from '@mui/icons-material/ErrorRounded'
+import OpenInNewRoundedIcon            from '@mui/icons-material/OpenInNewRounded'
+import RouterRoundedIcon               from '@mui/icons-material/RouterRounded'
+import FiberManualRecordIcon           from '@mui/icons-material/FiberManualRecord'
+import ShieldRoundedIcon               from '@mui/icons-material/ShieldRounded'
+import BoltRoundedIcon                 from '@mui/icons-material/BoltRounded'
+import DevicesRoundedIcon              from '@mui/icons-material/DevicesRounded'
+import SecurityRoundedIcon             from '@mui/icons-material/SecurityRounded'
+import GppBadRoundedIcon               from '@mui/icons-material/GppBadRounded'
+import ContentCopyRoundedIcon          from '@mui/icons-material/ContentCopyRounded'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartTip, ResponsiveContainer, Cell, PieChart, Pie, Legend,
 } from 'recharts'
 import { dashboardApi, alertsApi } from '../../services/api'
 import { format } from 'date-fns'
-import { th } from 'date-fns/locale'
 import { useNavigate } from 'react-router-dom'
 import WorldMap from './WorldMap'
+import { useSnackbar } from 'notistack'
 
-const LEVEL_COLORS = {
-  critical: '#ef4444',
-  high:     '#f59e0b',
-  medium:   '#3b82f6',
-  low:      '#10b981',
+// ─── Brand tokens ─────────────────────────────────────────────────────────────
+const B = {
+  purple:  '#7B5BA4', purpleL: '#9B7DC4', purpleD: '#5A3E85',
+  orange:  '#F17422', orangeL: '#FF9642',
+  red:     '#EF4444', yellow: '#EAB308',  green:   '#22C55E',
+  sky:     '#38BDF8', pink:   '#EC4899',
 }
+const SEV = { critical: B.red, high: B.orange, medium: B.yellow, low: B.green }
+const PIE = [B.purple, B.orange, B.sky, B.green, B.yellow, B.pink, '#A855F7']
+const TIP = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.35)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
+const AUTO_MS = 30000
 
-const PIE_PALETTE = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const N = (n) => {
+  if (n == null) return '—'
+  if (n >= 1e9) return `${(n/1e9).toFixed(1)}B`
+  if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`
+  if (n >= 1e4) return `${(n/1e3).toFixed(0)}K`
+  if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`
+  return n.toLocaleString()
+}
+const LC = (lv) => lv >= 15 ? B.red : lv >= 12 ? B.orange : lv >= 7 ? B.yellow : B.green
+const LL = (lv) => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
 
-const AUTO_REFRESH_MS = 30000
-
-// ─── Metric Card ──────────────────────────────────────────────────────────────
-function MetricCard({ title, value, icon, color, loading, subtitle, trend, trendValue }) {
-  const trendIcon = trend === 'up' ? <TrendingUpIcon sx={{ fontSize: 14 }} />
-    : trend === 'down' ? <TrendingDownIcon sx={{ fontSize: 14 }} />
-    : <TrendingFlatIcon sx={{ fontSize: 14 }} />
-
-  const trendColor = trend === 'up' ? '#ef4444' : trend === 'down' ? '#10b981' : '#94a3b8'
-
+// ─── Inline sparkline (pure SVG) ─────────────────────────────────────────────
+function Spark({ data = [], color, w = 80, h = 28 }) {
+  const vals = data.map(d => d.total || d.count || 0)
+  if (vals.length < 2) return null
+  const max = Math.max(...vals, 1)
+  const pts = vals.map((v, i) => {
+    const x = (i / (vals.length - 1)) * w
+    const y = h - (v / max) * (h - 3) - 1.5
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const area = `M 0,${h} L ${pts.split(' ').map(p => p).join(' L ')} L ${w},${h} Z`
   return (
-    <Card
-      sx={{
-        borderLeft: `3px solid ${color}`,
-        transition: 'all 0.25s ease',
-        '&:hover': { boxShadow: `0 4px 20px ${color}33`, transform: 'translateY(-2px)' },
-        position: 'relative',
-        overflow: 'visible',
-      }}
-    >
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <Box sx={{ flex: 1 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-            >
-              {title}
-            </Typography>
-            {loading ? (
-              <Skeleton width={80} height={36} sx={{ mt: 0.3 }} />
-            ) : (
-              <Typography
-                variant="h4"
-                fontWeight={700}
-                sx={{ color, lineHeight: 1.2, mt: 0.3, fontSize: '1.75rem' }}
-              >
-                {(value ?? 0).toLocaleString()}
-              </Typography>
-            )}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
-              {subtitle && !loading && (
-                <Typography variant="caption" color="text.disabled" sx={{ fontSize: 11 }}>
-                  {subtitle}
-                </Typography>
-              )}
-              {trendValue !== undefined && !loading && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3, ml: subtitle ? 0.5 : 0 }}>
-                  <Box sx={{ color: trendColor, display: 'flex', alignItems: 'center' }}>{trendIcon}</Box>
-                  <Typography variant="caption" sx={{ fontSize: 10, color: trendColor, fontWeight: 600 }}>
-                    {trendValue > 0 ? '+' : ''}{trendValue}%
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          </Box>
-          <Box
-            sx={{
-              p: 1,
-              borderRadius: '10px',
-              bgcolor: `${color}18`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={`sp${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#sp${color.replace('#','')})`} />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
-// ─── Chart Tooltip ────────────────────────────────────────────────────────────
-const ChartTooltipStyle = {
-  background: 'rgba(30,41,59,0.95)',
-  border: '1px solid #334155',
-  borderRadius: 8,
-  fontSize: 12,
-  color: '#e2e8f0',
-}
-
-// ─── Cluster Status ───────────────────────────────────────────────────────────
-function ClusterCard({ cluster }) {
-  let nodes = []
-  if (cluster) {
-    if (Array.isArray(cluster.data?.affected_items)) {
-      nodes = cluster.data.affected_items
-    } else if (Array.isArray(cluster?.affected_items)) {
-      nodes = cluster.affected_items
-    } else if (typeof cluster === 'object' && !Array.isArray(cluster)) {
-      if (Object.keys(cluster).length > 0 && !cluster.name) {
-        nodes = [{
-          name: cluster.node || cluster.name || 'Master',
-          status: 'active',
-          type: 'master',
-        }]
-      }
-    }
-  }
+// ─── Metric Hero Card ─────────────────────────────────────────────────────────
+function MetricHero({ stats, isLoading, tl, navigate }) {
+  const metrics = [
+    { key: 'total',    label: 'รวมทั้งหมด', color: B.purple,  bg: 'rgba(123,91,164,0.12)' },
+    { key: 'critical', label: 'Critical',   color: B.red,     bg: 'rgba(239,68,68,0.1)'   },
+    { key: 'high',     label: 'High',       color: B.orange,  bg: 'rgba(241,116,34,0.1)'  },
+    { key: 'medium',   label: 'Medium',     color: B.yellow,  bg: 'rgba(234,179,8,0.08)'  },
+    { key: 'low',      label: 'Low',        color: B.green,   bg: 'rgba(34,197,94,0.08)'  },
+  ]
+  const total = (stats?.critical||0)+(stats?.high||0)+(stats?.medium||0)+(stats?.low||0)
+  const vals  = { total, critical: stats?.critical||0, high: stats?.high||0, medium: stats?.medium||0, low: stats?.low||0 }
+  const navLevel = { critical: 15, high: 12, medium: 7, low: 1 }
 
   return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <StorageIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-          <Typography variant="subtitle2" fontWeight={600} fontSize={13}>
-            สุขภาพ Wazuh Cluster
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 rounded-2xl overflow-hidden"
+      style={{ border: '1px solid rgba(123,91,164,0.18)' }}>
+      {metrics.map((m, i) => (
+        <Box
+          key={m.key}
+          onClick={() => m.key !== 'total' ? navigate(`/alerts?level=${navLevel[m.key]}`) : navigate('/alerts')}
+          className="relative overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+          sx={{
+            p: { xs: '12px 10px', sm: '14px 16px', md: '16px 18px' },
+            bgcolor: m.bg,
+            borderLeft: i > 0 ? '1px solid rgba(123,91,164,0.12)' : 'none',
+            borderTop: { xs: i >= 2 ? '1px solid rgba(123,91,164,0.12)' : 'none', sm: i >= 3 ? '1px solid rgba(123,91,164,0.12)' : 'none', lg: 'none' },
+            borderTopWidth: { lg: 0 },
+            '&::after': {
+              content: '""', position: 'absolute', top: 0, left: 0, right: 0,
+              height: '3px', background: m.color,
+            },
+            '&:hover': { bgcolor: m.bg.replace('0.1', '0.18').replace('0.12', '0.2').replace('0.08', '0.14') },
+          }}
+        >
+          {/* BG watermark */}
+          <Box sx={{
+            position: 'absolute', bottom: -10, right: -6,
+            fontSize: 48, opacity: 0.06, color: m.color,
+            fontWeight: 900, lineHeight: 1, userSelect: 'none',
+          }}>
+            {m.key === 'total' ? '∑' : m.label[0]}
+          </Box>
+
+          <Typography sx={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: m.color, mb: 0.5, position: 'relative', zIndex: 1 }}>
+            {m.label}
           </Typography>
-        </Box>
-        {!cluster || nodes.length === 0 ? (
-          <Alert severity="info" sx={{ fontSize: 12 }}>กำลังโหลดข้อมูล...</Alert>
-        ) : (
-          nodes.map((node, i) => (
-            <Box key={node?.name || i}>
-              <Box sx={{ display: 'flex', alignItems: 'center', py: 0.8, gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    bgcolor: (node?.status || 'active') === 'active' ? '#10b981' : '#ef4444',
-                    flexShrink: 0,
-                    animation: (node?.status || 'active') === 'active' ? 'pulse-slow 2s ease-in-out infinite' : 'none',
-                  }}
-                />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 12 }}>
-                    {node?.name || `Node ${i + 1}`}
-                  </Typography>
-                  <Typography variant="caption" color="text.disabled" sx={{ display: 'block', fontSize: 10 }}>
-                    {node?.type || 'worker'}
-                  </Typography>
-                </Box>
-                <Chip
-                  size="small"
-                  label={node?.status || 'active'}
-                  color={(node?.status || 'active') === 'active' ? 'success' : 'error'}
-                  sx={{ height: 18, fontSize: 10 }}
-                />
-              </Box>
-              {i < nodes.length - 1 && <Divider />}
-            </Box>
-          ))
-        )}
-      </CardContent>
-    </Card>
-  )
-}
 
-// ─── Recent Critical Alerts ───────────────────────────────────────────────────
-function RecentCriticalAlerts({ alerts = [], loading, onRowClick }) {
-  const navigate = useNavigate()
-
-  const criticalAlerts = alerts
-    .filter(a => {
-      const level = Number(a['rule.level'] || a?.rule?.level || 0)
-      return level >= 12
-    })
-    .slice(0, 8)
-
-  return (
-    <Card sx={{ height: '100%' }}>
-      <CardContent sx={{ p: '14px 16px !important' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ErrorOutlineIcon sx={{ fontSize: 16, color: '#ef4444' }} />
-            <Typography variant="subtitle2" fontWeight={600} fontSize={13}>
-              แจ้งเตือนล่าสุด (Critical/High)
+          {isLoading ? (
+            <Skeleton width={56} height={34} />
+          ) : (
+            <Typography sx={{ fontSize: { xs: '1.4rem', sm: '1.6rem', md: '1.8rem' }, fontWeight: 900, color: m.color, lineHeight: 1, letterSpacing: '-0.03em', position: 'relative', zIndex: 1 }}>
+              {N(vals[m.key])}
             </Typography>
+          )}
+
+          <Box className="flex items-end justify-between mt-1.5">
+            <Typography sx={{ fontSize: 9, color: 'text.disabled' }}>
+              {m.key !== 'total' && total > 0 ? `${((vals[m.key]/total)*100).toFixed(1)}%` : 'alerts'}
+            </Typography>
+            {!isLoading && <Spark data={tl} color={m.color} w={60} h={22} />}
           </Box>
-          <Tooltip title="ดูทั้งหมด">
-            <IconButton size="small" onClick={() => navigate('/alerts')} sx={{ borderRadius: 1.5 }}>
-              <OpenInNewIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-            </IconButton>
-          </Tooltip>
         </Box>
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} height={28} sx={{ mb: 0.5 }} />)
-        ) : criticalAlerts.length === 0 ? (
-          <Alert severity="success" sx={{ fontSize: 12, py: 0.5 }}>
-            ไม่มี Critical/High alerts ล่าสุด ✓
-          </Alert>
-        ) : (
-          <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontSize: 10, fontWeight: 700, py: 0.5, color: 'text.disabled', textTransform: 'uppercase' }}>เวลา</TableCell>
-                  <TableCell sx={{ fontSize: 10, fontWeight: 700, py: 0.5, color: 'text.disabled', textTransform: 'uppercase' }}>ระดับ</TableCell>
-                  <TableCell sx={{ fontSize: 10, fontWeight: 700, py: 0.5, color: 'text.disabled', textTransform: 'uppercase' }}>คำอธิบาย</TableCell>
-                  <TableCell sx={{ fontSize: 10, fontWeight: 700, py: 0.5, color: 'text.disabled', textTransform: 'uppercase' }}>Source</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {criticalAlerts.map((a, i) => {
-                  const level = Number(a['rule.level'] || a?.rule?.level || 0)
-                  const isCritical = level >= 15
-                  return (
-                    <TableRow
-                      key={i}
-                      hover
-                      onClick={() => onRowClick && onRowClick(a)}
-                      sx={{
-                        cursor: 'pointer',
-                        bgcolor: isCritical ? 'rgba(239,68,68,0.06)' : 'transparent',
-                        '&:hover': { bgcolor: isCritical ? 'rgba(239,68,68,0.1)' : 'action.hover' },
-                        animation: isCritical && i === 0 ? 'pulse-critical 3s ease-in-out 1' : 'none',
-                      }}
-                    >
-                      <TableCell sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', whiteSpace: 'nowrap', py: 0.7 }}>
-                        {a['@timestamp'] ? format(new Date(a['@timestamp']), 'HH:mm:ss') : '-'}
-                      </TableCell>
-                      <TableCell sx={{ py: 0.7 }}>
-                        <Chip
-                          label={isCritical ? `${level} CRIT` : `${level} HIGH`}
-                          size="small"
-                          sx={{
-                            bgcolor: isCritical ? '#ef4444' : '#f59e0b',
-                            color: '#fff', fontSize: 10, height: 18, fontWeight: 700,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 11, maxWidth: 200, py: 0.7 }} className="line-clamp-2">
-                        {a['rule.description'] || a?.rule?.description || '-'}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono", monospace', py: 0.7 }}>
-                        {a['data.srcip'] || a?.data?.srcip || '-'}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+      ))}
+    </div>
   )
 }
 
-// ─── Auto-Refresh Indicator ───────────────────────────────────────────────────
-function AutoRefreshIndicator({ paused, onToggle, countdown }) {
+// ─── Timeline chart ───────────────────────────────────────────────────────────
+function Timeline({ data = [], isLoading, isDark }) {
+  if (isLoading) return <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
+  if (!data.length) return (
+    <Box className="flex flex-col items-center justify-center h-56 gap-2">
+      <BarChart size={40} style={{ opacity: 0.2 }} />
+      <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>ยังไม่มีข้อมูล Timeline</Typography>
+    </Box>
+  )
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-      <Tooltip title={paused ? 'เปิดรีเฟรชอัตโนมัติ' : 'หยุดรีเฟรชอัตโนมัติ'}>
-        <IconButton size="small" onClick={onToggle} sx={{ borderRadius: 1.5 }}>
-          {paused
-            ? <PlayCircleOutlineIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-            : <PauseCircleOutlineIcon sx={{ fontSize: 18, color: 'primary.main' }} />
-          }
-        </IconButton>
-      </Tooltip>
-      {!paused && (
-        <Typography variant="caption" sx={{ fontSize: 10, color: 'text.disabled', fontFamily: '"IBM Plex Mono", monospace' }}>
-          {countdown}s
-        </Typography>
-      )}
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={data} margin={{ top: 4, right: 2, left: -26, bottom: 0 }}>
+        <defs>
+          {[
+            ['gt', B.purple, 0.18], ['gc', B.red, 0.45],
+            ['gh', B.orange, 0.35], ['gm', B.yellow, 0.25],
+          ].map(([id, c, o]) => (
+            <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"   stopColor={c} stopOpacity={o} />
+              <stop offset="95%"  stopColor={c} stopOpacity={0} />
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(123,91,164,0.08)' : 'rgba(123,91,164,0.07)'} vertical={false} />
+        <XAxis dataKey="time" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
+          tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return '' } }}
+          interval="preserveStartEnd" />
+        <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={N} />
+        <RechartTip contentStyle={TIP} formatter={(v, n) => [N(v), n]}
+          labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
+        <Area type="monotone" dataKey="total"    name="Total"    stroke={B.purple} strokeWidth={2.5} fill="url(#gt)" dot={false} />
+        <Area type="monotone" dataKey="critical" name="Critical" stroke={B.red}    strokeWidth={1.5} fill="url(#gc)" dot={false} />
+        <Area type="monotone" dataKey="high"     name="High"     stroke={B.orange} strokeWidth={1.5} fill="url(#gh)" dot={false} />
+        <Area type="monotone" dataKey="medium"   name="Medium"   stroke={B.yellow} strokeWidth={1}   fill="url(#gm)" dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+// ─── Panel wrapper ────────────────────────────────────────────────────────────
+function Panel({ title, icon, iconColor, action, children, accent, className = '' }) {
+  return (
+    <Box className={`rounded-2xl overflow-hidden flex flex-col ${className}`}
+      sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', height: '100%' }}>
+      <Box className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+        sx={{ borderBottom: '1px solid', borderColor: 'divider',
+          ...(accent ? { borderLeft: `3px solid ${accent}`, background: `linear-gradient(90deg, ${accent}0A 0%, transparent 60%)` } : {}) }}>
+        <Box className="flex items-center gap-2">
+          {icon && <Box sx={{ color: iconColor || B.purple, display: 'flex', fontSize: 17 }}>{icon}</Box>}
+          <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{title}</Typography>
+        </Box>
+        {action}
+      </Box>
+      <Box className="flex-1 overflow-auto" sx={{ p: 2 }}>
+        {children}
+      </Box>
     </Box>
   )
 }
 
-// ─── Dashboard Page ───────────────────────────────────────────────────────────
-export default function DashboardPage() {
-  const theme = useTheme()
+// ─── Top-N horizontal bar ────────────────────────────────────────────────────
+function HBar({ items = [], isLoading, limit = 8, colorFn, mono }) {
+  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
+  if (!items.length) return (
+    <Box className="flex flex-col items-center justify-center py-6 gap-1">
+      <GppBadRoundedIcon sx={{ fontSize: 28, color: 'text.disabled', opacity: 0.3 }} />
+      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+    </Box>
+  )
+  const max = Math.max(...items.map(i => i.count), 1)
+  return (
+    <div className="flex flex-col gap-2">
+      {items.slice(0, limit).map((item, i) => {
+        const pct = Math.round((item.count / max) * 100)
+        const color = colorFn ? colorFn(i, item) : B.purple
+        return (
+          <div key={item.name || i}>
+            <div className="flex items-center justify-between mb-1">
+              <Typography sx={{ color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '78%',
+                fontFamily: mono ? '"IBM Plex Mono",monospace' : 'inherit', fontSize: mono ? 10.5 : 11 }}>
+                {item.name || 'Unknown'}
+              </Typography>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color, ml: 1, flexShrink: 0 }}>
+                {N(item.count)}
+              </Typography>
+            </div>
+            <Box sx={{ height: 5, borderRadius: 3, bgcolor: `${color}18`, overflow: 'hidden' }}>
+              <Box sx={{
+                height: '100%', width: `${pct}%`, borderRadius: 3,
+                background: `linear-gradient(90deg, ${color} 0%, ${color}90 100%)`,
+                transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)',
+                boxShadow: `0 0 8px ${color}50`,
+              }} />
+            </Box>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Source donut ────────────────────────────────────────────────────────────
+function SourceDonut({ data = [], isLoading }) {
+  if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+  if (!data.length) return (
+    <Box className="flex flex-col items-center justify-center h-48 gap-2">
+      <RouterRoundedIcon sx={{ fontSize: 32, color: 'text.disabled', opacity: 0.3 }} />
+      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ยังไม่มีข้อมูล Log Source</Typography>
+    </Box>
+  )
+  const pd = data.slice(0, 7).map(s => ({ name: s.name?.split('-')[0] || s.name || '?', value: s.count }))
+  return (
+    <div>
+      <ResponsiveContainer width="100%" height={160}>
+        <PieChart>
+          <Pie data={pd} dataKey="value" cx="50%" cy="50%" outerRadius={65} innerRadius={32} paddingAngle={3}>
+            {pd.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} stroke="transparent" />)}
+          </Pie>
+          <RechartTip contentStyle={TIP} formatter={v => [N(v), 'alerts']} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="flex flex-col gap-1.5 mt-1">
+        {pd.map((item, i) => (
+          <div key={item.name} className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: PIE[i%PIE.length], flexShrink: 0 }} />
+              <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{item.name}</Typography>
+            </div>
+            <Typography sx={{ fontSize: 10, fontWeight: 700, color: PIE[i%PIE.length] }}>{N(item.value)}</Typography>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── MITRE tactics ────────────────────────────────────────────────────────────
+const TACTIC_COLORS = {
+  'initial-access': B.red, 'execution': B.red, 'persistence': B.orange,
+  'privilege-escalation': B.orange, 'defense-evasion': B.yellow,
+  'credential-access': B.yellow, 'discovery': B.green,
+  'lateral-movement': B.sky, 'collection': B.sky,
+  'command-and-control': '#A855F7', 'exfiltration': '#A855F7', 'impact': B.pink,
+}
+function MitreTactics({ data = [], isLoading }) {
+  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
+  if (!data.length) return (
+    <Box className="flex flex-col items-center justify-center py-6 gap-1">
+      <SecurityRoundedIcon sx={{ fontSize: 28, color: 'text.disabled', opacity: 0.3 }} />
+      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่พบ MITRE mapping ในข้อมูลนี้</Typography>
+      <Typography sx={{ fontSize: 10, color: 'text.disabled', opacity: 0.6 }}>ตรวจสอบการตั้งค่า rule groups</Typography>
+    </Box>
+  )
+  const max = Math.max(...data.map(d => d.count), 1)
+  return (
+    <div className="flex flex-col gap-2">
+      {data.slice(0,8).map(item => {
+        const color = TACTIC_COLORS[item.name.toLowerCase()] || B.purple
+        const pct = Math.round((item.count/max)*100)
+        return (
+          <div key={item.name}>
+            <div className="flex items-center justify-between mb-0.5">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 5px ${color}90`, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 11, color: 'text.secondary', textTransform: 'capitalize' }}>{item.name}</Typography>
+              </Box>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color }}>{N(item.count)}</Typography>
+            </div>
+            <Box sx={{ height: 4, borderRadius: 2, bgcolor: `${color}18` }}>
+              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 2, bgcolor: color, transition: 'width 0.6s ease', boxShadow: `0 0 6px ${color}50` }} />
+            </Box>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Cluster health ────────────────────────────────────────────────────────────
+function ClusterStatus({ cluster }) {
+  let nodes = []
+  if (cluster) {
+    if (Array.isArray(cluster.data?.affected_items))  nodes = cluster.data.affected_items
+    else if (Array.isArray(cluster?.affected_items))   nodes = cluster.affected_items
+    else if (cluster && !cluster.error && typeof cluster === 'object') {
+      nodes = [{ name: cluster.node || 'Manager', status: 'active', type: 'master' }]
+    }
+  }
+  if (!nodes.length) return (
+    <Box className="flex flex-col gap-2">
+      {cluster?.error
+        ? <Alert severity="warning" sx={{ fontSize: 11, py: 0.5 }}>ไม่สามารถเชื่อมต่อ Wazuh API</Alert>
+        : Array.from({length:2}).map((_,i) => <Skeleton key={i} height={40} sx={{ borderRadius: 1.5 }} />)
+      }
+    </Box>
+  )
+  return (
+    <div className="flex flex-col gap-2">
+      {nodes.map((node, i) => {
+        const ok = (node?.status||'active') === 'active'
+        return (
+          <Box key={node?.name||i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+            sx={{ bgcolor: ok ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)', border: `1px solid ${ok ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+            <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: ok ? B.green : B.red, flexShrink: 0,
+              boxShadow: `0 0 8px ${ok ? 'rgba(34,197,94,0.8)' : 'rgba(239,68,68,0.8)'}`,
+              animation: ok ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>{node?.name||`Node ${i+1}`}</Typography>
+              <Typography sx={{ fontSize: 10, color: 'text.disabled', textTransform: 'capitalize' }}>{node?.type||'worker'}</Typography>
+            </Box>
+            <Chip label={ok?'Active':'Down'} size="small" color={ok?'success':'error'}
+              sx={{ height: 18, fontSize: 9, fontWeight: 700, '& .MuiChip-label':{px:0.75} }} />
+          </Box>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Agents mini panel ────────────────────────────────────────────────────────
+function AgentsMini({ agentData, isLoading }) {
   const navigate = useNavigate()
+  if (isLoading) return <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
+  if (!agentData || agentData.error) return <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่สามารถดึงข้อมูล Agent</Typography>
+  const { total=0, active=0, disconnected=0, never_connected=0 } = agentData
+  const bars = [
+    { label: 'Active', count: active, color: B.green },
+    { label: 'Disconnected', count: disconnected, color: B.red },
+    { label: 'Never seen', count: never_connected, color: '#9A90BF' },
+  ]
+  return (
+    <div>
+      <div className="flex items-center gap-4 mb-3">
+        <div className="text-center">
+          <Typography sx={{ fontSize: 28, fontWeight: 900, color: B.purple, lineHeight: 1 }}>{total}</Typography>
+          <Typography sx={{ fontSize: 9, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total</Typography>
+        </div>
+        <div className="flex-1 flex flex-col gap-1">
+          {bars.map(b => (
+            <div key={b.label} className="flex items-center gap-2">
+              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: b.color, flexShrink: 0,
+                boxShadow: b.count > 0 ? `0 0 5px ${b.color}80` : 'none' }} />
+              <Typography sx={{ fontSize: 10, color: 'text.secondary', flex: 1 }}>{b.label}</Typography>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: b.color }}>{b.count}</Typography>
+            </div>
+          ))}
+        </div>
+      </div>
+      {agentData.by_os?.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-2 border-t" style={{ borderColor: 'rgba(123,91,164,0.15)' }}>
+          {agentData.by_os.slice(0,4).map(os => (
+            <Chip key={os.name} label={`${os.name} ${os.count}`} size="small"
+              sx={{ height: 18, fontSize: 9, bgcolor: 'rgba(123,91,164,0.1)', color: B.purpleL }} />
+          ))}
+        </div>
+      )}
+      <Button size="small" onClick={() => navigate('/assets')}
+        sx={{ mt: 1.5, fontSize: 11, color: B.purpleL, p: 0, textTransform: 'none',
+          '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}>
+        ดูทั้งหมด {total} agents →
+      </Button>
+    </div>
+  )
+}
+
+// ─── Recent critical alerts ───────────────────────────────────────────────────
+function RecentAlerts({ alerts = [], isLoading }) {
+  const navigate = useNavigate()
+  const { enqueueSnackbar } = useSnackbar()
+  const top = alerts.filter(a => Number(a['rule.level']||a?.rule?.level||0) >= 12).slice(0,12)
+  if (isLoading) return <div className="flex flex-col gap-1.5">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={44} sx={{borderRadius:1.5}}/>)}</div>
+  if (!top.length) return (
+    <Box className="flex flex-col items-center justify-center py-8 gap-2">
+      <CheckCircleRoundedIcon sx={{ fontSize: 36, color: B.green, opacity: 0.7 }} />
+      <Typography sx={{ fontSize: 13, fontWeight: 600, color: 'text.secondary' }}>ระบบปลอดภัย</Typography>
+      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีการแจ้งเตือนระดับสูงในช่วงนี้</Typography>
+    </Box>
+  )
+  return (
+    <Box sx={{ maxHeight: 420, overflow: 'auto' }} className="scrollbar-thin">
+      <Table size="small" stickyHeader>
+        <TableHead>
+          <TableRow>
+            {['เวลา','Lv','คำอธิบาย','Source IP','Agent'].map(h => (
+              <TableCell key={h} sx={{ fontSize: 9, fontWeight: 800, py: 0.85, color: 'text.disabled',
+                textTransform: 'uppercase', letterSpacing: '0.07em', bgcolor: 'background.paper', whiteSpace: 'nowrap' }}>{h}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {top.map((a, i) => {
+            const lv   = Number(a['rule.level']||a?.rule?.level||0)
+            const clr  = LC(lv)
+            const srcip = a['data.srcip']||a?.data?.srcip
+            return (
+              <TableRow key={i} hover onClick={() => navigate('/alerts')} sx={{
+                cursor: 'pointer',
+                borderLeft: `3px solid ${lv >= 15 ? B.red : B.orange}`,
+                bgcolor: lv >= 15 ? 'rgba(239,68,68,0.04)' : 'transparent',
+                '&:hover': { bgcolor: 'rgba(123,91,164,0.06)' },
+              }}>
+                <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1, color: 'text.secondary' }}>
+                  {a['@timestamp'] ? format(new Date(a['@timestamp']), 'HH:mm:ss') : '—'}
+                </TableCell>
+                <TableCell sx={{ py: 1 }}>
+                  <Chip label={`${lv} ${LL(lv)}`} size="small" sx={{
+                    height: 19, fontSize: 9, fontWeight: 800,
+                    bgcolor: `${clr}20`, color: clr, border: `1px solid ${clr}35`,
+                    '& .MuiChip-label': { px: 0.75 },
+                    animation: lv >= 15 && i === 0 ? 'pulse-critical 2.5s ease-in-out infinite' : 'none',
+                  }} />
+                </TableCell>
+                <TableCell sx={{ py: 1, maxWidth: 280 }}>
+                  <Typography sx={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                    {a['rule.description']||a?.rule?.description||'—'}
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ py: 1 }}>
+                  {srcip ? (
+                    <Box className="flex items-center gap-1">
+                      <Typography sx={{ fontSize: 10.5, fontFamily: '"IBM Plex Mono"', color: B.purpleL,
+                        cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                        onClick={e => { e.stopPropagation(); navigate(`/investigate?q=${srcip}`) }}>
+                        {srcip}
+                      </Typography>
+                      <IconButton size="small"
+                        onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(srcip); enqueueSnackbar('คัดลอกแล้ว', { variant: 'info', autoHideDuration: 1500 }) }}
+                        sx={{ opacity: 0.4, '&:hover': { opacity: 1 }, p: 0.3 }}>
+                        <ContentCopyRoundedIcon sx={{ fontSize: 11 }} />
+                      </IconButton>
+                    </Box>
+                  ) : <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>}
+                </TableCell>
+                <TableCell sx={{ fontSize: 10.5, py: 1, color: 'text.secondary' }}>
+                  {a['agent.name']||a?.agent?.name||'—'}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </Box>
+  )
+}
+
+// ─── Countries panel ──────────────────────────────────────────────────────────
+function CountriesPanel({ countries = [], isLoading }) {
+  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
+  if (!countries.length) return (
+    <Box className="flex flex-col items-center py-6 gap-1">
+      <PublicRoundedIcon sx={{ fontSize: 28, color: 'text.disabled', opacity: 0.3 }} />
+      <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีข้อมูล GeoIP</Typography>
+    </Box>
+  )
+  const max = Math.max(...countries.map(c => c.count), 1)
+  return (
+    <div className="flex flex-col gap-2">
+      {countries.slice(0,8).map((c, i) => {
+        const pct = Math.round((c.count/max)*100)
+        const color = i < 3 ? B.red : i < 6 ? B.orange : B.purple
+        return (
+          <div key={c.name}>
+            <div className="flex justify-between items-center mb-0.5">
+              <Typography sx={{ fontSize: 11, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+                {c.name||'Unknown'}
+              </Typography>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color, ml: 1, flexShrink: 0 }}>{N(c.count)}</Typography>
+            </div>
+            <Box sx={{ height: 5, borderRadius: 2.5, bgcolor: `${color}15`, overflow: 'hidden' }}>
+              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 2.5,
+                background: `linear-gradient(90deg, ${color} 0%, ${color}80 100%)`,
+                transition: 'width 0.7s ease', boxShadow: `0 0 8px ${color}40` }} />
+            </Box>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Main Dashboard ────────────────────────────────────────────────────────────
+export default function DashboardPage() {
+  const navigate = useNavigate()
+  const qc       = useQueryClient()
+  const theme    = useTheme()
+  const isDark   = theme.palette.mode === 'dark'
+
   const [timeRange, setTimeRange] = useState('24h')
-  const [autoRefreshPaused, setAutoRefreshPaused] = useState(false)
+  const [paused, setPaused]       = useState(false)
   const [countdown, setCountdown] = useState(30)
 
-  const refreshInterval = autoRefreshPaused ? false : AUTO_REFRESH_MS
+  const refetchInterval = paused ? false : AUTO_MS
 
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats', timeRange],
-    queryFn: () => dashboardApi.stats(timeRange).then(r => r.data),
-    refetchInterval: refreshInterval,
-  })
-  const { data: cluster } = useQuery({
-    queryKey: ['cluster'],
-    queryFn: () => dashboardApi.cluster().then(r => r.data),
-    refetchInterval: 120000,
-  })
-  const { data: recentAlerts = [], isLoading: alertsLoading } = useQuery({
-    queryKey: ['recent-critical-alerts'],
-    queryFn: () => alertsApi.list({ level: 12, limit: 20, time_range: '24h' }).then(r => r.data),
-    refetchInterval: refreshInterval,
-  })
+  const { data: stats, isLoading }     = useQuery({ queryKey: ['dash-stats', timeRange], queryFn: () => dashboardApi.stats(timeRange).then(r=>r.data), refetchInterval, staleTime: 15000 })
+  const { data: cluster }              = useQuery({ queryKey: ['dash-cluster'],            queryFn: () => dashboardApi.cluster().then(r=>r.data),                refetchInterval: 120000, staleTime: 60000 })
+  const { data: agentData, isLoading: agentLoading } = useQuery({ queryKey: ['dash-agents'], queryFn: () => dashboardApi.agents().then(r=>r.data), refetchInterval: 60000, staleTime: 30000 })
+  const { data: recentAlerts = [], isLoading: alertsLoading } = useQuery({ queryKey: ['dash-recent'], queryFn: () => alertsApi.list({ level: 12, limit: 30, time_range: '24h' }).then(r=>r.data), refetchInterval, staleTime: 15000 })
 
-  // Countdown timer
   useEffect(() => {
-    if (autoRefreshPaused) return
+    if (paused) return
     setCountdown(30)
-    const id = setInterval(() => {
-      setCountdown(c => c <= 1 ? 30 : c - 1)
-    }, 1000)
+    const id = setInterval(() => setCountdown(c => c <= 1 ? 30 : c - 1), 1000)
     return () => clearInterval(id)
-  }, [autoRefreshPaused, timeRange])
+  }, [paused, timeRange])
 
-  const total = (stats?.critical || 0) + (stats?.high || 0) + (stats?.medium || 0) + (stats?.low || 0)
+  const doRefresh = () => {
+    qc.invalidateQueries({ queryKey: ['dash-stats'] })
+    qc.invalidateQueries({ queryKey: ['dash-recent'] })
+    qc.invalidateQueries({ queryKey: ['dash-agents'] })
+    setCountdown(30)
+  }
 
-  const pieData = (stats?.by_source || [])
-    .slice(0, 6)
-    .map(s => ({ name: s.name?.split('-')[0] || 'unknown', value: s.count }))
-
-  const timelineData = (stats?.timeline || []).map(t => ({
-    time: t.time ? format(new Date(t.time), 'HH:mm', { locale: th }) : '',
-    count: t.count,
-  }))
-
+  const tl        = stats?.timeline   || []
   const countries = stats?.by_country || []
+  const eps       = stats?.eps        || 0
 
-  // Calculate mock trend (compare first half vs second half of timeline)
-  const calcTrend = useCallback(() => {
-    if (!stats?.timeline || stats.timeline.length < 2) return { value: 0, direction: 'flat' }
-    const mid = Math.floor(stats.timeline.length / 2)
-    const firstHalf = stats.timeline.slice(0, mid).reduce((s, t) => s + t.count, 0)
-    const secondHalf = stats.timeline.slice(mid).reduce((s, t) => s + t.count, 0)
-    if (firstHalf === 0) return { value: 0, direction: 'flat' }
-    const pct = Math.round(((secondHalf - firstHalf) / firstHalf) * 100)
-    return { value: pct, direction: pct > 5 ? 'up' : pct < -5 ? 'down' : 'flat' }
-  }, [stats?.timeline])
-
-  const overallTrend = calcTrend()
+  const TIME_OPTS = [
+    {v:'1h',l:'1 ชั่วโมง'},{v:'6h',l:'6 ชั่วโมง'},
+    {v:'24h',l:'24 ชั่วโมง'},{v:'7d',l:'7 วัน'},{v:'30d',l:'30 วัน'},
+  ]
 
   return (
-    <Box className="page-enter">
-      {/* Page header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
-        <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>แดชบอร์ดภาพรวม</Typography>
-          <Typography variant="caption" color="text.secondary">
-            Security Operations Center — โรงพยาบาลวลัยลักษณ์
+    <Box className="page-enter flex flex-col gap-3 md:gap-4">
+
+      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <Typography sx={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2 }}>ภาพรวมระบบ</Typography>
+            {/* Live/Paused pill */}
+            <Box className="flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer"
+              onClick={() => setPaused(p => !p)}
+              sx={{ bgcolor: paused ? 'rgba(123,91,164,0.1)' : 'rgba(34,197,94,0.1)',
+                border: `1.5px solid ${paused ? 'rgba(123,91,164,0.3)' : 'rgba(34,197,94,0.35)'}`,
+                transition: 'all 0.2s', '&:hover': { opacity: 0.8 } }}>
+              <FiberManualRecordIcon sx={{ fontSize: 8, color: paused ? '#9A90BF' : B.green,
+                animation: paused ? 'none' : 'pulseGlow 2.5s ease-in-out infinite' }} />
+              <Typography sx={{ fontSize: 11, fontWeight: 800, color: paused ? '#9A90BF' : B.green }}>
+                {paused ? 'PAUSED' : 'LIVE'}
+              </Typography>
+              {!paused && (
+                <Typography sx={{ fontSize: 10, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', ml: 0.5 }}>
+                  {countdown}s
+                </Typography>
+              )}
+            </Box>
+            {/* EPS */}
+            {eps > 0 && (
+              <Box className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+                sx={{ bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.2)' }}>
+                <BoltRoundedIcon sx={{ fontSize: 13, color: B.purple }} />
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: B.purpleL }}>
+                  {eps} <span style={{ fontWeight: 400, fontSize: 10 }}>EPS</span>
+                </Typography>
+              </Box>
+            )}
+          </div>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.4 }}>
+            Security Operations Center · โรงพยาบาลวลัยลักษณ์
           </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AutoRefreshIndicator
-            paused={autoRefreshPaused}
-            onToggle={() => setAutoRefreshPaused(p => !p)}
-            countdown={countdown}
-          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Tooltip title="รีเฟรชทันที">
+            <IconButton size="small" onClick={doRefresh}
+              sx={{ bgcolor: 'rgba(123,91,164,0.08)', borderRadius: '9px', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}>
+              <RefreshRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+            </IconButton>
+          </Tooltip>
           <FormControl size="small" sx={{ minWidth: 130 }}>
-            <Select
-              value={timeRange}
-              onChange={e => setTimeRange(e.target.value)}
-              sx={{ fontSize: 13, borderRadius: 2 }}
-            >
-              <MenuItem value="1h">1 ชั่วโมง</MenuItem>
-              <MenuItem value="6h">6 ชั่วโมง</MenuItem>
-              <MenuItem value="24h">24 ชั่วโมง</MenuItem>
-              <MenuItem value="7d">7 วัน</MenuItem>
-              <MenuItem value="30d">30 วัน</MenuItem>
+            <Select value={timeRange} onChange={e => setTimeRange(e.target.value)} sx={{ fontSize: 13, borderRadius: '10px' }}>
+              {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
             </Select>
           </FormControl>
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      {/* Metric Cards */}
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
-        <Grid item xs={6} sm={4} md={2.4}>
-          <MetricCard
-            title="รวมทั้งหมด"
-            value={total}
-            icon={<StorageIcon sx={{ color: '#6366f1', fontSize: 20 }} />}
-            color="#6366f1"
-            loading={isLoading}
-            subtitle="alerts"
-            trend={overallTrend.direction}
-            trendValue={overallTrend.value}
-          />
-        </Grid>
-        <Grid item xs={6} sm={4} md={2.4}>
-          <MetricCard
-            title="Critical"
-            value={stats?.critical}
-            icon={<NotificationsActiveIcon sx={{ color: LEVEL_COLORS.critical, fontSize: 20 }} />}
-            color={LEVEL_COLORS.critical}
-            loading={isLoading}
-            subtitle="ระดับ 15+"
-          />
-        </Grid>
-        <Grid item xs={6} sm={4} md={2.4}>
-          <MetricCard
-            title="High"
-            value={stats?.high}
-            icon={<WarningAmberIcon sx={{ color: LEVEL_COLORS.high, fontSize: 20 }} />}
-            color={LEVEL_COLORS.high}
-            loading={isLoading}
-            subtitle="ระดับ 12–14"
-          />
-        </Grid>
-        <Grid item xs={6} sm={4} md={2.4}>
-          <MetricCard
-            title="Medium"
-            value={stats?.medium}
-            icon={<InfoOutlinedIcon sx={{ color: LEVEL_COLORS.medium, fontSize: 20 }} />}
-            color={LEVEL_COLORS.medium}
-            loading={isLoading}
-            subtitle="ระดับ 7–11"
-          />
-        </Grid>
-        <Grid item xs={6} sm={4} md={2.4}>
-          <MetricCard
-            title="Low"
-            value={stats?.low}
-            icon={<CheckCircleIcon sx={{ color: LEVEL_COLORS.low, fontSize: 20 }} />}
-            color={LEVEL_COLORS.low}
-            loading={isLoading}
-            subtitle="ระดับ 1–6"
-          />
-        </Grid>
-      </Grid>
+      {/* ══ ROW 1: Metric Hero Strip ═════════════════════════════════════════ */}
+      <MetricHero stats={stats} isLoading={isLoading} tl={tl} navigate={navigate} />
 
-      {/* Charts row */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        {/* Timeline chart */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent sx={{ p: '14px 16px !important' }}>
-              <Typography variant="subtitle2" fontWeight={600} mb={1.5} fontSize={13}>
-                แนวโน้ม Alert ตามเวลา
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />
-              ) : (
-                <ResponsiveContainer width="100%" height={210}>
-                  <AreaChart data={timelineData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="alertGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.25} />
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <RechartTooltip
-                      contentStyle={ChartTooltipStyle}
-                      formatter={v => [v.toLocaleString(), 'Alerts']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      fill="url(#alertGrad)"
-                      dot={false}
-                      activeDot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* ══ ROW 2: Timeline (left 2/3) + Sources+Countries (right 1/3) ══════ */}
+      <div className="grid grid-cols-12 gap-3 md:gap-4">
+        {/* Timeline */}
+        <div className="col-span-12 lg:col-span-8">
+          <Panel
+            title="แนวโน้ม Alert ตามเวลา"
+            icon={<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.5l6-6 4 4 7-8"/><path d="M3.5 18.5l6-6 4 4 7-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            action={
+              <div className="flex items-center gap-3">
+                {[['Total',B.purple],['Critical',B.red],['High',B.orange],['Medium',B.yellow]].map(([l,c]) => (
+                  <div key={l} className="flex items-center gap-1">
+                    <Box sx={{ width: 12, height: 3, borderRadius: 1.5, bgcolor: c }} />
+                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l}</Typography>
+                  </div>
+                ))}
+              </div>
+            }
+          >
+            <Timeline data={tl} isLoading={isLoading} isDark={isDark} />
+          </Panel>
+        </div>
 
-        {/* Source pie chart */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ p: '14px 16px !important' }}>
-              <Typography variant="subtitle2" fontWeight={600} mb={1.5} fontSize={13}>
-                แหล่งที่มา Log (Top 6)
-              </Typography>
-              {isLoading ? (
-                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />
-              ) : pieData.length === 0 ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-                  <Typography variant="caption" color="text.disabled">ไม่มีข้อมูล</Typography>
-                </Box>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%" cy="50%"
-                      outerRadius={65}
-                      innerRadius={30}
-                      paddingAngle={2}
-                    >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />
-                      ))}
-                    </Pie>
-                    <RechartTooltip
-                      contentStyle={ChartTooltipStyle}
-                      formatter={v => [v.toLocaleString(), 'Alerts']}
-                    />
-                    <Legend
-                      iconType="circle"
-                      iconSize={8}
-                      formatter={v => <span style={{ fontSize: 11, color: '#94a3b8' }}>{v}</span>}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+        {/* Sources */}
+        <div className="col-span-12 lg:col-span-4">
+          <Panel title="แหล่งที่มา Log" icon={<RouterRoundedIcon sx={{ fontSize: 16 }} />}>
+            <SourceDonut data={stats?.by_source||[]} isLoading={isLoading} />
+          </Panel>
+        </div>
+      </div>
 
-      {/* Row 3: WorldMap + Cluster */}
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        {/* World Map — Attack Origins */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent sx={{ p: '14px 16px !important' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <PublicIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="subtitle2" fontWeight={600} fontSize={13}>
-                  แผนที่โจมตีทั่วโลก
-                </Typography>
-                {countries.length > 0 && (
-                  <Chip size="small" label={`${countries.length} ประเทศ`} color="primary" sx={{ height: 18, fontSize: 10 }} />
-                )}
-              </Box>
-              <Box sx={{ height: 300, borderRadius: 1, overflow: 'hidden' }}>
-                <WorldMap countries={countries} loading={isLoading} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* ══ ROW 3: Countries · Rules · MITRE · Agents ════════════════════════ */}
+      <div className="grid grid-cols-12 gap-3 md:gap-4">
+        {/* Countries */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3">
+          <Panel title="ประเทศต้นทางโจมตี" icon={<PublicRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
+            <CountriesPanel countries={countries} isLoading={isLoading} />
+          </Panel>
+        </div>
 
-        {/* Cluster health */}
-        <Grid item xs={12} md={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
-            <ClusterCard cluster={cluster} />
+        {/* Top Rules */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3">
+          <Panel
+            title="Rule ที่พบบ่อยสุด"
+            icon={<ShieldRoundedIcon sx={{ fontSize: 16 }} />}
+            accent={B.orange}
+            action={
+              <Tooltip title="ดูใน Alerts">
+                <IconButton size="small" onClick={() => navigate('/alerts')}>
+                  <OpenInNewRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                </IconButton>
+              </Tooltip>
+            }
+          >
+            <HBar items={stats?.by_rule||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.red:i<3?B.orange:B.purple} mono />
+          </Panel>
+        </div>
 
-            {/* Top countries compact */}
-            <Card sx={{ flex: 1 }}>
-              <CardContent sx={{ p: '14px 16px !important' }}>
-                <Typography variant="subtitle2" fontWeight={600} mb={1.5} fontSize={13}>
-                  ประเทศที่โจมตีสูงสุด (Top 10)
-                </Typography>
-                {isLoading ? (
-                  <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
-                ) : countries.length === 0 ? (
-                  <Alert severity="info" sx={{ fontSize: 12 }}>ไม่มีข้อมูล GeoLocation</Alert>
-                ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {countries.slice(0, 10).map((c, i) => {
-                      const pct = Math.min((c.count / (countries[0]?.count || 1)) * 100, 100)
-                      return (
-                        <Box key={i}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.2 }}>
-                            <Typography variant="caption" sx={{ fontSize: 11 }} noWrap>
-                              {c.name || 'Unknown'}
-                            </Typography>
-                            <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, ml: 0.5 }}>
-                              {c.count.toLocaleString()}
-                            </Typography>
-                          </Box>
-                          <LinearProgress
-                            variant="determinate"
-                            value={pct}
-                            sx={{
-                              height: 3,
-                              borderRadius: 2,
-                              mb: 0.3,
-                              bgcolor: 'action.hover',
-                              '& .MuiLinearProgress-bar': {
-                                bgcolor: i < 3 ? '#ef4444' : i < 6 ? '#f59e0b' : '#3b82f6',
-                                borderRadius: 2,
-                              },
-                            }}
-                          />
-                        </Box>
-                      )
-                    })}
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-          </Box>
-        </Grid>
-      </Grid>
+        {/* MITRE */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3">
+          <Panel title="MITRE ATT&CK" icon={<SecurityRoundedIcon sx={{ fontSize: 16 }} />} accent="#A855F7">
+            <MitreTactics data={stats?.by_mitre||[]} isLoading={isLoading} />
+          </Panel>
+        </div>
 
-      {/* Row 4: Recent Critical Alerts */}
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <RecentCriticalAlerts
-            alerts={recentAlerts}
-            loading={alertsLoading}
-            onRowClick={() => navigate('/alerts')}
-          />
-        </Grid>
-      </Grid>
+        {/* Cluster + Agents stacked */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col gap-4">
+          <Panel title="Wazuh Cluster" icon={<StorageRoundedIcon sx={{ fontSize: 16 }} />} accent={B.green}>
+            <ClusterStatus cluster={cluster} />
+          </Panel>
+          <Panel
+            title="Wazuh Agents"
+            icon={<DevicesRoundedIcon sx={{ fontSize: 16 }} />}
+            accent={B.purple}
+          >
+            <AgentsMini agentData={agentData} isLoading={agentLoading} />
+          </Panel>
+        </div>
+      </div>
+
+      {/* ══ ROW 4: World Map + Top IPs/Agents + Recent Alerts ═══════════════ */}
+      <div className="grid grid-cols-12 gap-3 md:gap-4">
+        {/* World Map */}
+        <div className="col-span-12 lg:col-span-5">
+          <Panel
+            title="แผนที่แหล่งโจมตี"
+            icon={<PublicRoundedIcon sx={{ fontSize: 16 }} />}
+            accent={B.red}
+            action={countries.length > 0 && (
+              <Chip label={`${countries.length} ประเทศ`} size="small" color="primary"
+                sx={{ height: 18, fontSize: 10, '& .MuiChip-label':{px:0.7} }} />
+            )}
+            noPad
+          >
+            <Box sx={{ height: 240, overflow: 'hidden' }}>
+              <WorldMap countries={countries} loading={isLoading} />
+            </Box>
+          </Panel>
+        </div>
+
+        {/* Top IPs + Top Agents */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col gap-4">
+          <Panel title="IP โจมตีสูงสุด" icon={<RouterRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
+            <HBar items={stats?.by_srcip||[]} isLoading={isLoading} colorFn={()=>B.red} mono limit={6} />
+          </Panel>
+          <Panel title="Agent ที่มี Alert สูง" icon={<DevicesRoundedIcon sx={{ fontSize: 16 }} />} accent={B.orange}>
+            <HBar items={stats?.by_agent||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.orange:B.purple} limit={5} />
+          </Panel>
+        </div>
+
+        {/* Recent Critical Alerts */}
+        <div className="col-span-12 sm:col-span-6 lg:col-span-4">
+          <Panel
+            title="การแจ้งเตือนล่าสุด (Critical / High)"
+            icon={<ErrorRoundedIcon sx={{ fontSize: 16, color: B.red }} />}
+            action={
+              <Button size="small" onClick={() => navigate('/alerts')}
+                endIcon={<OpenInNewRoundedIcon sx={{ fontSize: 12 }} />}
+                sx={{ fontSize: 11, color: B.purpleL, borderRadius: '8px', py: 0.4, px: 1.25, textTransform: 'none' }}>
+                ดูทั้งหมด
+              </Button>
+            }
+            noPad
+          >
+            <Box sx={{ p: 0 }}>
+              <RecentAlerts alerts={recentAlerts} isLoading={alertsLoading} />
+            </Box>
+          </Panel>
+        </div>
+      </div>
+
     </Box>
   )
 }

@@ -40,35 +40,51 @@ export const authApi = {
 }
 
 export const dashboardApi = {
-  stats: (timeRange = '24h') => api.get(`/dashboard/stats?time_range=${timeRange}`),
-  cluster: () => api.get('/dashboard/cluster'),
-  sources: (timeRange = '24h') => api.get(`/dashboard/sources?time_range=${timeRange}`),
+  stats:   (timeRange = '24h') => api.get('/dashboard/stats', { params: { time_range: timeRange } }),
+  cluster: ()                  => api.get('/dashboard/cluster'),
+  agents:  ()                  => api.get('/dashboard/agents'),
+  sources: (timeRange = '24h') => api.get('/dashboard/sources', { params: { time_range: timeRange } }),
 }
 
 export const alertsApi = {
-  list: (params = {}) => api.get('/alerts', { params }),
-  recent: (limit = 20) => api.get(`/alerts/recent?limit=${limit}`),
+  list:   (params = {}) => api.get('/alerts', { params }),
+  recent: (limit = 20, level = 7) => api.get('/alerts/recent', { params: { limit, level } }),
+  stats:  (timeRange = '24h', level = 1) => api.get('/alerts/stats', { params: { time_range: timeRange, level } }),
+  export: (params = {}) => api.get('/alerts/export', { params, responseType: 'blob' }),
 }
 
 export const investigateApi = {
-  search: (q, type = 'auto', timeRange = '30d') =>
-    api.get(`/investigate?q=${encodeURIComponent(q)}&type=${type}&time_range=${timeRange}`),
-  enrich: ip => api.get(`/investigate/enrich?ip=${ip}`),
+  search: (q, type = 'auto', timeRange = '30d', size = 500) =>
+    api.get('/investigate', { params: { q, type, time_range: timeRange, size } }),
+  enrich: ip => api.get(`/investigate/enrich?ip=${encodeURIComponent(ip)}`),
 }
 
 export const iocApi = {
-  search: q => api.get(`/ioc/search?q=${encodeURIComponent(q)}`),
-  history: (q, timeRange = '30d', limit = 100) =>
+  search:      q          => api.get(`/ioc/search?q=${encodeURIComponent(q)}`),
+  history:     (q, timeRange = '30d', limit = 100) =>
     api.get(`/ioc/history?q=${encodeURIComponent(q)}&time_range=${timeRange}&limit=${limit}`),
-  listCustom: () => api.get('/ioc/custom'),
-  addCustom: data => api.post('/ioc/custom', data),
-  deleteCustom: id => api.delete(`/ioc/custom/${id}`),
+  listCustom:  (params={}) => api.get('/ioc/custom', { params }),
+  addCustom:   data        => api.post('/ioc/custom', data),
+  deleteCustom:id          => api.delete(`/ioc/custom/${id}`),
+  stats:       ()          => api.get('/ioc/stats'),
+}
+
+function normalizeComplianceParams(input = {}) {
+  if (typeof input === 'string') {
+    return { time_range: input }
+  }
+  return input
 }
 
 export const complianceApi = {
-  summary: (timeRange = '7d') => api.get(`/compliance/summary?time_range=${timeRange}`),
-  sca: (agentId = '000') => api.get(`/compliance/sca?agent_id=${agentId}`),
-  vulnerabilities: (agentId = '000') => api.get(`/compliance/vulnerabilities?agent_id=${agentId}`),
+  summary: (params = {}) => api.get('/compliance/summary', { params: normalizeComplianceParams(params) }),
+  frameworks: (params = {}) => api.get('/compliance/frameworks', { params: normalizeComplianceParams(params) }),
+  agents: (params = {}) => api.get('/compliance/agents', { params: normalizeComplianceParams(params) }),
+  sca: (params = {}) => api.get('/compliance/sca', { params: normalizeComplianceParams(params) }),
+  vulnerabilities: (params = {}) => api.get('/compliance/vulnerabilities', { params: normalizeComplianceParams(params) }),
+  alerts: (params = {}) => api.get('/compliance/alerts', { params: normalizeComplianceParams(params) }),
+  evidence: (params = {}) => api.get('/compliance/evidence', { params: normalizeComplianceParams(params) }),
+  export: (params = {}) => api.get('/compliance/export', { params: normalizeComplianceParams(params), responseType: 'blob' }),
 }
 
 export const assetsApi = {
@@ -92,6 +108,22 @@ export const adminApi = {
   saveRule: (filename, content) =>
     api.put(`/admin/rules/${filename}`, content, { headers: { 'Content-Type': 'text/plain' } }),
   deploy: () => api.post('/admin/deploy'),
+  // Decoders
+  listDecoders: () => api.get('/admin/decoders'),
+  getDecoder: filename => api.get(`/admin/decoders/${filename}`),
+  saveDecoder: (filename, content) =>
+    api.put(`/admin/decoders/${filename}`, content, { headers: { 'Content-Type': 'text/plain' } }),
+  // CDB Lists
+  listCdbLists: () => api.get('/admin/lists'),
+  getCdbList: filename => api.get(`/admin/lists/${encodeURIComponent(filename)}`),
+  saveCdbList: (filename, content) =>
+    api.put(`/admin/lists/${encodeURIComponent(filename)}`, content, { headers: { 'Content-Type': 'text/plain' } }),
+  // Wazuh Config (ossec.conf)
+  getWazuhConfig: () => api.get('/admin/wazuh-config'),
+  saveWazuhConfig: content =>
+    api.put('/admin/wazuh-config', content, { headers: { 'Content-Type': 'text/plain' } }),
+  // System Status
+  getSystemStatus: () => api.get('/admin/system-status'),
   // Alert Tuning
   listTuning: () => api.get('/admin/tuning'),
   addTuning: data => api.post('/admin/tuning', data),
