@@ -7,7 +7,8 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts'
 import { kpiApi } from '../../services/api'
-import { KpiSummary, KpiTimelinePoint } from '../../types'
+import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../../types'
+import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
 
 interface KPICardProps {
   title: string
@@ -30,10 +31,47 @@ function KPICard({ title, value, unit, color = 'primary.main', loading }: KPICar
   )
 }
 
+function ForecastCard({ forecast, loading }: { forecast?: KpiStorageForecast; loading: boolean }) {
+  const days = forecast?.days_to_full
+  const urgency = days == null ? 'info' : days <= 14 ? 'error' : days <= 30 ? 'warning' : 'success'
+  const urgencyColor = urgency === 'error' ? '#ef4444' : urgency === 'warning' ? '#f59e0b' : urgency === 'success' ? '#22c55e' : '#3b82f6'
+
+  return (
+    <Card sx={{ border: '1px solid', borderColor: `${urgencyColor}55` }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1 }}>
+          <Typography variant="caption" color="text.secondary">ประมาณการดิสก์เต็ม</Typography>
+          <StorageRoundedIcon fontSize="small" color="action" />
+        </Box>
+        {loading ? (
+          <Skeleton height={44} />
+        ) : (
+          <Typography variant="h4" fontWeight={800} sx={{ color: urgencyColor }}>
+            {days?.toFixed(1) ?? '-'} <Typography component="span" variant="body1" color="text.secondary">days</Typography>
+          </Typography>
+        )}
+        <Typography variant="caption" color="text.secondary">
+          {forecast?.full_date ? `คาดว่าเต็มวันที่ ${forecast.full_date}` : 'ยังคำนวณไม่ได้'}
+        </Typography>
+        <Box sx={{ mt: 1, display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          <Chip size="small" label={`เฉลี่ย ${forecast?.estimated_daily_gb ?? 0} GB/day`} />
+          <Chip size="small" label={`ใช้ไป ${forecast?.usage_percent ?? 0}%`} color={urgency as any} />
+          <Chip size="small" label={`sample ${forecast?.sample_days ?? 0} วัน`} />
+        </Box>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function KPIPage() {
   const { data: summary, isLoading } = useQuery<KpiSummary>({
     queryKey: ['kpi-summary'],
     queryFn: () => kpiApi.summary().then(r => r.data),
+    refetchInterval: 300000,
+  })
+  const { data: storageForecast, isLoading: storageLoading } = useQuery<KpiStorageForecast>({
+    queryKey: ['kpi-storage-forecast'],
+    queryFn: () => kpiApi.storageForecast().then(r => r.data),
     refetchInterval: 300000,
   })
   const { data: timeline = [] } = useQuery<KpiTimelinePoint[]>({
@@ -59,6 +97,10 @@ export default function KPIPage() {
           <KPICard title="High 30 วัน" value={summary?.high_30d} unit="high alerts" color="#f59e0b" loading={isLoading} />
         </Grid>
       </Grid>
+
+      <Box sx={{ mb: 3 }}>
+        <ForecastCard forecast={storageForecast} loading={storageLoading} />
+      </Box>
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={8}>

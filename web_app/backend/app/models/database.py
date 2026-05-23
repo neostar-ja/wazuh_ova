@@ -100,24 +100,8 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     from ..core.security import get_password_hash
     db = SessionLocal()
-    if _is_placeholder_secret(settings.secret_key):
-        raise RuntimeError(
-            "SECRET_KEY must be configured with a real value before starting the web app."
-        )
-    if _is_placeholder_secret(settings.default_admin_password):
-        raise RuntimeError(
-            "DEFAULT_ADMIN_PASSWORD must be configured with a real value before starting the web app."
-        )
-    if _is_placeholder_secret(settings.wazuh_api_pass):
-        raise RuntimeError(
-            "WAZUH_API_PASS must be configured with a real value before starting the web app."
-        )
-    if _is_placeholder_secret(settings.opensearch_pass):
-        raise RuntimeError(
-            "OPENSEARCH_PASS must be configured with a real value before starting the web app."
-        )
     if not db.query(User).filter(User.username == settings.default_admin_username).first():
-        if not settings.default_admin_password:
+        if _is_placeholder_secret(settings.default_admin_password):
             raise RuntimeError(
                 "DEFAULT_ADMIN_PASSWORD is required to bootstrap the initial web app admin user."
             )

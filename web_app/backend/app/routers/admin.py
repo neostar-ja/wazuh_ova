@@ -9,6 +9,16 @@ from ..routers.auth import get_current_user
 from ..models.database import get_db, User, AuditLog, AlertTuning, AlertConfig
 from ..core.security import get_password_hash
 from ..services import wazuh_service
+from ..services.opensearch_management_service import (
+    apply_policy_to_indices,
+    build_retention_policy,
+    delete_ism_policy,
+    explain_ism_index,
+    get_ism_policy,
+    list_ism_policies,
+    list_matching_indices,
+    save_ism_policy,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -17,6 +27,15 @@ DEFAULT_CONFIG_KEYS = [
     "telegram_chat_id",
     "alert_level_threshold",
 ]
+
+
+class IsmPolicyUpsert(BaseModel):
+    index_pattern: str
+    retention_days: int = 60
+    rollover_after_days: int = 1
+    rollover_max_primary_shard_size_gb: int = 50
+    description: Optional[str] = None
+    apply_to_existing: bool = False
 
 
 def require_admin(current_user=Depends(get_current_user)):
@@ -431,6 +450,80 @@ async def save_config(
                  detail=f"keys={list(body.keys())}",
                  ip=request.client.host if request.client else None)
     return {"message": "Config saved", "keys": list(body.keys())}
+
+
+# ─── ISM Retention ────────────────────────────────────────────────────────────
+
+
+@router.get("/ism/policies")
+async def list_ism_policies_api(current_user=Depends(require_admin)):
+    try:
+        return await asyncio.to_thread(list_ism_policies)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ism/policies/{policy_id}")
+async def get_ism_policy_api(policy_id: str, current_user=Depends(require_admin)):
+    try:
+        return await asyncio.to_thread(get_ism_policy, policy_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/ism/policies/{policy_id}")
+async def save_ism_policy_api(
+    policy_id: str,
+    body: IsmPolicyUpsert,
+    current_user=Depends(require_admin),
+):
+    if body.retention_days <= 0:
+        raise HTTPException(status_code=400, detail="retention_days must be greater than 0")
+    if body.rollover_after_days <= 0:
+        raise HTTPException(status_code=400, detail="rollover_after_days must be greater than 0")
+    if body.rollover_max_primary_shard_size_gb <= 0:
+        raise HTTPException(status_code=400, detail="rollover_max_primary_shard_size_gb must be greater than 0")
+    if body.retention_days < body.rollover_after_days:
+        raise HTTPException(status_code=400, detail="retention_days must be greater than or equal to rollover_after_days")
+
+    payload = build_retention_policy(
+        policy_id=policy_id,
+        index_pattern=body.index_pattern,
+        retention_days=body.retention_days,
+        rollover_after_days=body.rollover_after_days,
+        rollover_max_primary_shard_size_gb=body.rollover_max_primary_shard_size_gb,
+        description=body.description,
+    )
+    try:
+        saved = await asyncio.to_thread(save_ism_policy, policy_id, payload)
+        applied = None
+        if body.apply_to_existing:
+            indices = await asyncio.to_thread(list_matching_indices, body.index_pattern)
+            applied = await asyncio.to_thread(apply_policy_to_indices, policy_id, indices)
+        return {
+            "policy_id": policy_id,
+            "policy": payload,
+            "opensearch": saved,
+            "applied": applied,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/ism/policies/{policy_id}")
+async def delete_ism_policy_api(policy_id: str, current_user=Depends(require_admin)):
+    try:
+        return await asyncio.to_thread(delete_ism_policy, policy_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ism/explain/{index_name}")
+async def explain_ism_api(index_name: str, current_user=Depends(require_admin)):
+    try:
+        return await asyncio.to_thread(explain_ism_index, index_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────

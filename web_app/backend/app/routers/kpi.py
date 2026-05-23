@@ -1,6 +1,9 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query
 from ..routers.auth import get_current_user
 from ..services.opensearch_service import get_client
+from ..services.opensearch_management_service import get_storage_forecast
 from ..core.config import settings
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
@@ -48,6 +51,14 @@ async def kpi_summary(current_user=Depends(get_current_user)):
                 {"date": b["key_as_string"][:10], "count": b["doc_count"]} for b in daily
             ],
         }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/storage-forecast")
+async def storage_forecast(current_user=Depends(get_current_user)):
+    try:
+        return await asyncio.to_thread(get_storage_forecast, settings.opensearch_index)
     except Exception as e:
         return {"error": str(e)}
 

@@ -3,7 +3,7 @@ import { LoginResponse, User } from '../types/auth'
 import { DashboardStats, ClusterHealth } from '../types/dashboard'
 import { AlertStats } from '../types/alert'
 import { ComplianceSummary } from '../types/compliance'
-import { KpiSummary, KpiTimelinePoint } from '../types/kpi'
+import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../types/kpi'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/wazuh/api'
 const APP_BASE = (import.meta.env.VITE_BASE_PATH || '/wazuh').replace(/\/+$/, '') || '/'
@@ -106,6 +106,7 @@ export const assetsApi = {
 export const kpiApi = {
   summary: (): Promise<AxiosResponse<KpiSummary>> => api.get<KpiSummary>('/kpi/summary'),
   timeline: (days = 30): Promise<AxiosResponse<KpiTimelinePoint[]>> => api.get<KpiTimelinePoint[]>(`/kpi/timeline?days=${days}`),
+  storageForecast: (): Promise<AxiosResponse<KpiStorageForecast>> => api.get<KpiStorageForecast>('/kpi/storage-forecast'),
 }
 
 export const adminApi = {
@@ -143,6 +144,12 @@ export const adminApi = {
   // Config
   getConfig: (): Promise<AxiosResponse<any>> => api.get<any>('/admin/config'),
   saveConfig: (data: any): Promise<AxiosResponse<any>> => api.put<any>('/admin/config', data),
+  // ISM Retention
+  listIsmPolicies: (): Promise<AxiosResponse<any>> => api.get<any>('/admin/ism/policies'),
+  getIsmPolicy: (policyId: string): Promise<AxiosResponse<any>> => api.get<any>(`/admin/ism/policies/${encodeURIComponent(policyId)}`),
+  saveIsmPolicy: (policyId: string, data: any): Promise<AxiosResponse<any>> => api.put<any>(`/admin/ism/policies/${encodeURIComponent(policyId)}`, data),
+  deleteIsmPolicy: (policyId: string): Promise<AxiosResponse<any>> => api.delete<any>(`/admin/ism/policies/${encodeURIComponent(policyId)}`),
+  explainIsmIndex: (indexName: string): Promise<AxiosResponse<any>> => api.get<any>(`/admin/ism/explain/${encodeURIComponent(indexName)}`),
   // Audit
   auditLog: (limit = 100): Promise<AxiosResponse<any>> => api.get<any>(`/admin/audit?limit=${limit}`),
 }

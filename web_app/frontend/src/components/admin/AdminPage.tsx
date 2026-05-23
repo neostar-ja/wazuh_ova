@@ -28,6 +28,7 @@ import MonitorHeartRoundedIcon   from '@mui/icons-material/MonitorHeartRounded'
 import CodeRoundedIcon           from '@mui/icons-material/CodeRounded'
 import ListAltRoundedIcon        from '@mui/icons-material/ListAltRounded'
 import SettingsSuggestRoundedIcon from '@mui/icons-material/SettingsSuggestRounded'
+import StorageRoundedIcon        from '@mui/icons-material/StorageRounded'
 import ErrorRoundedIcon          from '@mui/icons-material/ErrorRounded'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
 import { adminApi } from '../../services/api'
@@ -36,6 +37,7 @@ import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { useThemeMode } from '../../theme/ThemeContext'
 import { UserRole } from '../../types/auth'
+import { ISMTab } from './ISMTab'
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', orange: '#F17422' }
@@ -84,6 +86,7 @@ const NAV: NavGroup[] = [
     section: 'OPERATIONS',
     items: [
       { id: 'tuning',  label: 'Alert Tuning',   icon: <TuneRoundedIcon sx={{ fontSize: 17 }} />,               color: '#EAB308' },
+      { id: 'ism',     label: 'ISM Retention',  icon: <StorageRoundedIcon sx={{ fontSize: 17 }} />,            color: '#14B8A6' },
       { id: 'notify',  label: 'การแจ้งเตือน',  icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 17 }} />, color: '#229ED9' },
     ],
   },
@@ -1567,6 +1570,7 @@ const CONTENT_MAP: Record<string, React.ReactNode> = {
   lists:    <ListsTab />,
   wazuhcfg: <WazuhConfigTab />,
   tuning:   <TuningTab />,
+  ism:      <ISMTab />,
   notify:   <NotifyTab />,
   users:    <UsersTab />,
   audit:    <AuditTab />,
