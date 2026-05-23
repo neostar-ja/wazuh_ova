@@ -58,6 +58,7 @@ import {
 } from 'recharts'
 import { complianceApi } from '../../services/api'
 import { AlertMessage, DetailPanel, EmptyState, LoadingSpinner, StatusDot } from '../common/CommonComponents'
+import { CHART_TIP_STYLE } from '../ui/tokens'
 import {
   useComplianceAgents,
   useComplianceAlerts,
@@ -78,13 +79,7 @@ import {
   SEVERITY_COLORS,
 } from './complianceUtils'
 
-const CHART_TOOLTIP_STYLE = {
-  background: 'rgba(13,24,37,0.94)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 10,
-  fontSize: 12,
-  color: '#f0f4ff',
-}
+const CHART_TOOLTIP_STYLE = CHART_TIP_STYLE
 
 const TAB_LABELS = ['Overview', 'Frameworks', 'SCA Checks', 'Agents', 'Vulnerabilities', 'Alerts', 'Evidence']
 

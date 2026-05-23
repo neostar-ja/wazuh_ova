@@ -151,7 +151,7 @@ const createSOCTheme = (mode: 'light' | 'dark' = 'dark'): Theme => {
       overline:  { fontSize: '0.75rem',   fontWeight: 700, lineHeight: 1.5, letterSpacing: '0.8px', textTransform: 'uppercase' },
       button:    { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.5, textTransform: 'none', letterSpacing: '0.1px' },
     },
-    shape: { borderRadius: 10 },
+    shape: { borderRadius: 12 },
     shadows,
     components: {
       MuiCssBaseline: {
@@ -484,6 +484,16 @@ const createSOCTheme = (mode: 'light' | 'dark' = 'dark'): Theme => {
             backgroundImage: 'none',
             backgroundColor: isDark ? '#1A1230' : '#F5F3FF',
             borderRight: `1px solid ${palette.divider}`,
+            borderLeft: `1px solid ${palette.divider}`,
+          },
+          root: {
+            '& .MuiDrawer-paperAnchorRight': {
+              borderLeft: `1px solid ${palette.divider}`,
+              borderRight: 'none',
+              boxShadow: isDark
+                ? '-24px 0 60px rgba(0,0,0,0.5)'
+                : '-12px 0 40px rgba(90,62,133,0.15)',
+            },
           },
         },
       },

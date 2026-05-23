@@ -1,14 +1,11 @@
 import React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box, Typography, Chip, Skeleton, Select, MenuItem, FormControl,
   Table, TableBody, TableCell, TableHead, TableRow,
   IconButton, Tooltip, useTheme, Button, Alert,
 } from '@mui/material'
-import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
-import WarningAmberRoundedIcon        from '@mui/icons-material/WarningAmberRounded'
-import InfoRoundedIcon                 from '@mui/icons-material/InfoRounded'
 import CheckCircleRoundedIcon          from '@mui/icons-material/CheckCircleRounded'
 import StorageRoundedIcon              from '@mui/icons-material/StorageRounded'
 import BoltRoundedIcon                 from '@mui/icons-material/BoltRounded'
@@ -32,29 +29,25 @@ import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 import WorldMap from './WorldMap'
 import { useSnackbar } from 'notistack'
+import { PageHeader } from '../ui/PageHeader'
+import { SectionCard } from '../ui/SectionCard'
+import { BRAND, CHART_TIP_STYLE, PIE_COLORS, fmtN, sevColor, sevLabelShort } from '../ui/tokens'
 
-// ─── Brand tokens ─────────────────────────────────────────────────────────────
+// ─── Brand aliases ────────────────────────────────────────────────────────────
 const B = {
-  purple:  '#7B5BA4', purpleL: '#9B7DC4', purpleD: '#5A3E85',
-  orange:  '#F17422', orangeL: '#FF9642',
-  red:     '#EF4444', yellow: '#EAB308',  green:   '#22C55E',
-  sky:     '#38BDF8', pink:   '#EC4899',
+  purple:  BRAND.purple,     purpleL: BRAND.purpleLight, purpleD: BRAND.purpleDark,
+  orange:  BRAND.orange,     orangeL: BRAND.orangeLight,
+  red:     '#EF4444',        yellow:  '#EAB308',         green:   '#22C55E',
+  sky:     '#38BDF8',        pink:    '#EC4899',
 }
-const TIP = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.35)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
-const PIE = [B.purple, B.orange, B.sky, B.green, B.yellow, B.pink, '#A855F7']
+const TIP = CHART_TIP_STYLE
+const PIE = PIE_COLORS
 const AUTO_MS = 30000
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const N = (n: number | null | undefined): string => {
-  if (n == null) return '—'
-  if (n >= 1e9) return `${(n/1e9).toFixed(1)}B`
-  if (n >= 1e6) return `${(n/1e6).toFixed(1)}M`
-  if (n >= 1e4) return `${(n/1e3).toFixed(0)}K`
-  if (n >= 1e3) return `${(n/1e3).toFixed(1)}K`
-  return n.toLocaleString()
-}
-const LC = (lv: number): string => lv >= 15 ? B.red : lv >= 12 ? B.orange : lv >= 7 ? B.yellow : B.green
-const LL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+const N  = fmtN
+const LC = sevColor
+const LL = sevLabelShort
 
 // ─── Inline sparkline (pure SVG) ─────────────────────────────────────────────
 interface SparkProps {
@@ -227,21 +220,17 @@ interface PanelProps {
 
 function Panel({ title, icon, iconColor, action, children, accent, className = '', noPad = false }: PanelProps) {
   return (
-    <Box className={`rounded-2xl overflow-hidden flex flex-col ${className}`}
-      sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', height: '100%' }}>
-      <Box className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-        sx={{ borderBottom: '1px solid', borderColor: 'divider',
-          ...(accent ? { borderLeft: `3px solid ${accent}`, background: `linear-gradient(90deg, ${accent}0A 0%, transparent 60%)` } : {}) }}>
-        <Box className="flex items-center gap-2">
-          {icon && <Box sx={{ color: iconColor || B.purple, display: 'flex', fontSize: 17 }}>{icon}</Box>}
-          <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{title}</Typography>
-        </Box>
-        {action}
-      </Box>
-      <Box className="flex-1 overflow-auto" sx={{ p: noPad ? 0 : 2 }}>
-        {children}
-      </Box>
-    </Box>
+    <SectionCard
+      title={title}
+      icon={icon}
+      iconColor={iconColor}
+      action={action}
+      accent={accent}
+      noPad={noPad}
+      className={className}
+    >
+      {children}
+    </SectionCard>
   )
 }
 
@@ -658,57 +647,47 @@ export default function DashboardPage() {
     <Box className="page-enter flex flex-col gap-3 md:gap-4">
 
       {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-3">
-            <Typography sx={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2 }}>ภาพรวมระบบ</Typography>
-            {/* Live/Paused pill */}
-            <Box className="flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer"
-              onClick={() => setPaused(p => !p)}
-              sx={{ bgcolor: paused ? 'rgba(123,91,164,0.1)' : 'rgba(34,197,94,0.1)',
-                border: `1.5px solid ${paused ? 'rgba(123,91,164,0.3)' : 'rgba(34,197,94,0.35)'}`,
-                transition: 'all 0.2s', '&:hover': { opacity: 0.8 } }}>
-              <FiberManualRecordIcon sx={{ fontSize: 8, color: paused ? '#9A90BF' : B.green,
-                animation: paused ? 'none' : 'pulseGlow 2.5s ease-in-out infinite' }} />
-              <Typography sx={{ fontSize: 11, fontWeight: 800, color: paused ? '#9A90BF' : B.green }}>
-                {paused ? 'PAUSED' : 'LIVE'}
-              </Typography>
-              {!paused && (
-                <Typography sx={{ fontSize: 10, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', ml: 0.5 }}>
-                  {countdown}s
-                </Typography>
-              )}
-            </Box>
-            {/* EPS */}
+      <PageHeader
+        title="ภาพรวมระบบ"
+        subtitle="Security Operations Center · โรงพยาบาลวลัยลักษณ์"
+        status={paused ? 'paused' : 'live'}
+        statusLabel={paused ? 'PAUSED' : `LIVE · ${countdown}s`}
+        actions={
+          <>
             {eps > 0 && (
               <Box className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                sx={{ bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.2)' }}>
+                sx={{ bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.2)', cursor: 'default' }}>
                 <BoltRoundedIcon sx={{ fontSize: 13, color: B.purple }} />
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: B.purpleL }}>
                   {eps} <span style={{ fontWeight: 400, fontSize: 10 }}>EPS</span>
                 </Typography>
               </Box>
             )}
-          </div>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.4 }}>
-            Security Operations Center · โรงพยาบาลวลัยลักษณ์
-          </Typography>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Tooltip title="รีเฟรชทันที">
-            <IconButton size="small" onClick={doRefresh}
-              sx={{ bgcolor: 'rgba(123,91,164,0.08)', borderRadius: '9px', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}>
-              <RefreshRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-            </IconButton>
-          </Tooltip>
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <Select value={timeRange} onChange={e => setTimeRange(e.target.value as string)} sx={{ fontSize: 13, borderRadius: '10px' }}>
-              {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
-            </Select>
-          </FormControl>
-        </div>
-      </div>
+            <Tooltip title={paused ? 'คลิกเพื่อเปิด Auto-refresh' : 'คลิกเพื่อหยุด Auto-refresh'}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setPaused(p => !p)}
+                sx={{ fontSize: 11, borderRadius: '9px', py: 0.5, px: 1.25, fontWeight: 700, color: paused ? 'text.secondary' : B.green, borderColor: paused ? 'divider' : `${B.green}40` }}
+              >
+                {paused ? '⏸ Paused' : '▶ Live'}
+              </Button>
+            </Tooltip>
+            <Tooltip title="รีเฟรชทันที">
+              <IconButton size="small" onClick={doRefresh}
+                aria-label="รีเฟรชข้อมูล"
+                sx={{ bgcolor: 'rgba(123,91,164,0.08)', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}>
+                <RefreshRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              </IconButton>
+            </Tooltip>
+            <FormControl size="small" sx={{ minWidth: 130 }}>
+              <Select value={timeRange} onChange={e => setTimeRange(e.target.value as string)} sx={{ fontSize: 13, borderRadius: '10px' }}>
+                {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </>
+        }
+      />
 
       {/* ══ ROW 1: Metric Hero Strip ═════════════════════════════════════════ */}
       <MetricHero stats={stats} isLoading={isLoading} tl={tl} navigate={navigate} />

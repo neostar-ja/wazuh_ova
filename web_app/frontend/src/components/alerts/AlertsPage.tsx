@@ -34,10 +34,11 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters } from '../../types/alert'
+import { BRAND as TOKENS, CHART_TIP_STYLE, sevColor, sevLabelShort } from '../ui/tokens'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const BRAND  = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
-const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
+const BRAND  = { purple: TOKENS.purple, purpleLight: TOKENS.purpleLight, purpleDark: TOKENS.purpleDark, orange: TOKENS.orange }
+const ChartTip = CHART_TIP_STYLE
 
 interface SeverityOption {
   key: SeverityName;
@@ -48,13 +49,13 @@ interface SeverityOption {
 }
 
 const SEV: SeverityOption[] = [
-  { key: 'critical', label: 'Critical', color: '#EF4444', min: 15, max: 99 },
-  { key: 'high',     label: 'High',     color: BRAND.orange, min: 12, max: 14 },
-  { key: 'medium',   label: 'Medium',   color: '#EAB308', min: 7, max: 11 },
-  { key: 'low',      label: 'Low',      color: '#22C55E', min: 1,  max: 6 },
+  { key: 'critical', label: 'Critical', color: '#EF4444',       min: 15, max: 99 },
+  { key: 'high',     label: 'High',     color: TOKENS.orange,   min: 12, max: 14 },
+  { key: 'medium',   label: 'Medium',   color: '#EAB308',       min: 7,  max: 11 },
+  { key: 'low',      label: 'Low',      color: '#22C55E',       min: 1,  max: 6  },
 ]
-const LC = (lv: number): string => lv >= 15 ? '#EF4444' : lv >= 12 ? BRAND.orange : lv >= 7 ? '#EAB308' : '#22C55E'
-const LL = (lv: number): string => lv >= 15 ? 'CRIT' : lv >= 12 ? 'HIGH' : lv >= 7 ? 'MED' : 'LOW'
+const LC = sevColor
+const LL = sevLabelShort
 
 const SOURCES = ['fortigate', 'mikrotik', 'infoblox', 'huawei-ac', 'suricata', 'syscheck', 'ossec', 'syslog']
 const TIME_OPTS = [
@@ -1688,63 +1689,67 @@ export default function AlertsPage() {
   return (
     <Box className="page-enter">
       {/* ── Header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>การแจ้งเตือนภัยคุกคาม</Typography>
-            {newCount > 0 && (
-              <Chip label={`+${newCount} ใหม่`} size="small" color="error" onClick={() => { setNewCount(0); refetch() }}
-                sx={{ height: 22, fontSize: 11, fontWeight: 800, animation: 'pulse-critical 2s ease-in-out infinite', cursor: 'pointer' }} />
-            )}
-            
-            {/* API Status Indicator */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.25, borderRadius: '6px', bgcolor: `${connectionStatus.color}15`, border: `1px solid ${connectionStatus.color}25` }}>
-              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: connectionStatus.color, animation: connectionStatus.label !== 'Error' ? 'pulseGlow 2s ease-in-out infinite' : 'none' }} />
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color: connectionStatus.color }}>
+            <Typography sx={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2 }}>การแจ้งเตือนภัยคุกคาม</Typography>
+
+            {/* Connection status */}
+            <Box sx={{
+              display: 'flex', alignItems: 'center', gap: 0.6,
+              px: 1.25, py: 0.4, borderRadius: '20px',
+              bgcolor: `${connectionStatus.color}12`,
+              border: `1.5px solid ${connectionStatus.color}30`,
+            }}>
+              <Box sx={{
+                width: 7, height: 7, borderRadius: '50%', bgcolor: connectionStatus.color,
+                animation: connectionStatus.label !== 'Error' ? 'pulseGlow 2s ease-in-out infinite' : 'none',
+              }} />
+              <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: connectionStatus.color, letterSpacing: '0.06em' }}>
                 {connectionStatus.label.toUpperCase()}
               </Typography>
             </Box>
 
-            {/* Auto Refresh controls */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <FiberManualRecordIcon sx={{ fontSize: 9, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled',
-                animation: refreshInterval > 0 ? 'pulseGlow 2.5s ease-in-out infinite' : 'none' }} />
-              <Typography sx={{ fontSize: 10, fontWeight: 600, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled', mr: 0.5 }}>
-                {refreshInterval > 0 ? 'AUTO' : 'MANUAL'}
-              </Typography>
-              <FormControl size="small" sx={{ m: 0 }}>
-                <Select
-                  value={refreshInterval}
-                  onChange={e => setRefreshInterval(Number(e.target.value))}
-                  sx={{ 
-                    height: 20, fontSize: 9, fontWeight: 700, 
-                    color: 'text.secondary', bgcolor: 'transparent',
-                    '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                    padding: 0
-                  }}
-                >
-                  <MenuItem value={0} sx={{ fontSize: 10 }}>Off</MenuItem>
-                  <MenuItem value={15000} sx={{ fontSize: 10 }}>15s</MenuItem>
-                  <MenuItem value={30000} sx={{ fontSize: 10 }}>30s</MenuItem>
-                  <MenuItem value={60000} sx={{ fontSize: 10 }}>60s</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            {newCount > 0 && (
+              <Chip
+                label={`+${newCount} ใหม่`}
+                size="small"
+                color="error"
+                onClick={() => { setNewCount(0); refetch() }}
+                sx={{ height: 22, fontSize: 11, fontWeight: 800, animation: 'pulse-critical 2s ease-in-out infinite', cursor: 'pointer' }}
+              />
+            )}
           </Box>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
-            Threat Alerts — {alerts.length.toLocaleString()} รายการ · อัปเดตทุก {timeRange}
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.35 }}>
+            Threat Alerts · {alerts.length.toLocaleString()} รายการ · ช่วงเวลา {timeRange}
           </Typography>
         </Box>
+
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Auto-refresh selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.4, borderRadius: '9px', bgcolor: 'rgba(123,91,164,0.06)', border: '1px solid rgba(123,91,164,0.12)' }}>
+            <FiberManualRecordIcon sx={{ fontSize: 8, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled', animation: refreshInterval > 0 ? 'pulseGlow 2s ease-in-out infinite' : 'none' }} />
+            <Typography sx={{ fontSize: 10, fontWeight: 700, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled' }}>
+              {refreshInterval > 0 ? 'AUTO' : 'MANUAL'}
+            </Typography>
+            <FormControl size="small">
+              <Select value={refreshInterval} onChange={e => setRefreshInterval(Number(e.target.value))}
+                sx={{ height: 20, fontSize: 9, color: 'text.secondary', bgcolor: 'transparent', '& .MuiOutlinedInput-notchedOutline': { border: 'none' }, padding: 0 }}>
+                <MenuItem value={0} sx={{ fontSize: 11 }}>Off</MenuItem>
+                <MenuItem value={15000} sx={{ fontSize: 11 }}>15s</MenuItem>
+                <MenuItem value={30000} sx={{ fontSize: 11 }}>30s</MenuItem>
+                <MenuItem value={60000} sx={{ fontSize: 11 }}>60s</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
           <Button size="small" startIcon={<RefreshRoundedIcon sx={{ fontSize: 15 }} />}
             onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ['alert-stats'] }); setNewCount(0) }}
-            variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }}>
+            variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }} aria-label="รีเฟรชข้อมูล">
             รีเฟรช
           </Button>
           <Button size="small" startIcon={<DownloadRoundedIcon sx={{ fontSize: 15 }} />}
-            onClick={() => handleExport('csv')} variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }}>
+            onClick={() => handleExport('csv')} variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }} aria-label="ดาวน์โหลด CSV">
             CSV
           </Button>
         </Box>
