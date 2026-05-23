@@ -20,6 +20,8 @@ import OpenInNewRoundedIcon            from '@mui/icons-material/OpenInNewRounde
 import FiberManualRecordIcon           from '@mui/icons-material/FiberManualRecord'
 import ShieldRoundedIcon               from '@mui/icons-material/ShieldRounded'
 import RefreshRoundedIcon              from '@mui/icons-material/RefreshRounded'
+import TrendingUpRoundedIcon           from '@mui/icons-material/TrendingUpRounded'
+import TrendingDownRoundedIcon         from '@mui/icons-material/TrendingDownRounded'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartTip, ResponsiveContainer, Cell, PieChart, Pie,
@@ -32,6 +34,12 @@ import { useSnackbar } from 'notistack'
 import { PageHeader } from '../ui/PageHeader'
 import { SectionCard } from '../ui/SectionCard'
 import { BRAND, CHART_TIP_STYLE, PIE_COLORS, fmtN, sevColor, sevLabelShort } from '../ui/tokens'
+import { DashboardStats, SecurityPosture, SeverityTrend, TimelinePoint } from '../../types/dashboard'
+import { SecurityPostureBanner } from './SecurityPostureBanner'
+import { SeverityBreakdown } from './SeverityBreakdown'
+import { InsightCards } from './InsightCards'
+import { SystemHealthStrip } from './SystemHealthStrip'
+import { AlertFeed } from './AlertFeed'
 
 // ─── Brand aliases ────────────────────────────────────────────────────────────
 const B = {
@@ -48,6 +56,60 @@ const AUTO_MS = 30000
 const N  = fmtN
 const LC = sevColor
 const LL = sevLabelShort
+
+/**
+ * Calculate trend indicator comparing first half and second half of timeline
+ */
+function calculateTrend(data: TimelinePoint[]): SeverityTrend | null {
+  if (!data || data.length < 4) return null
+  
+  const mid = Math.floor(data.length / 2)
+  const firstHalf = data.slice(0, mid)
+  const secondHalf = data.slice(mid)
+  
+  const firstHalfTotal = firstHalf.reduce((sum, p) => sum + (p.total || p.count || 0), 0)
+  const secondHalfTotal = secondHalf.reduce((sum, p) => sum + (p.total || p.count || 0), 0)
+  
+  if (firstHalfTotal === 0) return null
+  
+  const change = Math.round(((secondHalfTotal - firstHalfTotal) / firstHalfTotal) * 100)
+  const direction = change > 2 ? 'up' : change < -2 ? 'down' : 'stable'
+  
+  return { change: Math.abs(change), direction }
+}
+
+/**
+ * Calculate security posture from stats
+ */
+function calculateSecurityPosture(stats: DashboardStats | undefined): SecurityPosture | null {
+  if (!stats) return null
+  
+  const critical = stats.critical || 0
+  const high = stats.high || 0
+  
+  let riskLevel: 'critical' | 'elevated' | 'normal'
+  let suggestedAction: string
+  
+  if (critical > 0) {
+    riskLevel = 'critical'
+    suggestedAction = 'ต้องดำเนินการตรวจสอบและแก้ไขทันที'
+  } else if (high > 10 || (high > 0 && critical === 0)) {
+    riskLevel = 'elevated'
+    suggestedAction = 'แนะนำให้ทำการตรวจสอบและประเมินความเสี่ยง'
+  } else {
+    riskLevel = 'normal'
+    suggestedAction = 'ระบบทำงานปกติ ตรวจสอบเป็นประจำ'
+  }
+  
+  return {
+    riskLevel,
+    criticalCount: critical,
+    highCount: high,
+    topSourceIP: stats.by_srcip?.[0],
+    topRule: stats.by_rule?.[0],
+    suggestedAction,
+  }
+}
 
 // ─── Inline sparkline (pure SVG) ─────────────────────────────────────────────
 interface SparkProps {
@@ -84,15 +146,16 @@ function Spark({ data = [], color, w = 80, h = 28 }: SparkProps) {
 
 // ─── Metric Hero Card ─────────────────────────────────────────────────────────
 interface MetricHeroProps {
-  stats: any
+  stats: DashboardStats | undefined
   isLoading: boolean
-  tl: any[]
+  tl: TimelinePoint[]
   navigate: (path: string) => void
 }
 
 function MetricHero({ stats, isLoading, tl, navigate }: MetricHeroProps) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
+  const trend = calculateTrend(tl)
 
   const metrics = [
     { key: 'total',    label: 'Total Alerts', labelTh: 'รวมทั้งหมด', color: B.purple,  icon: '∑' },
@@ -196,14 +259,32 @@ function MetricHero({ stats, isLoading, tl, navigate }: MetricHeroProps) {
             </Typography>
           )}
 
-          {/* Bottom row: percent + sparkline */}
-          <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 1.25, position: 'relative', zIndex: 1 }}>
-            <Box>
+          {/* Bottom row: percent + sparkline + trend */}
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 1.25, position: 'relative', zIndex: 1, gap: 1 }}>
+            <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 500 }}>
                 {m.key !== 'total' && total > 0
                   ? `${((vals[m.key]/total)*100).toFixed(1)}% ของทั้งหมด`
                   : 'แจ้งเตือนทั้งหมด'}
               </Typography>
+              {/* Trend indicator */}
+              {!isLoading && trend && m.key === 'total' && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                  {trend.direction === 'up' ? (
+                    <>
+                      <TrendingUpRoundedIcon sx={{ fontSize: 12, color: '#EF4444' }} />
+                      <Typography sx={{ fontSize: 9, color: '#EF4444', fontWeight: 700 }}>+{trend.change}%</Typography>
+                    </>
+                  ) : trend.direction === 'down' ? (
+                    <>
+                      <TrendingDownRoundedIcon sx={{ fontSize: 12, color: '#22C55E' }} />
+                      <Typography sx={{ fontSize: 9, color: '#22C55E', fontWeight: 700 }}>-{trend.change}%</Typography>
+                    </>
+                  ) : (
+                    <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700 }}>— stable</Typography>
+                  )}
+                </Box>
+              )}
             </Box>
             {!isLoading && <Spark data={tl} color={m.color} w={64} h={24} />}
           </Box>
@@ -303,9 +384,10 @@ interface HBarProps {
   limit?: number
   colorFn?: (index: number, item: HBarItem) => string
   mono?: boolean
+  onItemClick?: (item: HBarItem) => void
 }
 
-function HBar({ items = [], isLoading, limit = 8, colorFn, mono }: HBarProps) {
+function HBar({ items = [], isLoading, limit = 8, colorFn, mono, onItemClick }: HBarProps) {
   if (isLoading) return (
     <div className="flex flex-col gap-2.5">
       {Array.from({length:5}).map((_,i) => (
@@ -330,14 +412,17 @@ function HBar({ items = [], isLoading, limit = 8, colorFn, mono }: HBarProps) {
         const pct = Math.round((item.count / max) * 100)
         const color = colorFn ? colorFn(i, item) : B.purple
         return (
-          <Box key={item.name || i} sx={{
-            p: '7px 10px',
-            borderRadius: '10px',
-            bgcolor: `${color}08`,
-            border: `1px solid ${color}15`,
-            transition: 'all 0.2s ease',
-            '&:hover': { bgcolor: `${color}12`, border: `1px solid ${color}28` },
-          }}>
+          <Box key={item.name || i} 
+            onClick={() => onItemClick?.(item)}
+            sx={{
+              p: '7px 10px',
+              borderRadius: '10px',
+              bgcolor: `${color}08`,
+              border: `1px solid ${color}15`,
+              transition: 'all 0.2s ease',
+              cursor: onItemClick ? 'pointer' : 'default',
+              '&:hover': onItemClick ? { bgcolor: `${color}12`, border: `1px solid ${color}28` } : {},
+            }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
                 <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
@@ -689,9 +774,10 @@ interface CountryItem {
 interface CountriesPanelProps {
   countries?: CountryItem[]
   isLoading: boolean
+  onCountryClick?: (country: CountryItem) => void
 }
 
-function CountriesPanel({ countries = [], isLoading }: CountriesPanelProps) {
+function CountriesPanel({ countries = [], isLoading, onCountryClick }: CountriesPanelProps) {
   if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
   if (!countries.length) return (
     <Box className="flex flex-col items-center py-6 gap-1">
@@ -706,14 +792,16 @@ function CountriesPanel({ countries = [], isLoading }: CountriesPanelProps) {
         const pct = Math.round((c.count/max)*100)
         const color = i < 3 ? B.red : i < 6 ? B.orange : B.purple
         return (
-          <div key={c.name}>
+          <div key={c.name}
+            onClick={() => onCountryClick?.(c)}
+            style={{ cursor: onCountryClick ? 'pointer' : 'default' }}>
             <div className="flex justify-between items-center mb-0.5">
               <Typography sx={{ fontSize: 11, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
                 {c.name||'Unknown'}
               </Typography>
               <Typography sx={{ fontSize: 10, fontWeight: 700, color, ml: 1, flexShrink: 0 }}>{N(c.count)}</Typography>
             </div>
-            <Box sx={{ height: 5, borderRadius: 2.5, bgcolor: `${color}15`, overflow: 'hidden' }}>
+            <Box sx={{ height: 5, borderRadius: 2.5, bgcolor: `${color}15`, overflow: 'hidden', transition: 'all 0.2s' }}>
               <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 2.5,
                 background: `linear-gradient(90deg, ${color} 0%, ${color}80 100%)`,
                 transition: 'width 0.7s ease', boxShadow: `0 0 8px ${color}40` }} />
@@ -760,6 +848,17 @@ export default function DashboardPage() {
   const tl        = stats?.timeline   || []
   const countries = stats?.by_country || []
   const eps       = stats?.eps        || 0
+  
+  // Calculate security posture
+  const posture = calculateSecurityPosture(stats)
+  
+  // Determine cluster status for health strip
+  let clusterStatus: 'active' | 'warning' | 'error' = 'active'
+  if (cluster && typeof cluster === 'object') {
+    if (cluster.error || (cluster.data && cluster.data.affected_items?.some((n: any) => n.status !== 'active'))) {
+      clusterStatus = 'warning'
+    }
+  }
 
   const TIME_OPTS = [
     {v:'1h',l:'1 ชั่วโมง'},{v:'6h',l:'6 ชั่วโมง'},
@@ -812,10 +911,59 @@ export default function DashboardPage() {
         }
       />
 
+      {/* ══ SECURITY POSTURE BANNER ═════════════════════════════════════════ */}
+      <SecurityPostureBanner posture={posture} isLoading={isLoading} />
+
+      {/* ══ SYSTEM HEALTH STRIP ═════════════════════════════════════════════ */}
+      <SystemHealthStrip
+        clusterStatus={clusterStatus}
+        activeAgents={agentData?.active || 0}
+        totalAgents={agentData?.total || 0}
+        eps={eps}
+        isAutoRefresh={!paused}
+        lastUpdated={new Date()}
+      />
+
       {/* ══ ROW 1: Metric Hero Strip ═════════════════════════════════════════ */}
       <MetricHero stats={stats} isLoading={isLoading} tl={tl} navigate={navigate} />
 
-      {/* ══ ROW 2: Timeline (left 2/3) + Sources+Countries (right 1/3) ══════ */}
+      {/* ══ ROW 2: Severity Breakdown & Insight Cards ════════════════════════ */}
+      <div className="grid grid-cols-12 gap-3 md:gap-4">
+        {/* Severity Breakdown */}
+        <div className="col-span-12 lg:col-span-4">
+          <Panel
+            title="การแบ่งระดับความรุนแรง"
+            icon={<GppBadRoundedIcon sx={{ fontSize: 16 }} />}
+            accent={B.orange}
+          >
+            <SeverityBreakdown
+              critical={stats?.critical || 0}
+              high={stats?.high || 0}
+              medium={stats?.medium || 0}
+              low={stats?.low || 0}
+              isLoading={isLoading}
+            />
+          </Panel>
+        </div>
+
+        {/* Insight Cards */}
+        <div className="col-span-12 lg:col-span-8">
+          <Panel
+            title="SOC Insights"
+            icon={<TrendingUpRoundedIcon sx={{ fontSize: 16 }} />}
+            accent={B.purple}
+          >
+            <InsightCards
+              topAgent={stats?.by_agent?.[0]}
+              topIP={stats?.by_srcip?.[0]}
+              topRule={stats?.by_rule?.[0]}
+              isLoading={isLoading}
+            />
+          </Panel>
+        </div>
+      </div>
+
+      {/* ══ ROW 3: Timeline (left 2/3) + Sources+Countries (right 1/3) ══════ */}
       <div className="grid grid-cols-12 gap-3 md:gap-4">
         {/* Timeline */}
         <div className="col-span-12 lg:col-span-8">
@@ -850,7 +998,7 @@ export default function DashboardPage() {
         {/* Countries */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3">
           <Panel title="ประเทศต้นทางโจมตี" icon={<PublicRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
-            <CountriesPanel countries={countries} isLoading={isLoading} />
+            <CountriesPanel countries={countries} isLoading={isLoading} onCountryClick={(c) => navigate(`/alerts?country=${encodeURIComponent(c.name)}`)} />
           </Panel>
         </div>
 
@@ -868,7 +1016,7 @@ export default function DashboardPage() {
               </Tooltip>
             }
           >
-            <HBar items={stats?.by_rule||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.red:i<3?B.orange:B.purple} mono />
+            <HBar items={stats?.by_rule||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.red:i<3?B.orange:B.purple} mono onItemClick={(item) => navigate(`/alerts?rule_id=${encodeURIComponent(item.name)}`)} />
           </Panel>
         </div>
 
@@ -917,14 +1065,14 @@ export default function DashboardPage() {
         {/* Top IPs + Top Agents */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col gap-4">
           <Panel title="IP โจมตีสูงสุด" icon={<RouterRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
-            <HBar items={stats?.by_srcip||[]} isLoading={isLoading} colorFn={()=>B.red} mono limit={6} />
+            <HBar items={stats?.by_srcip||[]} isLoading={isLoading} colorFn={()=>B.red} mono limit={6} onItemClick={(item) => navigate(`/investigate?q=${encodeURIComponent(item.name)}`)} />
           </Panel>
           <Panel title="Agent ที่มี Alert สูง" icon={<DevicesRoundedIcon sx={{ fontSize: 16 }} />} accent={B.orange}>
-            <HBar items={stats?.by_agent||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.orange:B.purple} limit={5} />
+            <HBar items={stats?.by_agent||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.orange:B.purple} limit={5} onItemClick={(item) => navigate(`/alerts?agent=${encodeURIComponent(item.name)}`)} />
           </Panel>
         </div>
 
-        {/* Recent Critical Alerts */}
+        {/* Recent Critical Alerts - Modern Feed */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-4">
           <Panel
             title="การแจ้งเตือนล่าสุด (Critical / High)"
@@ -938,8 +1086,8 @@ export default function DashboardPage() {
             }
             noPad
           >
-            <Box sx={{ p: 0 }}>
-              <RecentAlerts alerts={recentAlerts} isLoading={alertsLoading} />
+            <Box sx={{ p: 1.5 }}>
+              <AlertFeed alerts={recentAlerts as any[]} isLoading={alertsLoading} maxItems={8} />
             </Box>
           </Panel>
         </div>
