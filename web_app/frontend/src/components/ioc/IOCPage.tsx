@@ -32,6 +32,7 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts'
 import { iocApi } from '../../services/api'
+import { PageShell } from '../ui/layout'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
@@ -1051,17 +1052,11 @@ export default function IOCPage() {
   ]
 
   return (
-    <Box className="page-enter">
-      {/* ── Page header ── */}
-      <Box sx={{ mb: 2.5 }}>
-        <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>
-          ตรวจจับภัยคุกคาม (IOC)
-        </Typography>
-        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
-          Threat Intelligence — AbuseIPDB · AlienVault OTX · Shodan · VirusTotal
-        </Typography>
-      </Box>
-
+    <PageShell
+      variant="workbench"
+      title="ตรวจจับภัยคุกคาม (IOC)"
+      subtitle="Threat Intelligence — AbuseIPDB · AlienVault OTX · Shodan · VirusTotal"
+    >
       {/* ── Tab bar ── */}
       <Box sx={{
         display: 'flex', gap: 0.5, mb: 2.5,
@@ -1228,6 +1223,6 @@ export default function IOCPage() {
 
       {/* ── Tab 2: Statistics ── */}
       {activeTab === 2 && <StatsPanel />}
-    </Box>
+    </PageShell>
   )
 }

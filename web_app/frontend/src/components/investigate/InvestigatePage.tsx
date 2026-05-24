@@ -18,7 +18,7 @@ import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded'
 import DataObjectRoundedIcon from '@mui/icons-material/DataObjectRounded'
 import HistoryEduRoundedIcon from '@mui/icons-material/HistoryEduRounded'
 import { useSnackbar } from 'notistack'
-import PageHeader from '../ui/PageHeader'
+import { PageShell } from '../ui/layout'
 import SectionCard from '../ui/SectionCard'
 import MetricCard from '../ui/MetricCard'
 import EmptyState, { ErrorState } from '../ui/EmptyState'
@@ -321,37 +321,39 @@ export default function InvestigatePage() {
     })
   }
 
+  const headerActions = (
+    <>
+      <Button
+        variant="outlined"
+        startIcon={<RefreshRoundedIcon />}
+        onClick={() => investigationQuery.refetch()}
+        disabled={!submittedRequest || investigationQuery.isFetching}
+      >
+        Refresh
+      </Button>
+      <Button variant="outlined" startIcon={<DownloadRoundedIcon />} onClick={handleExport} disabled={!submittedRequest}>
+        Export Evidence
+      </Button>
+      <Button
+        variant="contained"
+        startIcon={<NotificationsActiveRoundedIcon />}
+        onClick={() => setActiveTab('alerts')}
+        disabled={!submittedRequest}
+      >
+        Open Alerts
+      </Button>
+    </>
+  )
+
   return (
-    <Box className="space-y-6">
-      <PageHeader
-        title="วิเคราะห์เหตุการณ์"
-        subtitle="ค้นหาและเชื่อมโยง IP, Host, User, IOC และ Alert จาก Wazuh / OpenSearch เพื่อทำ investigation แบบ end-to-end"
-        status="live"
-        statusLabel="INVESTIGATION READY"
-        actions={
-          <>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshRoundedIcon />}
-              onClick={() => investigationQuery.refetch()}
-              disabled={!submittedRequest || investigationQuery.isFetching}
-            >
-              Refresh
-            </Button>
-            <Button variant="outlined" startIcon={<DownloadRoundedIcon />} onClick={handleExport} disabled={!submittedRequest}>
-              Export Evidence
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<NotificationsActiveRoundedIcon />}
-              onClick={() => setActiveTab('alerts')}
-              disabled={!submittedRequest}
-            >
-              Open Alerts
-            </Button>
-          </>
-        }
-      />
+    <PageShell
+      variant="workbench"
+      title="วิเคราะห์เหตุการณ์"
+      subtitle="ค้นหาและเชื่อมโยง IP, Host, User, IOC และ Alert จาก Wazuh / OpenSearch เพื่อทำ investigation แบบ end-to-end"
+      status="live"
+      statusLabel="INVESTIGATION READY"
+      actions={headerActions}
+    >
 
       <InvestigationSearchHero
         query={query}
@@ -591,6 +593,6 @@ export default function InvestigatePage() {
           </Box>
         </Stack>
       </DetailPanel>
-    </Box>
+    </PageShell>
   )
 }

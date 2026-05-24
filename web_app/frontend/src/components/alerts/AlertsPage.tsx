@@ -35,6 +35,7 @@ import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters } from '../../types/alert'
 import { BRAND as TOKENS, CHART_TIP_STYLE, sevColor, sevLabelShort } from '../ui/tokens'
+import { PageShell } from '../ui/layout'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND  = { purple: TOKENS.purple, purpleLight: TOKENS.purpleLight, purpleDark: TOKENS.purpleDark, orange: TOKENS.orange }
@@ -1687,7 +1688,7 @@ export default function AlertsPage() {
   }, [isError, isErrorStats, isLoading, loadingStats])
 
   return (
-    <Box className="page-enter">
+    <PageShell variant="console">
       {/* ── Header ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
         <Box>
@@ -2018,6 +2019,6 @@ export default function AlertsPage() {
 
       {/* Alert Drawer */}
       <AlertDrawer alert={selectedAlert} open={drawerOpen} onClose={() => setDrawer(false)} />
-    </Box>
+    </PageShell>
   )
 }

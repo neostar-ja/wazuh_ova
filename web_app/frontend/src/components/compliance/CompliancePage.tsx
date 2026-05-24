@@ -57,6 +57,7 @@ import {
   YAxis,
 } from 'recharts'
 import { complianceApi } from '../../services/api'
+import { PageShell } from '../ui/layout'
 import { AlertMessage, DetailPanel, EmptyState, LoadingSpinner, StatusDot } from '../common/CommonComponents'
 import { CHART_TIP_STYLE } from '../ui/tokens'
 import {
@@ -590,7 +591,7 @@ export default function CompliancePage() {
             activeTab === 6 ? evidenceQuery.refetch : summaryQuery.refetch
 
   return (
-    <Box className="page-enter">
+    <PageShell variant="report">
       <Box sx={{ display: 'grid', gap: 2 }}>
         <Card>
           <CardContent sx={{ display: 'grid', gap: 1.5 }}>
@@ -1410,6 +1411,6 @@ export default function CompliancePage() {
           </Stack>
         ) : null}
       </DetailPanel>
-    </Box>
+    </PageShell>
   )
 }

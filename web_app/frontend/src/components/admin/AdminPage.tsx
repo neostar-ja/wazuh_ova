@@ -32,6 +32,7 @@ import StorageRoundedIcon        from '@mui/icons-material/StorageRounded'
 import ErrorRoundedIcon          from '@mui/icons-material/ErrorRounded'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
 import { adminApi } from '../../services/api'
+import { PageShell } from '../ui/layout'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
@@ -1582,15 +1583,11 @@ export default function AdminPage() {
   const isDark = theme.palette.mode === 'dark'
 
   return (
-    <Box className="page-enter">
-      {/* ── Header ── */}
-      <Box sx={{ mb: 2.5 }}>
-        <Typography fontWeight={800} sx={{ fontSize: 20, lineHeight: 1.2 }}>ผู้ดูแลระบบ</Typography>
-        <Typography variant="caption" color="text.secondary">
-          จัดการ Wazuh Engine, Rules, Decoders, CDB Lists, Config, Users และการตั้งค่า
-        </Typography>
-      </Box>
-
+    <PageShell
+      variant="management"
+      title="ผู้ดูแลระบบ"
+      subtitle="จัดการ Wazuh Engine, Rules, Decoders, CDB Lists, Config, Users และการตั้งค่า"
+    >
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         {/* ── Sidebar ── */}
         <Box sx={{ width: 210, flexShrink: 0, position: 'sticky', top: 16 }}>
@@ -1659,6 +1656,6 @@ export default function AdminPage() {
           </Card>
         </Box>
       </Box>
-    </Box>
+    </PageShell>
   )
 }

@@ -13,6 +13,7 @@ import ShieldIcon from '@mui/icons-material/Shield'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import { format } from 'date-fns'
 import { assetsApi } from '../../services/api'
+import { PageShell } from '../ui/layout'
 import { DetailPanel, LoadingSpinner, EmptyState, StatusDot, StatusCard } from '../common/CommonComponents'
 
 interface RiskChipProps {
@@ -343,7 +344,7 @@ export default function AssetsPage() {
   ]
 
   return (
-    <Box className="page-enter">
+    <PageShell variant="console">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Box>
           <Typography variant="h6" fontWeight={700}>สินทรัพย์เครือข่าย</Typography>
@@ -526,6 +527,6 @@ export default function AssetsPage() {
         open={Boolean(selectedIdentifier)}
         onClose={() => setSelectedIdentifier(null)}
       />
-    </Box>
+    </PageShell>
   )
 }

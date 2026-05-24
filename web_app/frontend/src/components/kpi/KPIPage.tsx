@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts'
 import { kpiApi } from '../../services/api'
+import { PageShell } from '../ui/layout'
 import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../../types'
 import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
 
@@ -80,9 +81,11 @@ export default function KPIPage() {
   })
 
   return (
-    <Box>
-      <Typography variant="h6" fontWeight={700} mb={2}>KPI ประสิทธิภาพ SOC</Typography>
-
+    <PageShell
+      variant="dashboard"
+      title="KPI ประสิทธิภาพ SOC"
+      subtitle="ประสิทธิภาพ Security Operations Center ย้อนหลัง 30 วัน"
+    >
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={3}>
           <KPICard title="รวม 30 วัน" value={summary?.total_30d} unit="alerts" loading={isLoading} />
@@ -152,6 +155,6 @@ export default function KPIPage() {
           </Card>
         </Grid>
       </Grid>
-    </Box>
+    </PageShell>
   )
 }
