@@ -1,41 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Box, IconButton, Typography, Badge, Avatar,
-  Menu, MenuItem, Tooltip, Divider, useTheme, useMediaQuery,
+  Menu, MenuItem, Divider, Tooltip, useTheme, useMediaQuery,
 } from '@mui/material'
-import MenuRoundedIcon           from '@mui/icons-material/MenuRounded'
-import DarkModeRoundedIcon       from '@mui/icons-material/DarkModeRounded'
-import LightModeRoundedIcon      from '@mui/icons-material/LightModeRounded'
-import NotificationsRoundedIcon  from '@mui/icons-material/NotificationsRounded'
+import MenuRoundedIcon               from '@mui/icons-material/MenuRounded'
+import DarkModeRoundedIcon           from '@mui/icons-material/DarkModeRounded'
+import LightModeRoundedIcon          from '@mui/icons-material/LightModeRounded'
+import NotificationsRoundedIcon      from '@mui/icons-material/NotificationsRounded'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
-import LogoutRoundedIcon         from '@mui/icons-material/LogoutRounded'
-import TuneRoundedIcon           from '@mui/icons-material/TuneRounded'
-import FiberManualRecordIcon     from '@mui/icons-material/FiberManualRecord'
-import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRightRounded'
-import HomeRoundedIcon           from '@mui/icons-material/HomeRounded'
+import LogoutRoundedIcon             from '@mui/icons-material/LogoutRounded'
+import TuneRoundedIcon               from '@mui/icons-material/TuneRounded'
+import FiberManualRecordIcon         from '@mui/icons-material/FiberManualRecord'
+import ChevronRightRoundedIcon       from '@mui/icons-material/ChevronRightRounded'
+import GridViewRoundedIcon           from '@mui/icons-material/GridViewRounded'
 import { useThemeMode } from '../../theme/ThemeContext'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate, useLocation } from 'react-router-dom'
 
-const ROLE_COLORS: Record<string, string> = { superadmin: '#EF4444', admin: '#F59E0B', analyst: '#3B82F6', viewer: '#9A90BF' }
-const ROLE_LABELS: Record<string, string> = { superadmin: 'Super Admin', admin: 'ผู้ดูแลระบบ', analyst: 'นักวิเคราะห์', viewer: 'ผู้ชม' }
-
-interface PageInfoItem {
-  th: string
-  en: string
-  color: string
-  bg: string
+const ROLE_COLORS: Record<string, string> = {
+  superadmin: '#EF4444',
+  admin:      '#F59E0B',
+  analyst:    '#3B82F6',
+  viewer:     '#9A90BF',
+}
+const ROLE_LABELS: Record<string, string> = {
+  superadmin: 'Super Admin',
+  admin:      'Administrator',
+  analyst:    'Analyst',
+  viewer:     'Viewer',
 }
 
-const PAGE_INFO: Record<string, PageInfoItem> = {
-  '/':            { th: 'ภาพรวมระบบ',           en: 'Dashboard',          color: '#7B5BA4', bg: 'rgba(123,91,164,0.12)' },
-  '/alerts':      { th: 'การแจ้งเตือน',          en: 'Threat Alerts',      color: '#EF4444', bg: 'rgba(239,68,68,0.1)'   },
-  '/investigate': { th: 'วิเคราะห์เหตุการณ์',    en: 'Investigate',        color: '#3B82F6', bg: 'rgba(59,130,246,0.1)'  },
-  '/ioc':         { th: 'ตรวจจับภัยคุกคาม',      en: 'IOC Lookup',         color: '#F17422', bg: 'rgba(241,116,34,0.1)'  },
-  '/compliance':  { th: 'มาตรฐาน & Compliance',   en: 'Standards',          color: '#22C55E', bg: 'rgba(34,197,94,0.1)'   },
-  '/assets':      { th: 'อุปกรณ์เครือข่าย',       en: 'Network Assets',     color: '#0EA5E9', bg: 'rgba(14,165,233,0.1)'  },
-  '/kpi':         { th: 'ตัวชี้วัดผลงาน',          en: 'KPI & Metrics',      color: '#F59E0B', bg: 'rgba(245,158,11,0.1)'  },
-  '/admin':       { th: 'ตั้งค่าระบบ',            en: 'Administration',      color: '#64748B', bg: 'rgba(100,116,139,0.1)' },
+interface PageMeta {
+  titleTh: string
+  titleEn: string
+  color: string
+}
+
+const PAGE_META: Record<string, PageMeta> = {
+  '/':            { titleTh: 'ภาพรวมระบบ',        titleEn: 'Dashboard',       color: '#7B5BA4' },
+  '/alerts':      { titleTh: 'การแจ้งเตือน',       titleEn: 'Threat Alerts',   color: '#EF4444' },
+  '/investigate': { titleTh: 'วิเคราะห์เหตุการณ์', titleEn: 'Investigation',   color: '#3B82F6' },
+  '/ioc':         { titleTh: 'ตรวจจับภัยคุกคาม',   titleEn: 'IOC Lookup',      color: '#F17422' },
+  '/compliance':  { titleTh: 'Compliance',          titleEn: 'Compliance',      color: '#22C55E' },
+  '/assets':      { titleTh: 'อุปกรณ์เครือข่าย',  titleEn: 'Network Assets',  color: '#0EA5E9' },
+  '/kpi':         { titleTh: 'KPI & Metrics',       titleEn: 'KPI & Metrics',   color: '#F59E0B' },
+  '/admin':       { titleTh: 'Administration',      titleEn: 'Administration',  color: '#64748B' },
 }
 
 // ── Live clock ────────────────────────────────────────────────────────────────
@@ -45,13 +54,22 @@ function LiveClock() {
     const id = setInterval(() => setTime(new Date()), 30000)
     return () => clearInterval(id)
   }, [])
+  const isDark = useTheme().palette.mode === 'dark'
   return (
     <Box sx={{ textAlign: 'right' }}>
-      <Typography sx={{ fontSize: 12.5, fontFamily: '"IBM Plex Mono",monospace', fontWeight: 600, lineHeight: 1.2, color: 'text.primary' }}>
+      <Typography sx={{
+        fontSize: 13, fontFamily: '"IBM Plex Mono",monospace',
+        fontWeight: 600, lineHeight: 1.15,
+        color: isDark ? '#EDE9FA' : '#1A1033',
+      }}>
         {time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
       </Typography>
-      <Typography sx={{ fontSize: 9.5, color: 'text.disabled', lineHeight: 1.2 }}>
-        {time.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+      <Typography sx={{
+        fontSize: 9.5, lineHeight: 1.15, mt: 0.15,
+        color: isDark ? 'rgba(237,233,250,0.38)' : 'rgba(26,16,51,0.45)',
+        fontWeight: 500,
+      }}>
+        {time.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}
       </Typography>
     </Box>
   )
@@ -61,257 +79,302 @@ interface TopbarProps {
   onMenuClick: () => void
 }
 
-// ── Main Topbar ───────────────────────────────────────────────────────────────
 export default function Topbar({ onMenuClick }: TopbarProps) {
   const theme    = useTheme()
   const isDark   = theme.palette.mode === 'dark'
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const { mode, toggleTheme } = useThemeMode()
-  const { user, logout } = useAuth()
+  const { user, logout }  = useAuth()
   const navigate  = useNavigate()
   const location  = useLocation()
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+
+  const [anchorEl, setAnchorEl]   = useState<null | HTMLElement>(null)
   const [newAlerts, setNewAlerts] = useState<number>(0)
   const [wsConnected, setWsConnected] = useState<boolean>(false)
   const wsRef = useRef<WebSocket | null>(null)
 
+  // WebSocket for live alert count
   useEffect(() => {
-    let timer: any = null
+    let timer: ReturnType<typeof setTimeout> | null = null
     const connect = () => {
       try {
-        const BASE = import.meta.env.VITE_BASE_PATH || '/wazuh'
+        const BASE  = import.meta.env.VITE_BASE_PATH || '/wazuh'
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-        const ws = new WebSocket(`${proto}://${window.location.host}${BASE}/ws/alerts`)
+        const ws    = new WebSocket(`${proto}://${window.location.host}${BASE}/ws/alerts`)
         wsRef.current = ws
-        ws.onopen  = () => setWsConnected(true)
-        ws.onclose = () => { setWsConnected(false); timer = setTimeout(connect, 5000) }
-        ws.onerror = () => ws.close()
+        ws.onopen    = () => setWsConnected(true)
+        ws.onclose   = () => { setWsConnected(false); timer = setTimeout(connect, 5000) }
+        ws.onerror   = () => ws.close()
         ws.onmessage = e => {
           try {
             const d = JSON.parse(e.data)
             if (d.count > 0) setNewAlerts(c => c + d.count)
-          } catch {}
+          } catch { /* ignore parse errors */ }
         }
-      } catch {}
+      } catch { /* ignore connection errors */ }
     }
     connect()
     return () => {
-      clearTimeout(timer)
+      if (timer) clearTimeout(timer)
       wsRef.current?.close()
     }
   }, [])
 
-  const matchedPath = Object.keys(PAGE_INFO)
+  // Resolve current page metadata
+  const matchedPath = Object.keys(PAGE_META)
     .sort((a, b) => b.length - a.length)
     .find(p => p === '/' ? location.pathname === '/' : location.pathname.startsWith(p))
-  const pageInfo = PAGE_INFO[matchedPath || '/'] || PAGE_INFO['/']
+  const page = PAGE_META[matchedPath || '/'] ?? PAGE_META['/']
 
-  const initials = (user?.name || user?.username || 'U')
+  const initials   = (user?.name || user?.username || 'U')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const roleColor = ROLE_COLORS[user?.role || ''] || '#9A90BF'
+  const roleColor  = ROLE_COLORS[user?.role || ''] || '#9A90BF'
+  const roleLabel  = ROLE_LABELS[user?.role || '']  || user?.role || ''
 
   const handleLogout = async () => { setAnchorEl(null); await logout(); navigate('/login') }
 
-  // Common icon button style
+  // Shared icon-button style
   const iconBtnSx = {
-    borderRadius: '10px', p: 1,
-    bgcolor: isDark ? 'rgba(123,91,164,0.06)' : 'rgba(123,91,164,0.04)',
-    color: 'text.secondary',
+    borderRadius: '10px', p: 0.9,
+    bgcolor: isDark ? 'rgba(123,91,164,0.07)' : 'rgba(123,91,164,0.05)',
+    color: isDark ? 'rgba(237,233,250,0.55)' : 'rgba(26,16,51,0.5)',
     border: '1px solid',
-    borderColor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-    transition: 'all 0.2s ease',
+    borderColor: isDark ? 'rgba(123,91,164,0.13)' : 'rgba(123,91,164,0.1)',
+    transition: 'all 0.18s ease',
     '&:hover': {
-      bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-      borderColor: isDark ? 'rgba(123,91,164,0.25)' : 'rgba(123,91,164,0.15)',
-      transform: 'scale(1.05)',
-    }
-  }
+      bgcolor: isDark ? 'rgba(123,91,164,0.14)' : 'rgba(123,91,164,0.09)',
+      borderColor: isDark ? 'rgba(123,91,164,0.28)' : 'rgba(123,91,164,0.18)',
+      color: isDark ? '#C4A8E8' : '#5A3E85',
+      transform: 'translateY(-1px)',
+    },
+  } as const
 
   return (
     <Box
       component="header"
       sx={{
-        position: 'sticky', top: 0, zIndex: 1099,
-        bgcolor: isDark ? 'rgba(14,10,24,0.92)' : 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        position: 'sticky', top: 0, zIndex: 1099, flexShrink: 0,
+        bgcolor: isDark ? 'rgba(12,8,22,0.93)' : 'rgba(255,255,255,0.93)',
+        backdropFilter: 'blur(22px)',
+        WebkitBackdropFilter: 'blur(22px)',
         borderBottom: '1px solid',
-        borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.1)',
-        flexShrink: 0,
+        borderColor: isDark ? 'rgba(123,91,164,0.16)' : 'rgba(123,91,164,0.09)',
         boxShadow: isDark
-          ? '0 1px 8px rgba(0,0,0,0.2)'
-          : '0 1px 6px rgba(123,91,164,0.06)',
+          ? '0 1px 0 rgba(123,91,164,0.08), 0 4px 24px rgba(0,0,0,0.25)'
+          : '0 1px 0 rgba(123,91,164,0.06), 0 4px 16px rgba(123,91,164,0.05)',
       }}
     >
       <Box sx={{
-        display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 },
-        px: { xs: 1.5, sm: 2, md: 2.5 }, height: { xs: 56, sm: 60 },
+        display: 'flex', alignItems: 'center',
+        px: { xs: 1.5, sm: 2, md: 2.5 },
+        height: { xs: 56, sm: 62 },
+        gap: { xs: 1, sm: 1.5 },
       }}>
 
         {/* Mobile hamburger */}
         {isMobile && (
-          <IconButton onClick={onMenuClick} size="small"
-            sx={{
-              ...iconBtnSx,
-              color: '#7B5BA4',
-            }}>
+          <IconButton
+            onClick={onMenuClick}
+            size="small"
+            aria-label="Open navigation"
+            sx={{ ...iconBtnSx, color: '#7B5BA4', borderColor: 'rgba(123,91,164,0.25)' }}
+          >
             <MenuRoundedIcon sx={{ fontSize: 20 }} />
           </IconButton>
         )}
 
-        {/* ── Breadcrumb + Page title ── */}
+        {/* ── Page identity ── */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {/* Breadcrumb */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-            <HomeRoundedIcon
-              sx={{
-                fontSize: 13,
-                color: 'text.disabled',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                '&:hover': { color: '#7B5BA4', transform: 'scale(1.1)' }
-              }}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.2 }}>
+            <GridViewRoundedIcon
               onClick={() => navigate('/')}
+              sx={{
+                fontSize: 12,
+                color: isDark ? 'rgba(237,233,250,0.3)' : 'rgba(26,16,51,0.3)',
+                cursor: 'pointer',
+                transition: 'all 0.18s',
+                '&:hover': { color: '#7B5BA4' },
+              }}
             />
-            <KeyboardArrowRightRoundedIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
-            <Typography sx={{ fontSize: 11.5, color: 'text.secondary', fontWeight: 500 }}>
-              {pageInfo.en}
+            <ChevronRightRoundedIcon sx={{ fontSize: 11, color: isDark ? 'rgba(237,233,250,0.2)' : 'rgba(26,16,51,0.2)' }} />
+            <Typography sx={{
+              fontSize: 11, fontWeight: 500,
+              color: isDark ? 'rgba(237,233,250,0.38)' : 'rgba(26,16,51,0.42)',
+              letterSpacing: '0.01em',
+            }}>
+              {page.titleEn}
             </Typography>
           </Box>
 
-          {/* Page title row */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            {/* Color dot with animation */}
+          {/* Page title */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{
-              width: 8, height: 8, borderRadius: '50%', bgcolor: pageInfo.color, flexShrink: 0,
-              boxShadow: `0 0 10px ${pageInfo.color}`,
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              bgcolor: page.color,
+              boxShadow: `0 0 8px ${page.color}BB`,
               animation: 'pulseGlow 3s ease-in-out infinite',
             }} />
             <Typography sx={{
-              fontSize: { xs: 17, sm: 20 }, fontWeight: 800, lineHeight: 1.1,
-              color: 'text.primary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              letterSpacing: '-0.5px',
+              fontSize: { xs: 16, sm: 19 }, fontWeight: 800, lineHeight: 1.1,
+              letterSpacing: '-0.4px',
+              color: isDark ? '#EDE9FA' : '#1A1033',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {pageInfo.th}
+              {page.titleTh}
             </Typography>
           </Box>
         </Box>
 
-        {/* ── Right side ── */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1, lg: 1.5 }, flexShrink: 0 }}>
+        {/* ── Right controls ── */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 0.75 }, flexShrink: 0 }}>
 
-          {/* WS + Clock (desktop only) */}
-          {!isMobile && (
+          {/* WS status + clock (lg only) */}
+          <Box sx={{
+            display: { xs: 'none', lg: 'flex' },
+            alignItems: 'center', gap: 1.75,
+            px: 1.75, py: 0.85,
+            borderRadius: '11px',
+            bgcolor: isDark ? 'rgba(123,91,164,0.07)' : 'rgba(123,91,164,0.05)',
+            border: '1px solid',
+            borderColor: isDark ? 'rgba(123,91,164,0.13)' : 'rgba(123,91,164,0.1)',
+          }}>
+            <Tooltip title={wsConnected ? 'Real-time connected' : 'Offline'} placement="bottom">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, cursor: 'default' }}>
+                <FiberManualRecordIcon sx={{
+                  fontSize: 7.5,
+                  color: wsConnected ? '#22C55E' : isDark ? 'rgba(237,233,250,0.2)' : 'rgba(26,16,51,0.2)',
+                  animation: wsConnected ? 'pulseGlow 2.5s ease-in-out infinite' : 'none',
+                }} />
+                <Typography sx={{
+                  fontSize: 11.5, fontWeight: 700, lineHeight: 1,
+                  color: wsConnected ? '#22C55E' : isDark ? 'rgba(237,233,250,0.3)' : 'rgba(26,16,51,0.3)',
+                }}>
+                  {wsConnected ? 'Live' : 'Offline'}
+                </Typography>
+              </Box>
+            </Tooltip>
+
             <Box sx={{
-              display: { xs: 'none', lg: 'flex' },
-              alignItems: 'center', gap: 2,
-              px: 2, py: 0.75, borderRadius: '12px',
-              bgcolor: isDark ? 'rgba(123,91,164,0.06)' : 'rgba(123,91,164,0.04)',
-              border: '1px solid',
-              borderColor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-              backdropFilter: 'blur(12px)',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                bgcolor: isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.06)',
-              }
-            }}>
-              {/* WS status */}
-              <Tooltip title={wsConnected ? 'Real-time เชื่อมต่อแล้ว' : 'ออฟไลน์'}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <FiberManualRecordIcon sx={{
-                    fontSize: 8,
-                    color: wsConnected ? '#22C55E' : 'text.disabled',
-                    animation: wsConnected ? 'pulse 2s cubic-bezier(0.4,0,0.6,1) infinite' : 'none',
-                  }} />
-                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: wsConnected ? '#22C55E' : 'text.disabled' }}>
-                    {wsConnected ? 'Live' : 'Offline'}
-                  </Typography>
-                </Box>
-              </Tooltip>
-
-              <Box sx={{ width: 1, height: 20, bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)' }} />
-              <LiveClock />
-            </Box>
-          )}
+              width: 1, height: 18,
+              bgcolor: isDark ? 'rgba(123,91,164,0.15)' : 'rgba(123,91,164,0.1)',
+            }} />
+            <LiveClock />
+          </Box>
 
           {/* Alert bell */}
-          <Tooltip title={newAlerts > 0 ? `${newAlerts} การแจ้งเตือนใหม่` : 'การแจ้งเตือน'}>
-            <IconButton onClick={() => { navigate('/alerts'); setNewAlerts(0) }}
+          <Tooltip title={newAlerts > 0 ? `${newAlerts} new alert${newAlerts > 1 ? 's' : ''}` : 'Alerts'} placement="bottom">
+            <IconButton
+              onClick={() => { navigate('/alerts'); setNewAlerts(0) }}
+              size="small"
+              aria-label={newAlerts > 0 ? `${newAlerts} new alerts` : 'View alerts'}
               sx={{
                 ...iconBtnSx,
                 ...(newAlerts > 0 ? {
-                  bgcolor: 'rgba(239,68,68,0.1)',
+                  bgcolor: 'rgba(239,68,68,0.09)',
                   color: '#EF4444',
-                  borderColor: 'rgba(239,68,68,0.25)',
+                  borderColor: 'rgba(239,68,68,0.22)',
                   '&:hover': {
-                    bgcolor: 'rgba(239,68,68,0.18)',
-                    transform: 'scale(1.08)',
+                    bgcolor: 'rgba(239,68,68,0.16)',
+                    borderColor: 'rgba(239,68,68,0.35)',
+                    color: '#EF4444',
+                    transform: 'translateY(-1px)',
                   },
                 } : {}),
-              }}>
-              <Badge badgeContent={newAlerts > 0 ? Math.min(newAlerts, 99) : 0} color="error"
-                sx={{ '& .MuiBadge-badge': { fontSize: 8, minWidth: 15, height: 15, fontWeight: 800 } }}>
+              }}
+            >
+              <Badge
+                badgeContent={newAlerts > 0 ? Math.min(newAlerts, 99) : 0}
+                color="error"
+                sx={{ '& .MuiBadge-badge': { fontSize: 8, minWidth: 15, height: 15, fontWeight: 800, p: 0 } }}
+              >
                 {newAlerts > 0
-                  ? <NotificationsActiveRoundedIcon sx={{ fontSize: 20 }} />
-                  : <NotificationsRoundedIcon sx={{ fontSize: 20 }} />}
+                  ? <NotificationsActiveRoundedIcon sx={{ fontSize: 19 }} />
+                  : <NotificationsRoundedIcon sx={{ fontSize: 19 }} />
+                }
               </Badge>
             </IconButton>
           </Tooltip>
 
-          {/* Dark mode toggle */}
-          <Tooltip title={mode === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}>
-            <IconButton onClick={toggleTheme}
+          {/* Dark/light toggle */}
+          <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'} placement="bottom">
+            <IconButton
+              onClick={toggleTheme}
+              size="small"
+              aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               sx={{
                 ...iconBtnSx,
                 '&:hover': {
                   ...iconBtnSx['&:hover'],
-                  color: '#9B7DC4',
-                  transform: 'rotate(20deg) scale(1.05)',
-                }
-              }}>
+                  transform: 'rotate(18deg) translateY(-1px)',
+                },
+              }}
+            >
               {mode === 'dark'
-                ? <LightModeRoundedIcon sx={{ fontSize: 19 }} />
-                : <DarkModeRoundedIcon sx={{ fontSize: 19 }} />}
+                ? <LightModeRoundedIcon sx={{ fontSize: 18 }} />
+                : <DarkModeRoundedIcon  sx={{ fontSize: 18 }} />
+              }
             </IconButton>
           </Tooltip>
 
-          {/* User avatar button */}
-          <Tooltip title="บัญชีผู้ใช้">
-            <Box onClick={e => setAnchorEl(e.currentTarget)} sx={{
-              display: 'flex', alignItems: 'center', gap: 1,
-              px: { xs: 0.5, sm: 1.25 }, py: 0.5, borderRadius: '10px', cursor: 'pointer',
-              bgcolor: isDark ? 'rgba(123,91,164,0.06)' : 'rgba(123,91,164,0.04)',
-              border: '1px solid',
-              borderColor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-                borderColor: isDark ? 'rgba(123,91,164,0.25)' : 'rgba(123,91,164,0.15)',
-              },
-            }}>
+          {/* Divider */}
+          <Box sx={{
+            width: 1, height: 24, mx: 0.25,
+            bgcolor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.12)',
+            display: { xs: 'none', sm: 'block' },
+          }} />
+
+          {/* User pill */}
+          <Tooltip title="Account" placement="bottom">
+            <Box
+              onClick={e => setAnchorEl(e.currentTarget)}
+              role="button"
+              tabIndex={0}
+              aria-label="Open account menu"
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setAnchorEl(e.currentTarget as HTMLElement) }}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 1,
+                pl: 0.75, pr: { xs: 0.75, sm: 1.25 }, py: 0.6,
+                borderRadius: '10px', cursor: 'pointer',
+                bgcolor: isDark ? 'rgba(123,91,164,0.07)' : 'rgba(123,91,164,0.05)',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(123,91,164,0.13)' : 'rgba(123,91,164,0.1)',
+                transition: 'all 0.18s ease',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(123,91,164,0.14)' : 'rgba(123,91,164,0.09)',
+                  borderColor: isDark ? 'rgba(123,91,164,0.28)' : 'rgba(123,91,164,0.18)',
+                },
+              }}
+            >
               <Avatar sx={{
-                width: 32, height: 32, fontSize: 12, fontWeight: 800,
-                background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)`,
-                boxShadow: `0 2px 8px ${roleColor}33`,
+                width: 30, height: 30, fontSize: 11, fontWeight: 800,
+                background: `linear-gradient(135deg,${roleColor},${roleColor}BB)`,
+                boxShadow: `0 2px 8px ${roleColor}44`,
               }}>
                 {initials}
               </Avatar>
-              {!isMobile && (
-                <Box sx={{ display: { xs: 'none', lg: 'block' } }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.2, color: 'text.primary' }}>
-                    {user?.name?.split(' ')[0] || user?.username}
-                  </Typography>
-                  <Typography sx={{ fontSize: 10, color: roleColor, fontWeight: 600, lineHeight: 1.2 }}>
-                    {ROLE_LABELS[user?.role || ''] || user?.role}
-                  </Typography>
-                </Box>
-              )}
+              <Box sx={{ display: { xs: 'none', lg: 'block' } }}>
+                <Typography sx={{
+                  fontSize: 12.5, fontWeight: 700, lineHeight: 1.2,
+                  color: isDark ? '#EDE9FA' : '#1A1033',
+                  letterSpacing: '-0.1px',
+                }}>
+                  {user?.name?.split(' ')[0] || user?.username}
+                </Typography>
+                <Typography sx={{
+                  fontSize: 10, fontWeight: 600, lineHeight: 1.2,
+                  color: roleColor,
+                  letterSpacing: '0.01em',
+                }}>
+                  {roleLabel}
+                </Typography>
+              </Box>
             </Box>
           </Tooltip>
         </Box>
       </Box>
 
-      {/* ── User Dropdown Menu ── */}
+      {/* ── User dropdown ── */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -320,72 +383,87 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         sx={{
           '& .MuiPaper-root': {
-            mt: 1, minWidth: 280, borderRadius: '14px',
+            mt: 1, minWidth: 260, borderRadius: '14px',
             border: '1px solid',
             borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.12)',
-            backdropFilter: 'blur(20px)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             boxShadow: isDark
-              ? '0 8px 32px rgba(0,0,0,0.3)'
-              : '0 8px 24px rgba(0,0,0,0.1)',
-          }
+              ? '0 12px 40px rgba(0,0,0,0.4)'
+              : '0 12px 32px rgba(123,91,164,0.12)',
+          },
         }}
       >
-        <Box sx={{ px: 2.5, py: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+        {/* User info header */}
+        <Box sx={{ px: 2, pt: 2, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Avatar sx={{
-              width: 46, height: 46, fontSize: 16, fontWeight: 800,
-              background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)`,
-              boxShadow: `0 4px 12px ${roleColor}40`,
+              width: 44, height: 44, fontSize: 15, fontWeight: 800,
+              background: `linear-gradient(135deg,${roleColor},${roleColor}BB)`,
+              boxShadow: `0 4px 14px ${roleColor}44`,
             }}>
               {initials}
             </Avatar>
             <Box>
-              <Typography sx={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.3px' }}>
+              <Typography sx={{
+                fontSize: 13.5, fontWeight: 700, lineHeight: 1.2,
+                color: isDark ? '#EDE9FA' : '#1A1033',
+                letterSpacing: '-0.2px',
+              }}>
                 {user?.name || user?.username}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.3 }}>
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: roleColor }} />
-                <Typography sx={{ fontSize: 11.5, color: roleColor, fontWeight: 600 }}>
-                  {ROLE_LABELS[user?.role || ''] || user?.role}
-                </Typography>
+                <Box sx={{
+                  px: 0.7, py: 0.1, borderRadius: '5px',
+                  bgcolor: `${roleColor}22`,
+                  border: `1px solid ${roleColor}44`,
+                }}>
+                  <Typography sx={{ fontSize: 10, fontWeight: 700, color: roleColor, lineHeight: 1.4 }}>
+                    {roleLabel}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           </Box>
         </Box>
 
-        <Divider sx={{ my: 0.75 }} />
+        <Divider sx={{ mx: 1 }} />
 
         {(user?.role === 'admin' || user?.role === 'superadmin') && (
           <>
-            <MenuItem onClick={() => { setAnchorEl(null); navigate('/admin') }}
+            <MenuItem
+              onClick={() => { setAnchorEl(null); navigate('/admin') }}
               sx={{
-                gap: 1.75, py: 1.25, mx: 1, my: 0.4, borderRadius: '10px',
-                transition: 'all 0.2s ease',
+                gap: 1.5, py: 1.1, mx: 1, my: 0.4, borderRadius: '10px',
+                fontSize: 13, fontWeight: 500,
+                transition: 'all 0.18s',
                 '&:hover': {
                   bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
                   color: '#7B5BA4',
                   transform: 'translateX(3px)',
-                }
-              }}>
-              <TuneRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              <Typography sx={{ fontSize: 13, fontWeight: 500 }}>ตั้งค่าระบบ</Typography>
+                },
+              }}
+            >
+              <TuneRoundedIcon sx={{ fontSize: 17, color: 'text.secondary' }} />
+              <Typography sx={{ fontSize: 13, fontWeight: 500 }}>Administration</Typography>
             </MenuItem>
-            <Divider sx={{ my: 0.75 }} />
+            <Divider sx={{ mx: 1 }} />
           </>
         )}
 
-        <MenuItem onClick={handleLogout}
+        <MenuItem
+          onClick={handleLogout}
           sx={{
-            gap: 1.75, py: 1.25, mx: 1, my: 0.4, borderRadius: '10px',
-            transition: 'all 0.2s ease',
+            gap: 1.5, py: 1.1, mx: 1, my: 0.4, borderRadius: '10px',
+            transition: 'all 0.18s',
             '&:hover': {
-              bgcolor: 'rgba(239,68,68,0.1)',
-              color: '#EF4444',
+              bgcolor: 'rgba(239,68,68,0.08)',
               transform: 'translateX(3px)',
-            }
-          }}>
-          <LogoutRoundedIcon sx={{ fontSize: 18, color: '#EF4444' }} />
-          <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#EF4444' }}>ออกจากระบบ</Typography>
+            },
+          }}
+        >
+          <LogoutRoundedIcon sx={{ fontSize: 17, color: '#EF4444' }} />
+          <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#EF4444' }}>Log out</Typography>
         </MenuItem>
       </Menu>
     </Box>
