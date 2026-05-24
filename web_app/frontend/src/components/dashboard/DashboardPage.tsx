@@ -33,6 +33,7 @@ import WorldMap from './WorldMap'
 import { useSnackbar } from 'notistack'
 import { PageHeader } from '../ui/PageHeader'
 import { SectionCard } from '../ui/SectionCard'
+import { PageShell, ContentGrid } from '../ui/layout'
 import { BRAND, CHART_TIP_STYLE, PIE_COLORS, fmtN, sevColor, sevLabelShort } from '../ui/tokens'
 import { DashboardStats, SecurityPosture, SeverityTrend, TimelinePoint } from '../../types/dashboard'
 import { SecurityPostureBanner } from './SecurityPostureBanner'
@@ -865,51 +866,52 @@ export default function DashboardPage() {
     {v:'24h',l:'24 ชั่วโมง'},{v:'7d',l:'7 วัน'},{v:'30d',l:'30 วัน'},
   ]
 
-  return (
-    <Box className="page-enter flex flex-col gap-4 md:gap-5">
+  const headerActions = (
+    <>
+      {eps > 0 && (
+        <Box className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+          sx={{ bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.2)', cursor: 'default' }}>
+          <BoltRoundedIcon sx={{ fontSize: 13, color: B.purple }} />
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: B.purpleL }}>
+            {eps} <span style={{ fontWeight: 400, fontSize: 10 }}>EPS</span>
+          </Typography>
+        </Box>
+      )}
+      <Tooltip title={paused ? 'คลิกเพื่อเปิด Auto-refresh' : 'คลิกเพื่อหยุด Auto-refresh'}>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => setPaused(p => !p)}
+          sx={{ fontSize: 11, borderRadius: '9px', py: 0.5, px: 1.25, fontWeight: 700, color: paused ? 'text.secondary' : B.green, borderColor: paused ? 'divider' : `${B.green}40` }}
+        >
+          {paused ? '⏸ Paused' : '▶ Live'}
+        </Button>
+      </Tooltip>
+      <Tooltip title="รีเฟรชทันที">
+        <IconButton size="small" onClick={doRefresh}
+          aria-label="รีเฟรชข้อมูล"
+          sx={{ bgcolor: 'rgba(123,91,164,0.08)', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}>
+          <RefreshRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        </IconButton>
+      </Tooltip>
+      <FormControl size="small" sx={{ minWidth: 130 }}>
+        <Select value={timeRange} onChange={e => setTimeRange(e.target.value as string)} sx={{ fontSize: 13, borderRadius: '10px' }}>
+          {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
+        </Select>
+      </FormControl>
+    </>
+  )
 
-      {/* ══ HEADER ══════════════════════════════════════════════════════════ */}
-      <PageHeader
-        title="ภาพรวมระบบ"
-        subtitle="Security Operations Center · โรงพยาบาลวลัยลักษณ์"
-        status={paused ? 'paused' : 'live'}
-        statusLabel={paused ? 'PAUSED' : `LIVE · ${countdown}s`}
-        actions={
-          <>
-            {eps > 0 && (
-              <Box className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                sx={{ bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.2)', cursor: 'default' }}>
-                <BoltRoundedIcon sx={{ fontSize: 13, color: B.purple }} />
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: B.purpleL }}>
-                  {eps} <span style={{ fontWeight: 400, fontSize: 10 }}>EPS</span>
-                </Typography>
-              </Box>
-            )}
-            <Tooltip title={paused ? 'คลิกเพื่อเปิด Auto-refresh' : 'คลิกเพื่อหยุด Auto-refresh'}>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => setPaused(p => !p)}
-                sx={{ fontSize: 11, borderRadius: '9px', py: 0.5, px: 1.25, fontWeight: 700, color: paused ? 'text.secondary' : B.green, borderColor: paused ? 'divider' : `${B.green}40` }}
-              >
-                {paused ? '⏸ Paused' : '▶ Live'}
-              </Button>
-            </Tooltip>
-            <Tooltip title="รีเฟรชทันที">
-              <IconButton size="small" onClick={doRefresh}
-                aria-label="รีเฟรชข้อมูล"
-                sx={{ bgcolor: 'rgba(123,91,164,0.08)', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }}>
-                <RefreshRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              </IconButton>
-            </Tooltip>
-            <FormControl size="small" sx={{ minWidth: 130 }}>
-              <Select value={timeRange} onChange={e => setTimeRange(e.target.value as string)} sx={{ fontSize: 13, borderRadius: '10px' }}>
-                {TIME_OPTS.map(t => <MenuItem key={t.v} value={t.v}>{t.l}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </>
-        }
-      />
+  return (
+    <PageShell
+      title="ภาพรวมระบบ"
+      subtitle="Security Operations Center · โรงพยาบาลวลัยลักษณ์"
+      status={paused ? 'paused' : 'live'}
+      statusLabel={paused ? 'PAUSED' : `LIVE · ${countdown}s`}
+      actions={headerActions}
+      variant="dashboard"
+      density="comfortable"
+    >
 
       {/* ══ SECURITY POSTURE BANNER ═════════════════════════════════════════ */}
       <SecurityPostureBanner posture={posture} isLoading={isLoading} />
@@ -928,8 +930,7 @@ export default function DashboardPage() {
       <MetricHero stats={stats} isLoading={isLoading} tl={tl} navigate={navigate} />
 
       {/* ══ ROW 2: Severity Breakdown & Insight Cards ════════════════════════ */}
-      <div className="grid grid-cols-12 gap-3 md:gap-4">
-        {/* Severity Breakdown */}
+      <ContentGrid variant="dashboard" gap="md">
         <div className="col-span-12 lg:col-span-4">
           <Panel
             title="การแบ่งระดับความรุนแรง"
@@ -945,8 +946,6 @@ export default function DashboardPage() {
             />
           </Panel>
         </div>
-
-        {/* Insight Cards */}
         <div className="col-span-12 lg:col-span-8">
           <Panel
             title="SOC Insights"
@@ -961,15 +960,14 @@ export default function DashboardPage() {
             />
           </Panel>
         </div>
-      </div>
+      </ContentGrid>
 
-      {/* ══ ROW 3: Timeline (left 2/3) + Sources+Countries (right 1/3) ══════ */}
-      <div className="grid grid-cols-12 gap-3 md:gap-4">
-        {/* Timeline */}
+      {/* ══ ROW 3: Timeline (8/12) + Sources (4/12) ══════════════════════════ */}
+      <ContentGrid variant="dashboard" gap="md">
         <div className="col-span-12 lg:col-span-8">
           <Panel
             title="แนวโน้ม Alert ตามเวลา"
-            icon={<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.5l6-6 4 4 7-8"/><path d="M3.5 18.5l6-6 4 4 7-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            icon={<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.5l6-6 4 4 7-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             action={
               <div className="flex items-center gap-3">
                 {[['Total',B.purple],['Critical',B.red],['High',B.orange],['Medium',B.yellow]].map(([l,c]) => (
@@ -984,25 +982,20 @@ export default function DashboardPage() {
             <Timeline data={tl} isLoading={isLoading} isDark={isDark} />
           </Panel>
         </div>
-
-        {/* Sources */}
         <div className="col-span-12 lg:col-span-4">
           <Panel title="แหล่งที่มา Log" icon={<RouterRoundedIcon sx={{ fontSize: 16 }} />}>
             <SourceDonut data={stats?.by_source||[]} isLoading={isLoading} />
           </Panel>
         </div>
-      </div>
+      </ContentGrid>
 
-      {/* ══ ROW 3: Countries · Rules · MITRE · Agents ════════════════════════ */}
-      <div className="grid grid-cols-12 gap-3 md:gap-4">
-        {/* Countries */}
+      {/* ══ ROW 4: Countries · Rules · MITRE · Cluster+Agents ════════════════ */}
+      <ContentGrid variant="dashboard" gap="md">
         <div className="col-span-12 sm:col-span-6 lg:col-span-3">
           <Panel title="ประเทศต้นทางโจมตี" icon={<PublicRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
             <CountriesPanel countries={countries} isLoading={isLoading} onCountryClick={(c) => navigate(`/alerts?country=${encodeURIComponent(c.name)}`)} />
           </Panel>
         </div>
-
-        {/* Top Rules */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3">
           <Panel
             title="Rule ที่พบบ่อยสุด"
@@ -1019,32 +1012,23 @@ export default function DashboardPage() {
             <HBar items={stats?.by_rule||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.red:i<3?B.orange:B.purple} mono onItemClick={(item) => navigate(`/alerts?rule_id=${encodeURIComponent(item.name)}`)} />
           </Panel>
         </div>
-
-        {/* MITRE */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3">
           <Panel title="MITRE ATT&CK" icon={<SecurityRoundedIcon sx={{ fontSize: 16 }} />} accent="#A855F7">
             <MitreTactics data={stats?.by_mitre||[]} isLoading={isLoading} />
           </Panel>
         </div>
-
-        {/* Cluster + Agents stacked */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col gap-4">
           <Panel title="Wazuh Cluster" icon={<StorageRoundedIcon sx={{ fontSize: 16 }} />} accent={B.green}>
             <ClusterStatus cluster={cluster} />
           </Panel>
-          <Panel
-            title="Wazuh Agents"
-            icon={<DevicesRoundedIcon sx={{ fontSize: 16 }} />}
-            accent={B.purple}
-          >
+          <Panel title="Wazuh Agents" icon={<DevicesRoundedIcon sx={{ fontSize: 16 }} />} accent={B.purple}>
             <AgentsMini agentData={agentData} isLoading={agentLoading} />
           </Panel>
         </div>
-      </div>
+      </ContentGrid>
 
-      {/* ══ ROW 4: World Map + Top IPs/Agents + Recent Alerts ═══════════════ */}
-      <div className="grid grid-cols-12 gap-3 md:gap-4">
-        {/* World Map */}
+      {/* ══ ROW 5: World Map + Top IPs/Agents + Recent Alerts ════════════════ */}
+      <ContentGrid variant="dashboard" gap="md">
         <div className="col-span-12 lg:col-span-5">
           <Panel
             title="แผนที่แหล่งโจมตี"
@@ -1061,8 +1045,6 @@ export default function DashboardPage() {
             </Box>
           </Panel>
         </div>
-
-        {/* Top IPs + Top Agents */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3 flex flex-col gap-4">
           <Panel title="IP โจมตีสูงสุด" icon={<RouterRoundedIcon sx={{ fontSize: 16 }} />} accent={B.red}>
             <HBar items={stats?.by_srcip||[]} isLoading={isLoading} colorFn={()=>B.red} mono limit={6} onItemClick={(item) => navigate(`/investigate?q=${encodeURIComponent(item.name)}`)} />
@@ -1071,8 +1053,6 @@ export default function DashboardPage() {
             <HBar items={stats?.by_agent||[]} isLoading={isLoading} colorFn={(i)=>i===0?B.orange:B.purple} limit={5} onItemClick={(item) => navigate(`/alerts?agent=${encodeURIComponent(item.name)}`)} />
           </Panel>
         </div>
-
-        {/* Recent Critical Alerts - Modern Feed */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-4">
           <Panel
             title="การแจ้งเตือนล่าสุด (Critical / High)"
@@ -1091,8 +1071,8 @@ export default function DashboardPage() {
             </Box>
           </Panel>
         </div>
-      </div>
+      </ContentGrid>
 
-    </Box>
+    </PageShell>
   )
 }
