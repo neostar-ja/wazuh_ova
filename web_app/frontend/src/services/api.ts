@@ -4,6 +4,7 @@ import { DashboardStats, ClusterHealth } from '../types/dashboard'
 import { AlertStats } from '../types/alert'
 import { ComplianceSummary } from '../types/compliance'
 import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../types/kpi'
+import { safeStorage } from '../utils/safeStorage'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/wazuh/api'
 const APP_BASE = (import.meta.env.VITE_BASE_PATH || '/wazuh').replace(/\/+$/, '') || '/'
@@ -13,7 +14,7 @@ let isRedirectingToLogin = false
 const api = axios.create({ baseURL: BASE })
 
 api.interceptors.request.use((cfg: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem('token')
+  const token = safeStorage.getItem('token')
   if (token) {
     cfg.headers.Authorization = `Bearer ${token}`
   }
@@ -24,8 +25,8 @@ api.interceptors.response.use(
   (r: AxiosResponse) => r,
   (err) => {
     if (err.response?.status === 401 && !err.config?.url?.includes('/auth/login')) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      safeStorage.removeItem('token')
+      safeStorage.removeItem('user')
       if (!isRedirectingToLogin && window.location.pathname !== LOGIN_PATH) {
         isRedirectingToLogin = true
         window.location.replace(LOGIN_PATH)

@@ -129,11 +129,18 @@ async def put_list_file(filename: str, content: str) -> dict:
     token = await get_token()
     async with httpx.AsyncClient(verify=False, timeout=30) as c:
         r = await c.put(
-            f"{BASE}/lists/files/{filename}",
+            f"{BASE}/lists/files/{filename}?overwrite=true",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"},
             content=content.encode(),
         )
-        return r.json()
+        data = r.json()
+        if data.get("error"):
+            failed = data.get("data", {}).get("failed_items", [])
+            detail = data.get("message") or "Could not upload CDB list file"
+            if failed:
+                detail = failed[0].get("error", {}).get("message", detail)
+            raise RuntimeError(detail)
+        return data
 
 
 # ─── Manager Config ───────────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { useThemeMode } from '../../theme/ThemeContext'
+import { safeStorage } from '../../utils/safeStorage'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
@@ -1008,11 +1009,11 @@ const RECENT_SEARCHES_KEY = 'soc_ioc_recent'
 const MAX_RECENT = 8
 
 function getRecent(): string[] {
-  try { return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]') } catch { return [] }
+  try { return JSON.parse(safeStorage.getItem(RECENT_SEARCHES_KEY) || '[]') } catch { return [] }
 }
 function saveRecent(val: string) {
   const prev = getRecent().filter(v => v !== val)
-  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([val, ...prev].slice(0, MAX_RECENT)))
+  safeStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify([val, ...prev].slice(0, MAX_RECENT)))
 }
 
 export default function IOCPage() {

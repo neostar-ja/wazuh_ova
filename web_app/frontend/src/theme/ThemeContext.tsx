@@ -3,6 +3,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import createSOCTheme from './muiTheme'
 import { ThemeMode, ThemeContextValue } from '../types/theme'
+import { safeStorage } from '../utils/safeStorage'
 
 const ThemeCtx = createContext<ThemeContextValue>({
   themeMode: 'dark',
@@ -19,7 +20,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('soc-theme-mode') as ThemeMode | null
+      const stored = safeStorage.getItem('soc-theme-mode') as ThemeMode | null
       if (stored && (stored === 'light' || stored === 'dark' || stored === 'system')) return stored
       return 'dark' // default to dark
     }
@@ -53,7 +54,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const setThemeMode = useCallback((newMode: ThemeMode) => {
     setThemeModeState(newMode)
-    localStorage.setItem('soc-theme-mode', newMode)
+    safeStorage.setItem('soc-theme-mode', newMode)
   }, [])
 
   const toggleTheme = useCallback(() => {

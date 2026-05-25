@@ -358,32 +358,285 @@ async def _search_entity_events(query: str, time_range: str = "30d", size: int =
         return []
 
 
-async def get_asset_devices(time_range: str = "7d", limit: int = 250):
-    events = await _search_entity_events(
-        'data.dhcp_ip:* OR data.dhcp_mac:* OR data.srcip:* OR data.mac:*',
-        time_range=time_range,
-        size=max(500, min(limit * 8, 2000)),
+def _first_ipv4(addresses):
+    for address in addresses:
+        if "." in address:
+            return address
+    return addresses[0] if addresses else None
+
+
+def _normalize_asset_status(status: str | None):
+    value = (status or "").lower()
+    if value in {"active", "connected"}:
+        return "online"
+    if value in {"disconnected", "pending"}:
+        return "stale"
+    return "offline"
+
+
+def _last_keepalive_value(value: str | None):
+    if not value or value.startswith("9999-"):
+        return None
+    return value
+
+
+async def _inventory_index_docs(index_name: str, source_fields=None, size: int = 500):
+    client = get_client()
+    body = {"size": size}
+    if source_fields:
+        body["_source"] = source_fields
+    try:
+        resp = client.search(index=index_name, body=body)
+        return [hit.get("_source", {}) for hit in resp.get("hits", {}).get("hits", [])]
+    except Exception:
+        return []
+
+
+async def _inventory_index_count(index_name: str):
+    client = get_client()
+    try:
+        return int(client.count(index=index_name).get("count", 0))
+    except Exception:
+        return 0
+
+
+async def _load_asset_inventory(time_range: str = "7d"):
+    from . import wazuh_service
+
+    agents_payload = await wazuh_service.get_agents()
+    agents = agents_payload.get("data", {}).get("affected_items", [])
+
+    system_docs = await _inventory_index_docs(
+        "wazuh-states-inventory-system-wazuh",
+        ["agent.id", "agent.name", "agent.version", "host.hostname", "host.os.name", "host.os.version", "host.architecture", "wazuh.cluster.node"],
+        size=200,
     )
-    grouped = {}
-    for event in events:
-        data = event.get("data", {})
-        ip = data.get("dhcp_ip") or data.get("srcip")
-        mac = data.get("dhcp_mac") or data.get("mac")
-        if not ip and not mac:
-          continue
-        key = f"{ip or 'unknown'}::{mac or 'unknown'}"
-        grouped.setdefault(key, []).append(event)
+    hardware_docs = await _inventory_index_docs(
+        "wazuh-states-inventory-hardware-wazuh",
+        ["agent.id", "host.cpu.name", "host.cpu.cores", "host.cpu.speed", "host.memory.total", "host.memory.used", "host.memory.free", "host.memory.usage", "host.serial_number"],
+        size=200,
+    )
+    interface_docs = await _inventory_index_docs(
+        "wazuh-states-inventory-interfaces-wazuh",
+        ["agent.id", "host.mac", "interface.name", "interface.state", "interface.type", "interface.mtu"],
+        size=1000,
+    )
+    network_docs = await _inventory_index_docs(
+        "wazuh-states-inventory-networks-wazuh",
+        ["agent.id", "interface.name", "network.ip", "network.netmask", "network.type"],
+        size=1000,
+    )
+
+    client = get_client()
+    alert_body = {
+        "size": 0,
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    {"range": {"rule.level": {"gte": 7}}},
+                ]
+            }
+        },
+        "aggs": {
+            "agents": {
+                "terms": {"field": "agent.id", "size": 200},
+                "aggs": {
+                    "agent_name": {"terms": {"field": "agent.name.keyword", "size": 1}},
+                    "max_level": {"max": {"field": "rule.level"}},
+                    "last_seen": {"max": {"field": "@timestamp"}},
+                    "top_source": {"terms": {"field": "predecoder.program_name.keyword", "size": 1}},
+                },
+            }
+        },
+    }
+    try:
+        alert_resp = client.search(index=settings.opensearch_index, body=alert_body)
+        alert_buckets = alert_resp.get("aggregations", {}).get("agents", {}).get("buckets", [])
+    except Exception:
+        alert_buckets = []
+
+    system_map = {doc.get("agent", {}).get("id"): doc for doc in system_docs if doc.get("agent", {}).get("id")}
+    hardware_map = {doc.get("agent", {}).get("id"): doc for doc in hardware_docs if doc.get("agent", {}).get("id")}
+    interface_map = defaultdict(list)
+    for doc in interface_docs:
+        agent_id = doc.get("agent", {}).get("id")
+        if agent_id:
+            interface_map[agent_id].append(doc)
+    network_map = defaultdict(list)
+    for doc in network_docs:
+        agent_id = doc.get("agent", {}).get("id")
+        if agent_id:
+            network_map[agent_id].append(doc)
+    alert_map = {}
+    for bucket in alert_buckets:
+        key = bucket.get("key")
+        if not key:
+            continue
+        top_source = bucket.get("top_source", {}).get("buckets", [])
+        alert_map[key] = {
+            "event_count": bucket.get("doc_count", 0),
+            "max_level": int(bucket.get("max_level", {}).get("value") or 0),
+            "last_seen": bucket.get("last_seen", {}).get("value_as_string"),
+            "top_source": top_source[0]["key"] if top_source else None,
+        }
 
     devices = []
-    for group_events in grouped.values():
-        summary = summarize_entity_events(group_events)
-        devices.append(summary)
+    for agent in agents:
+        agent_id = agent.get("id")
+        if not agent_id or agent_id == "000":
+            continue
 
+        system_doc = system_map.get(agent_id, {})
+        hardware_doc = hardware_map.get(agent_id, {})
+        interface_entries = interface_map.get(agent_id, [])
+        network_entries = network_map.get(agent_id, [])
+        alert_data = alert_map.get(agent_id, {})
+
+        host = system_doc.get("host", {})
+        host_os = host.get("os", {})
+        hardware_host = hardware_doc.get("host", {})
+        cpu = hardware_host.get("cpu", {})
+        memory = hardware_host.get("memory", {})
+
+        addresses = []
+        for entry in network_entries:
+            address = entry.get("network", {}).get("ip")
+            if address and address not in addresses:
+                addresses.append(address)
+
+        interface_names = []
+        mac_addresses = []
+        for entry in interface_entries:
+            iface = entry.get("interface", {})
+            host_mac = entry.get("host", {}).get("mac")
+            if iface.get("name") and iface["name"] not in interface_names:
+                interface_names.append(iface["name"])
+            if host_mac and host_mac not in mac_addresses:
+                mac_addresses.append(host_mac)
+
+        agent_ip = agent.get("ip")
+        primary_ip = agent_ip if agent_ip not in {"127.0.0.1", "any", None} else _first_ipv4(addresses)
+        if primary_ip in {"127.0.0.1", "any"}:
+            primary_ip = _first_ipv4(addresses)
+
+        max_level = alert_data.get("max_level", 0)
+        event_count = alert_data.get("event_count", 0)
+        last_seen = _last_keepalive_value(agent.get("lastKeepAlive")) or alert_data.get("last_seen")
+
+        devices.append({
+            "asset_kind": "managed",
+            "asset_id": agent_id,
+            "agent_id": agent_id,
+            "agent": agent.get("name"),
+            "hostname": host.get("hostname") or agent.get("name"),
+            "ip": primary_ip,
+            "mac": mac_addresses[0] if mac_addresses else None,
+            "ips": addresses,
+            "macs": [{"value": value, "count": 1} for value in mac_addresses],
+            "status": _normalize_asset_status(agent.get("status")),
+            "agent_status": agent.get("status"),
+            "group": ", ".join(agent.get("group", [])) if isinstance(agent.get("group"), list) else agent.get("group"),
+            "manager": agent.get("manager"),
+            "node": system_doc.get("wazuh", {}).get("cluster", {}).get("node") or agent.get("node_name"),
+            "version": agent.get("version") or system_doc.get("agent", {}).get("version"),
+            "architecture": host.get("architecture") or agent.get("os", {}).get("arch"),
+            "os": host_os.get("name") or agent.get("os", {}).get("name"),
+            "os_version": host_os.get("version") or agent.get("os", {}).get("version"),
+            "cpu_name": cpu.get("name"),
+            "cpu_cores": cpu.get("cores"),
+            "cpu_speed_mhz": cpu.get("speed"),
+            "memory_total": memory.get("total"),
+            "memory_used": memory.get("used"),
+            "memory_usage": memory.get("usage"),
+            "serial_number": hardware_host.get("serial_number"),
+            "interface_count": len(interface_names),
+            "address_count": len(addresses),
+            "event_count": event_count,
+            "max_level": max_level,
+            "risk_score": _calc_risk_score(max_level, event_count),
+            "top_source": alert_data.get("top_source"),
+            "first_seen": agent.get("dateAdd"),
+            "last_seen": last_seen,
+            "top_rules": [],
+            "timeline": [],
+            "users": [],
+            "programs": [],
+            "hostnames": [{"value": host.get("hostname") or agent.get("name"), "count": 1}],
+            "agents": [{"value": agent.get("name"), "count": 1}],
+            "ip_conflicts": {},
+        })
+
+    return devices
+
+
+async def _load_dhcp_summary(time_range: str = "7d"):
+    client = get_client()
+    body = {
+        "size": 2000,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    {"exists": {"field": "data.dhcp_ip"}},
+                ]
+            }
+        },
+        "_source": ["@timestamp", "data.dhcp_ip", "data.dhcp_mac", "data.dhcp_hostname", "data.dhcp_action", "agent.name"],
+        "aggs": {
+            "unique_ips": {"cardinality": {"field": "data.dhcp_ip"}},
+            "unique_macs": {"cardinality": {"field": "data.dhcp_mac"}},
+        },
+    }
+    try:
+        resp = client.search(index=settings.opensearch_index, body=body)
+        hits = [hit.get("_source", {}) for hit in resp.get("hits", {}).get("hits", [])]
+        unique_ips = int(resp.get("aggregations", {}).get("unique_ips", {}).get("value", 0))
+        unique_macs = int(resp.get("aggregations", {}).get("unique_macs", {}).get("value", 0))
+    except Exception:
+        hits = []
+        unique_ips = 0
+        unique_macs = 0
+
+    ip_to_macs = defaultdict(set)
+    for event in hits:
+        data = event.get("data", {})
+        if data.get("dhcp_ip") and data.get("dhcp_mac"):
+            ip_to_macs[data["dhcp_ip"]].add(data["dhcp_mac"])
+    try:
+        recent_24h = int(client.count(
+            index=settings.opensearch_index,
+            body={
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"range": {"@timestamp": {"gte": "now-24h"}}},
+                            {"exists": {"field": "data.dhcp_ip"}},
+                        ]
+                    }
+                }
+            },
+        ).get("count", 0))
+    except Exception:
+        recent_24h = 0
+
+    return {
+        "events": hits,
+        "unique_ips": unique_ips,
+        "unique_macs": unique_macs,
+        "recent_events_24h": recent_24h,
+        "conflicts": sum(1 for macs in ip_to_macs.values() if len(macs) > 1),
+    }
+
+
+async def get_asset_devices(time_range: str = "7d", limit: int = 250):
+    devices = await _load_asset_inventory(time_range=time_range)
     devices.sort(
         key=lambda item: (
-            item.get("last_seen") or "",
+            {"online": 2, "stale": 1, "offline": 0}.get(item.get("status"), 0),
             item.get("risk_score") or 0,
-            item.get("event_count") or 0,
+            item.get("last_seen") or "",
         ),
         reverse=True,
     )
@@ -392,35 +645,93 @@ async def get_asset_devices(time_range: str = "7d", limit: int = 250):
 
 async def get_asset_stats(time_range: str = "7d"):
     devices = await get_asset_devices(time_range=time_range, limit=500)
+    dhcp_summary = await _load_dhcp_summary(time_range=time_range)
     total = len(devices)
     online = sum(1 for device in devices if device.get("status") == "online")
     stale = sum(1 for device in devices if device.get("status") == "stale")
     risky = sum(1 for device in devices if (device.get("risk_score") or 0) >= 7)
+    os_breakdown = Counter((device.get("os") or "Unknown") for device in devices)
+    inventory_counts = {
+        "system": await _inventory_index_count("wazuh-states-inventory-system-wazuh"),
+        "hardware": await _inventory_index_count("wazuh-states-inventory-hardware-wazuh"),
+        "interfaces": await _inventory_index_count("wazuh-states-inventory-interfaces-wazuh"),
+        "networks": await _inventory_index_count("wazuh-states-inventory-networks-wazuh"),
+        "ports": await _inventory_index_count("wazuh-states-inventory-ports-wazuh"),
+    }
     new_24h = 0
-    conflicts = 0
     for device in devices:
         first_seen = _parse_ts(device.get("first_seen"))
         if first_seen and first_seen >= datetime.now(timezone.utc) - timedelta(hours=24):
             new_24h += 1
-        if device.get("ip_conflicts"):
-            conflicts += 1
     return {
         "total_devices": total,
         "online_devices": online,
         "stale_devices": stale,
         "new_devices_24h": new_24h,
-        "conflict_devices": conflicts,
+        "conflict_devices": dhcp_summary["conflicts"],
         "high_risk_devices": risky,
+        "managed_assets": total,
+        "dhcp_unique_ips": dhcp_summary["unique_ips"],
+        "dhcp_unique_macs": dhcp_summary["unique_macs"],
+        "dhcp_events_24h": dhcp_summary["recent_events_24h"],
+        "inventory_counts": inventory_counts,
+        "os_breakdown": [{"label": key, "value": value} for key, value in os_breakdown.most_common(8)],
     }
 
 
 async def get_device_detail(identifier: str, time_range: str = "30d"):
-    query = (
-        f'data.dhcp_ip:"{identifier}" OR data.srcip:"{identifier}" OR data.dstip:"{identifier}" '
-        f'OR data.dhcp_mac:"{identifier}" OR data.mac:"{identifier}"'
-    )
+    managed_assets = await _load_asset_inventory(time_range=time_range)
+    managed_device = next((
+        item for item in managed_assets
+        if identifier in {
+            item.get("asset_id"),
+            item.get("agent_id"),
+            item.get("agent"),
+            item.get("hostname"),
+            item.get("ip"),
+            item.get("mac"),
+        }
+    ), None)
+
+    query_parts = [
+        f'data.dhcp_ip:"{identifier}"',
+        f'data.srcip:"{identifier}"',
+        f'data.dstip:"{identifier}"',
+        f'data.dhcp_mac:"{identifier}"',
+        f'data.mac:"{identifier}"',
+        f'agent.id:"{identifier}"',
+        f'agent.name:"{identifier}"',
+    ]
+    if managed_device:
+        if managed_device.get("agent_id") and managed_device.get("agent_id") != identifier:
+            query_parts.append(f'agent.id:"{managed_device["agent_id"]}"')
+        if managed_device.get("agent") and managed_device.get("agent") != identifier:
+            query_parts.append(f'agent.name:"{managed_device["agent"]}"')
+        if managed_device.get("ip") and managed_device.get("ip") != identifier:
+            query_parts.extend([
+                f'data.dhcp_ip:"{managed_device["ip"]}"',
+                f'data.srcip:"{managed_device["ip"]}"',
+                f'data.dstip:"{managed_device["ip"]}"',
+            ])
+        if managed_device.get("mac") and managed_device.get("mac") != identifier:
+            query_parts.extend([
+                f'data.dhcp_mac:"{managed_device["mac"]}"',
+                f'data.mac:"{managed_device["mac"]}"',
+            ])
+
+    query = " OR ".join(dict.fromkeys(query_parts))
     events = await _search_entity_events(query, time_range=time_range, size=300)
     summary = summarize_entity_events(events, entity_value=identifier)
+    if managed_device:
+        summary.update({
+            **managed_device,
+            "event_count": max(summary.get("event_count", 0), managed_device.get("event_count", 0)),
+            "top_rules": summary.get("top_rules", []),
+            "timeline": summary.get("timeline", []),
+            "users": summary.get("users", []),
+            "programs": summary.get("programs", []),
+            "ip_conflicts": summary.get("ip_conflicts", {}),
+        })
     dhcp_history = [event for event in events if event.get("data", {}).get("dhcp_action")]
     wifi_sessions = [
         event for event in events
@@ -492,34 +803,3 @@ async def get_compliance_stats(framework: str, time_range: str = "7d"):
         return client.search(index=settings.opensearch_index, body=body)
     except Exception:
         return {}
-
-
-async def get_asset_devices(time_range: str = "7d"):
-    client = get_client()
-    body = {
-        "size": 0,
-        "query": {
-            "bool": {
-                "must": [
-                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
-                    {"exists": {"field": "data.dhcp_ip"}},
-                ]
-            }
-        },
-        "aggs": {
-            "devices": {
-                "composite": {
-                    "size": 200,
-                    "sources": [
-                        {"ip": {"terms": {"field": "data.dhcp_ip.keyword"}}},
-                        {"mac": {"terms": {"field": "data.dhcp_mac.keyword"}}},
-                    ],
-                }
-            }
-        },
-    }
-    try:
-        resp = client.search(index=settings.opensearch_index, body=body)
-        return resp.get("aggregations", {}).get("devices", {}).get("buckets", [])
-    except Exception:
-        return []

@@ -44,10 +44,16 @@ export function ListsTab() {
   const entryCount = content.split('\n').filter(l => l.trim() && !l.startsWith('#')).length
   const commentCount = content.split('\n').filter(l => l.trim().startsWith('#')).length
 
+  const getItemPath = (item: any) => {
+    const dirname = (item?.relative_dirname || '').replace(/^etc\/lists\/?/, '').replace(/^\/+|\/+$/g, '')
+    return dirname ? `${dirname}/${item.filename}` : item.filename
+  }
+
   const loadFile = async (item: any) => {
     try {
-      const r = await adminApi.getCdbList(item.filename)
-      setSelectedFile(item)
+      const filePath = getItemPath(item)
+      const r = await adminApi.getCdbList(filePath)
+      setSelectedFile({ ...item, filePath })
       setContent(r.data.content || '')
       setOriginalContent(r.data.content || '')
     } catch { enqueueSnackbar(`โหลดล้มเหลว: ${item.filename}`, { variant: 'error' }) }
@@ -57,7 +63,7 @@ export function ListsTab() {
     if (!selectedFile) return
     setSaving(true)
     try {
-      await adminApi.saveCdbList(selectedFile.filename, content)
+      await adminApi.saveCdbList(selectedFile.filePath || selectedFile.filename, content)
       setOriginalContent(content)
       enqueueSnackbar('บันทึกสำเร็จ', { variant: 'success' })
     } catch (e: any) { enqueueSnackbar(e.response?.data?.detail || 'บันทึกล้มเหลว', { variant: 'error' }) }

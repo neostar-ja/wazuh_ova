@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { User } from '../types/auth'
+import { safeStorage } from '../utils/safeStorage'
 
 let globalUser: User | null = null
 let globalListeners: ((user: User | null) => void)[] = []
 
 function parseUser(): User | null {
   try {
-    return JSON.parse(localStorage.getItem('user') || 'null') as User | null
+    return JSON.parse(safeStorage.getItem('user') || 'null') as User | null
   } catch {
     return null
   }
@@ -18,15 +19,15 @@ export function getUser(): User | null {
 
 export function setAuthData(user: User, token: string): void {
   globalUser = user
-  localStorage.setItem('user', JSON.stringify(user))
-  localStorage.setItem('token', token)
+  safeStorage.setItem('user', JSON.stringify(user))
+  safeStorage.setItem('token', token)
   globalListeners.forEach(fn => fn(user))
 }
 
 export function clearAuthData(): void {
   globalUser = null
-  localStorage.removeItem('user')
-  localStorage.removeItem('token')
+  safeStorage.removeItem('user')
+  safeStorage.removeItem('token')
   globalListeners.forEach(fn => fn(null))
 }
 

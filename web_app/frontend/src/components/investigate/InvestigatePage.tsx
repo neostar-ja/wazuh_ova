@@ -50,6 +50,7 @@ import RelatedEntitiesPanel from './RelatedEntitiesPanel'
 import RawEvidencePanel from './RawEvidencePanel'
 import SuggestedActionsPanel from './SuggestedActionsPanel'
 import { MonoValue, formatTimestamp, jsonToDisplay } from './utils'
+import { safeStorage } from '../../utils/safeStorage'
 
 type InvestigationTab =
   | 'timeline'
@@ -65,7 +66,7 @@ const RECENT_KEY = 'wazuh-investigation-recent'
 
 function getRecentSearches(): string[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]')
+    const parsed = JSON.parse(safeStorage.getItem(RECENT_KEY) ?? '[]')
     return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
   } catch {
     return []
@@ -74,7 +75,7 @@ function getRecentSearches(): string[] {
 
 function saveRecentSearch(query: string) {
   const next = [query, ...getRecentSearches().filter((entry) => entry !== query)].slice(0, 8)
-  localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  safeStorage.setItem(RECENT_KEY, JSON.stringify(next))
   return next
 }
 
