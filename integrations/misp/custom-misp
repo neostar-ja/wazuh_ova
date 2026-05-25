@@ -1,0 +1,4 @@
+#!/bin/sh
+WPYTHON_BIN="framework/python/bin/python3"
+WAZUH_PATH="$(cd "$(dirname "$0")/.."; pwd)"
+exec "${WAZUH_PATH}/${WPYTHON_BIN}" "${WAZUH_PATH}/integrations/custom-misp.py" "$@"

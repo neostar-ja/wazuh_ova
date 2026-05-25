@@ -1,0 +1,40 @@
+<!-- MISP Integration Rules -->
+<group name="misp,threat_intel,">
+
+  <rule id="100620" level="10">
+    <field name="integration">misp</field>
+    <description>MISP: Threat Intelligence event</description>
+    <options>no_full_log</options>
+    <group>misp_alert,</group>
+  </rule>
+
+  <rule id="100621" level="3">
+    <field name="misp.error">\.+</field>
+    <description>MISP: Error connecting to MISP API</description>
+    <options>no_full_log</options>
+    <group>misp_error,</group>
+  </rule>
+
+  <rule id="100622" level="12">
+    <if_sid>100620</if_sid>
+    <field name="misp.category">\.+</field>
+    <description>MISP IOC Match: $(misp.category) - $(misp.value) [Event: $(misp.event_id)]</description>
+    <options>no_full_log</options>
+    <group>misp_match,threat_intel,</group>
+  </rule>
+
+  <rule id="100623" level="14">
+    <if_sid>100622</if_sid>
+    <field name="misp.category" type="pcre2">Malware|malware|C&amp;C|c2|Payload|payload</field>
+    <description>MISP: MALWARE IOC detected - $(misp.value) [$(misp.type)]</description>
+    <group>misp_malware,malware,threat_intel,</group>
+  </rule>
+
+  <rule id="100624" level="13">
+    <if_sid>100622</if_sid>
+    <field name="misp.total_matches" type="pcre2">^([5-9]|[1-9][0-9]+)$</field>
+    <description>MISP: HIGH CONFIDENCE IOC - $(misp.value) found in $(misp.total_matches) MISP events</description>
+    <group>misp_high_confidence,threat_intel,</group>
+  </rule>
+
+</group>
