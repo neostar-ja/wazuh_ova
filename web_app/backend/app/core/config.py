@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
+    # SOAR Integration
+    shuffle_url: str = ""
+    shuffle_token: str = ""
+    shuffle_webhook_url: str = ""
+    shuffle_block_url: str = ""
+    shuffle_esc_url: str = ""
+    iris_url: str = ""
+    iris_api_key: str = ""
+    iris_customer_id: str = "1"
+    misp_url: str = ""
+    misp_api_key: str = ""
+
     class Config:
         env_file = "/opt/code/wazuh_ova/web_app/.env"
         case_sensitive = False

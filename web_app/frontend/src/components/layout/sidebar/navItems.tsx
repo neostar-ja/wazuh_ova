@@ -73,6 +73,21 @@ export const NAV_GROUPS: NavGroupData[] = [
           </svg>
         ),
       },
+      {
+        id: 'soar-ir',
+        label: 'SOAR & IR',
+        descriptionTh: 'Shuffle SOAR, DFIR-IRIS Incident Response และ MISP Threat Intelligence',
+        path: '/soar',
+        section: 'SECURITY OPERATIONS',
+        color: '#8B5CF6',
+        gradient: 'linear-gradient(135deg,#8B5CF6,#6D28D9)',
+        glow: 'rgba(139,92,246,0.55)',
+        icon: (
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M17 8C8 10 5.9 16.17 3.82 20.33L5.71 21l1-2.3A4.49 4.49 0 0 0 8 19c8 0 10-8 10-8s-1.5 1.5-4 2.67V12c0-.67-.33-2-2-2H8.5C7 10 5.5 11 5.5 12.5S7 15 8.5 15H9c0 1.1.9 2 2 2h1c.55 0 1-.45 1-1v-1h1c1.1 0 2-.9 2-2v-1c1.38-1.01 2-3 2-5z"/>
+          </svg>
+        ),
+      },
     ],
   },
   {

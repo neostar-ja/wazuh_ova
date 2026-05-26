@@ -10,6 +10,7 @@ import CompliancePage from './components/compliance/CompliancePage'
 import AssetsPage from './components/assets/AssetsPage'
 import KPIPage from './components/kpi/KPIPage'
 import AdminPage from './components/admin/AdminPage'
+import SOARPage from './components/soar/SOARPage'
 import { useAuth } from './hooks/useAuth'
 import { UserRole } from './types/auth'
 
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="compliance" element={<CompliancePage />} />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="kpi" element={<KPIPage />} />
+          <Route path="soar" element={<SOARPage />} />
           <Route
             path="admin/*"
             element={
