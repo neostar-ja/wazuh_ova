@@ -4,7 +4,7 @@ import Layout from './components/layout/Layout'
 import LoginPage from './components/auth/LoginPage'
 import DashboardPage from './components/dashboard/DashboardPage'
 import AlertsPage from './components/alerts/AlertsPage'
-import InvestigatePage from './components/investigate/InvestigatePage'
+import InvestigatePageV2 from './components/investigate/v2/InvestigatePageV2'
 import IOCPage from './components/ioc/IOCPage'
 import CompliancePage from './components/compliance/CompliancePage'
 import AssetsPage from './components/assets/AssetsPage'
@@ -36,7 +36,7 @@ export default function App() {
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="alerts" element={<AlertsPage />} />
-          <Route path="investigate" element={<InvestigatePage />} />
+          <Route path="investigate" element={<InvestigatePageV2 />} />
           <Route path="ioc" element={<IOCPage />} />
           <Route path="compliance" element={<CompliancePage />} />
           <Route path="assets" element={<AssetsPage />} />

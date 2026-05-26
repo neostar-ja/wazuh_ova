@@ -199,7 +199,11 @@ async def investigate_entity(value: str, entity_type: str = "auto", time_range: 
             "data.dhcp_ip", "data.dhcp_mac", "data.dhcp_hostname",
             "data.dstuser", "data.srcuser", "data.mac", "data.ap_mac",
             "data.ac_msg_type", "data.dhcp_action", "data.url", "data.command",
-            "GeoLocation", "predecoder.program_name", "agent.name", "agent.id",
+            "data.action", "data.proto", "data.src_zone", "data.dst_zone",
+            "data.app", "data.devname", "data.srcintf", "data.dstintf",
+            "GeoLocation.country_name", "GeoLocation.city_name",
+            "GeoLocation.longitude", "GeoLocation.latitude",
+            "predecoder.program_name", "agent.name", "agent.id",
             "full_log",
         ],
     }
@@ -328,6 +332,90 @@ def summarize_entity_events(events, entity_value: str | None = None):
         ],
         "timeline": [{"date": date, "count": count} for date, count in sorted(daily.items())],
     }
+
+
+async def get_entity_network_stats(ip: str, time_range: str = "30d") -> dict:
+    """Aggregation-based network traffic analysis for a given IP (no raw events, fast)."""
+    client = get_client()
+    must = [
+        {
+            "bool": {
+                "should": [
+                    {"term": {"data.srcip.keyword": ip}},
+                    {"term": {"data.dstip.keyword": ip}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+    ]
+    body = {
+        "size": 0,
+        "query": {"bool": {"must": must}},
+        "aggs": {
+            "as_src_top_dst": {
+                "filter": {"term": {"data.srcip.keyword": ip}},
+                "aggs": {
+                    "top_dst_ips": {"terms": {"field": "data.dstip.keyword", "size": 15}},
+                    "top_dstports": {"terms": {"field": "data.dstport.keyword", "size": 10}},
+                },
+            },
+            "as_dst_top_src": {
+                "filter": {"term": {"data.dstip.keyword": ip}},
+                "aggs": {
+                    "top_src_ips": {"terms": {"field": "data.srcip.keyword", "size": 15}},
+                },
+            },
+            "proto_dist":    {"terms": {"field": "data.protocol.keyword",          "size": 8}},
+            "conn_state":    {"terms": {"field": "data.connection_state.keyword",  "size": 8}},
+            "zone_src":      {"terms": {"field": "data.src_zone.keyword",          "size": 10}},
+            "zone_dst":      {"terms": {"field": "data.dst_zone.keyword",          "size": 10}},
+            "rule_names":    {"terms": {"field": "data.rule_name.keyword",         "size": 8}},
+            "decoders":      {"terms": {"field": "decoder.name.keyword",           "size": 8}},
+            "geo_countries": {"terms": {"field": "GeoLocation.country_name.keyword","size": 12}},
+        },
+    }
+    try:
+        resp = client.search(index=settings.opensearch_index, body=body)
+        aggs = resp.get("aggregations", {})
+
+        def _buckets(key: str) -> list:
+            return [
+                {"value": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(key, {}).get("buckets", [])
+                if b["doc_count"] > 0
+            ]
+
+        def _nested(outer: str, inner: str) -> list:
+            return [
+                {"value": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(outer, {}).get(inner, {}).get("buckets", [])
+                if b["doc_count"] > 0
+            ]
+
+        # Normalize protocol: "6"→"TCP", "17"→"UDP", "1"→"ICMP"; text "TCP"/"UDP" pass through
+        PROTO_MAP = {"6": "TCP", "17": "UDP", "1": "ICMP", "47": "GRE", "50": "ESP", "89": "OSPF"}
+        proto_dist = [
+            {"value": PROTO_MAP.get(b["value"], b["value"]), "raw": b["value"], "count": b["count"]}
+            for b in _buckets("proto_dist")
+        ]
+
+        return {
+            "ip": ip,
+            "total": resp["hits"]["total"]["value"],
+            "top_dst_ips":  _nested("as_src_top_dst", "top_dst_ips"),
+            "top_src_ips":  _nested("as_dst_top_src", "top_src_ips"),
+            "top_dstports": _nested("as_src_top_dst", "top_dstports"),
+            "proto_dist":    proto_dist,
+            "conn_state":    _buckets("conn_state"),
+            "zone_src":      _buckets("zone_src"),
+            "zone_dst":      _buckets("zone_dst"),
+            "rule_names":    _buckets("rule_names"),
+            "decoders":      _buckets("decoders"),
+            "geo_countries": _buckets("geo_countries"),
+        }
+    except Exception as e:
+        return {"ip": ip, "total": 0, "error": str(e)}
 
 
 async def _search_entity_events(query: str, time_range: str = "30d", size: int = 250):

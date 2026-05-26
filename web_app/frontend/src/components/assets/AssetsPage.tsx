@@ -513,7 +513,7 @@ export default function AssetsPage() {
     },
   ]).filter((item) => item.value > 0), [stats])
 
-  const osChartData = (stats.os_breakdown || []).slice(0, 6)
+  const osChartData = ((stats.os_breakdown || []) as Array<{ label: string; value: number }>).slice(0, 6)
   const hasPrimaryError = devicesQuery.error || statsQuery.error
 
   const headerActions = (
@@ -574,7 +574,7 @@ export default function AssetsPage() {
             pointerEvents: 'none',
           }}
         />
-        <Grid container spacing={2} alignItems="center">
+        <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid item xs={12} md={7}>
             <Stack spacing={1}>
               <Chip
@@ -791,7 +791,7 @@ export default function AssetsPage() {
                       <YAxis dataKey="label" type="category" width={110} tick={{ fontSize: 11 }} />
                       <RechartTooltip contentStyle={CHART_TIP_STYLE} />
                       <Bar dataKey="value" radius={[0, 10, 10, 0]}>
-                        {osChartData.map((_, index) => (
+                        {osChartData.map((_, index: number) => (
                           <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                         ))}
                       </Bar>
