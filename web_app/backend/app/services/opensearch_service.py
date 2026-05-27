@@ -115,6 +115,8 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
             "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
             "by_mitre":   {"terms": {"field": "rule.mitre.tactic.keyword", "size": 10}},
             "by_srcip":   {"terms": {"field": "data.srcip.keyword", "size": 10}},
+            "by_group":   {"terms": {"field": "rule.groups", "size": 15}},
+            "by_decoder": {"terms": {"field": "rule.id", "size": 10}},
         },
     }
     try:

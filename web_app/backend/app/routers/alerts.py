@@ -115,6 +115,8 @@ async def alert_stats(
         "by_country": _buckets("by_country"),
         "by_mitre":   _buckets("by_mitre"),
         "by_srcip":   _buckets("by_srcip"),
+        "by_group":   _buckets("by_group", 15),
+        "by_decoder": _buckets("by_decoder", 10),
     }
 
 

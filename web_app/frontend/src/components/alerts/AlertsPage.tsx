@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
-  Box, Card, CardContent, Typography, Chip, TextField, Select, MenuItem,
-  FormControl, Button, Grid, Drawer, IconButton, Divider, CircularProgress,
+  Box, Typography, Chip, TextField, Select, MenuItem,
+  FormControl, Button, Drawer, IconButton, CircularProgress,
   Tooltip, Alert, Table, TableBody, TableCell, TableHead, TableRow,
   LinearProgress, Collapse, InputAdornment, Badge, useTheme,
+  Stack, Grid, Card, CardContent,
 } from '@mui/material'
 import SearchRoundedIcon       from '@mui/icons-material/SearchRounded'
 import RefreshRoundedIcon      from '@mui/icons-material/RefreshRounded'
@@ -23,11 +24,12 @@ import GppBadRoundedIcon       from '@mui/icons-material/GppBadRounded'
 import GppGoodRoundedIcon      from '@mui/icons-material/GppGoodRounded'
 import RouterRoundedIcon       from '@mui/icons-material/RouterRounded'
 import FiberManualRecordIcon   from '@mui/icons-material/FiberManualRecord'
-import TuneRoundedIcon         from '@mui/icons-material/TuneRounded'
-import BookmarkAddRoundedIcon  from '@mui/icons-material/BookmarkAddRounded'
+import TuneRoundedIcon          from '@mui/icons-material/TuneRounded'
+import BookmarkAddRoundedIcon   from '@mui/icons-material/BookmarkAddRounded'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartTip, ResponsiveContainer,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import { alertsApi, investigateApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
@@ -1249,17 +1251,91 @@ function Sparkline({ data = [], color, height = 32 }: SparklineProps) {
   )
 }
 
-// ── Stats Bar ─────────────────────────────────────────────────────────────────
-interface StatsBarProps {
-  stats?: AlertStats;
-  loadingStats: boolean;
-  onLevelClick: (level: number) => void;
-  activeLevel: number;
+// ── Group + Rule metadata ─────────────────────────────────────────────────────
+function hexRgb(hex: string) {
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
 }
 
-function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarProps) {
+const GROUP_META: Record<string, { color: string; label: string }> = {
+  fortigate:      { color: '#F17422', label: 'FortiGate' },
+  fortigate_wuh:  { color: '#F17422', label: 'FortiGate' },
+  mikrotik:       { color: '#3B82F6', label: 'Mikrotik' },
+  routeros:       { color: '#3B82F6', label: 'RouterOS' },
+  huawei:         { color: '#22C55E', label: 'Huawei USG' },
+  huawei_usg:     { color: '#22C55E', label: 'Huawei USG' },
+  infoblox:       { color: '#8B5CF6', label: 'Infoblox DNS' },
+  infoblox_dns:   { color: '#8B5CF6', label: 'DNS Query' },
+  dns_query:      { color: '#8B5CF6', label: 'DNS Query' },
+  compliance:     { color: '#EAB308', label: 'Compliance' },
+  authentication: { color: '#EF4444', label: 'Auth Failure' },
+  windows:        { color: '#0EA5E9', label: 'Windows' },
+  suricata:       { color: '#EC4899', label: 'Suricata IDS' },
+  syscheck:       { color: '#64748B', label: 'FIM/Syscheck' },
+  firewall:       { color: '#64748B', label: 'Firewall' },
+}
+
+const CHART_GROUPS = ['fortigate', 'mikrotik', 'huawei', 'infoblox_dns', 'compliance', 'authentication', 'windows', 'suricata', 'syscheck']
+
+const RULE_DESC: Record<string, string> = {
+  '101053': 'Mikrotik: TCP connection tracked',
+  '100052': 'Huawei USG: Traffic permitted',
+  '110010': 'FortiGate: Traffic logged',
+  '120001': 'PCI DSS 1.3: Unauthorized access blocked',
+  '110022': 'FortiGate: App-ctrl elevated risk',
+  '110011': 'FortiGate: Session closed',
+  '110021': 'FortiGate: DNS lookup',
+  '100401': 'Infoblox DNS: HTTPS query',
+  '100400': 'Infoblox DNS: A record query',
+  '101052': 'Mikrotik: UDP connection',
+  '100053': 'Huawei USG: Traffic denied',
+  '110016': 'FortiGate: App-ctrl application',
+  '120054': 'Compliance: System event',
+  '110023': 'FortiGate: App-ctrl medium risk',
+  '110018': 'FortiGate: URL blocked',
+  '120003': 'PCI DSS 8.3: Auth failure',
+  '120061': 'NIST: DHCP pool exhausted',
+  '60602':  'Windows: Application error',
+  '110039': 'FortiGate: Policy event',
+  '100303': 'Auth: Multiple failures',
+}
+
+// ── Dashboard Section ─────────────────────────────────────────────────────────
+interface DashboardSectionProps {
+  stats?: AlertStats
+  loading: boolean
+  activeLevel: number
+  onLevelClick: (level: number) => void
+  onGroupClick: (group: string) => void
+}
+
+function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupClick }: DashboardSectionProps) {
   const timeline = stats?.timeline || []
   const total    = stats?.total || 0
+
+  const groupChartData = useMemo(() => {
+    const raw = (stats as any)?.by_group || []
+    return CHART_GROUPS
+      .map(key => {
+        const meta  = GROUP_META[key]
+        const found = raw.find((b: any) => b.name === key || b.name?.includes(key))
+        const count = found?.count || 0
+        return { name: meta?.label || key, count, color: meta?.color || '#6B7280' }
+      })
+      .filter(d => d.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+  }, [stats])
+
+  const ruleChartData = useMemo(() => {
+    const raw = (stats as any)?.by_rule || []
+    const maxCount = Math.max(...raw.map((r: any) => r.count || 0), 1)
+    return raw.slice(0, 8).map((r: any) => ({
+      id: r.name,
+      desc: RULE_DESC[r.name] || `Rule ${r.name}`,
+      count: r.count || 0,
+      pct: Math.round(((r.count || 0) / maxCount) * 100),
+    }))
+  }, [stats])
 
   const SEV_ICON: Record<SeverityName, React.ReactNode> = {
     critical: <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>,
@@ -1317,7 +1393,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                 </Typography>
                 {isTotalActive && <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: BRAND.purple, boxShadow: `0 0 6px ${BRAND.purple}` }} />}
               </Box>
-              {loadingStats ? (
+              {loading ? (
                 <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: BRAND.purple }} /></Box>
               ) : (
                 <Typography sx={{ fontSize: { xs: 26, sm: 30 }, fontWeight: 900, color: BRAND.purple, lineHeight: 1, letterSpacing: '-0.03em', mb: 0.25 }}>
@@ -1389,7 +1465,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                       <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: s.color, boxShadow: `0 0 6px ${s.color}` }} />
                     )}
                   </Box>
-                  {loadingStats ? (
+                  {loading ? (
                     <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: s.color }} /></Box>
                   ) : (
                     <Typography sx={{
@@ -1404,7 +1480,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
                     <Box sx={{ opacity: 0.8 }}>
                       <Sparkline data={timeline.map(t => ({ timestamp: t.timestamp, count: t.severity_breakdown?.[s.key] ?? 0 }))} color={s.color} height={28} />
                     </Box>
-                    {!loadingStats && (
+                    {!loading && (
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 800, color: s.color, lineHeight: 1 }}>{pct}<span style={{ fontSize: 9, fontWeight: 600 }}>%</span></Typography>
                         <Typography sx={{ fontSize: 9, color: 'text.disabled', lineHeight: 1.2 }}>of total</Typography>
@@ -1431,7 +1507,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
               <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
                 TOP AFFECTED AGENT (อุปกรณ์ถูกกระทบสูงสุด)
               </Typography>
-              {loadingStats ? (
+              {loading ? (
                 <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
               ) : topAgent ? (
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
@@ -1459,7 +1535,7 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
               <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
                 TOP ATTACKER IP (IP โจมตีสูงสุด)
               </Typography>
-              {loadingStats ? (
+              {loading ? (
                 <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
               ) : topAttacker ? (
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
@@ -1478,67 +1554,154 @@ function StatsBar({ stats, loadingStats, onLevelClick, activeLevel }: StatsBarPr
         </Grid>
       </Grid>
 
-      {/* ── Timeline chart ── */}
-      {timeline.length > 1 && (
-        <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-          <CardContent sx={{ p: { xs: '12px 14px !important', sm: '12px 20px !important' } }}>
-            {/* Chart header */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary' }}>
-                Alert Timeline
-                {total > 0 && (
-                  <Box component="span" sx={{ ml: 1, fontSize: 11, fontWeight: 400, color: 'text.disabled' }}>
-                    · รวม {fmtNum(total)} รายการ
+      {/* ── Timeline + Groups + Top Rules row ── */}
+      <Grid container spacing={2}>
+        {/* Timeline chart - 7 cols */}
+        {timeline.length > 1 && (
+          <Grid item xs={12} md={7}>
+            <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden', height: '100%' }}>
+              <CardContent sx={{ p: { xs: '12px 14px !important', sm: '12px 20px !important' } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary' }}>
+                    Alert Timeline
+                    {total > 0 && (
+                      <Box component="span" sx={{ ml: 1, fontSize: 11, fontWeight: 400, color: 'text.disabled' }}>
+                        · {fmtNum(total)} รายการ
+                      </Box>
+                    )}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap' }}>
+                    {[
+                      { label: 'Critical', color: '#EF4444' },
+                      { label: 'High',     color: BRAND.orange },
+                      { label: 'Medium',   color: '#EAB308' },
+                      { label: 'Total',    color: BRAND.purple },
+                    ].map(l => (
+                      <Box key={l.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box sx={{ width: 10, height: 3, borderRadius: 2, bgcolor: l.color }} />
+                        <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l.label}</Typography>
+                      </Box>
+                    ))}
                   </Box>
-                )}
-              </Typography>
-              {/* Legend */}
-              <Box sx={{ display: 'flex', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Critical', color: '#EF4444' },
-                  { label: 'High',     color: BRAND.orange },
-                  { label: 'Medium',   color: '#EAB308' },
-                  { label: 'Total',    color: BRAND.purple },
-                ].map(l => (
-                  <Box key={l.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 10, height: 3, borderRadius: 2, bgcolor: l.color }} />
-                    <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l.label}</Typography>
+                </Box>
+                <ResponsiveContainer width="100%" height={120}>
+                  <AreaChart data={timeline} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
+                    <defs>
+                      {[
+                        { id: 'g-total',    color: BRAND.purple, o1: 0.22, o2: 0.01 },
+                        { id: 'g-critical', color: '#EF4444',    o1: 0.45, o2: 0.02 },
+                        { id: 'g-high',     color: BRAND.orange, o1: 0.35, o2: 0.02 },
+                        { id: 'g-medium',   color: '#EAB308',    o1: 0.25, o2: 0.01 },
+                      ].map(g => (
+                        <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%"   stopColor={g.color} stopOpacity={g.o1} />
+                          <stop offset="100%" stopColor={g.color} stopOpacity={g.o2} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
+                    <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
+                      tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
+                      interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} />
+                    <RechartTip contentStyle={ChartTip} formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
+                      labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
+                    <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={2} fill="url(#g-total)" dot={false} name="Total" />
+                    <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444" strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
+                    <Area type="monotone" dataKey="severity_breakdown.high" stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)" dot={false} name="High" />
+                    <Area type="monotone" dataKey="severity_breakdown.medium" stroke="#EAB308" strokeWidth={1} fill="url(#g-medium)" dot={false} name="Medium" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Groups PieChart - 2.5 cols */}
+        {groupChartData.length > 0 && (
+          <Grid item xs={12} sm={6} md={timeline.length > 1 ? 2.5 : 5}>
+            <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+              <CardContent sx={{ p: '12px 16px !important' }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', mb: 1 }}>
+                  Alert Groups
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ResponsiveContainer width={90} height={90}>
+                    <PieChart>
+                      <Pie data={groupChartData} dataKey="count" nameKey="name" cx="50%" cy="50%"
+                        innerRadius={22} outerRadius={40} paddingAngle={2} startAngle={90} endAngle={-270}>
+                        {groupChartData.map((entry, idx) => (
+                          <Cell key={idx} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <RechartTip contentStyle={ChartTip} formatter={(v: any) => [fmtNum(Number(v)), '']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    {groupChartData.map(d => (
+                      <Box key={d.name} sx={{
+                        display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.35,
+                        cursor: 'pointer', borderRadius: '4px', px: 0.5, py: 0.2,
+                        transition: 'all 0.15s',
+                        '&:hover': { bgcolor: `${d.color}15` },
+                      }}
+                        onClick={() => onGroupClick(d.name.toLowerCase().replace(' ', '_'))}
+                      >
+                        <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: d.color, flexShrink: 0 }} />
+                        <Typography sx={{ fontSize: 9.5, color: 'text.secondary', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {d.name}
+                        </Typography>
+                        <Typography sx={{ fontSize: 9, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', flexShrink: 0 }}>
+                          {fmtNum(d.count)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Top Rules - 2.5 cols */}
+        {ruleChartData.length > 0 && (
+          <Grid item xs={12} sm={6} md={timeline.length > 1 ? 2.5 : 7}>
+            <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+              <CardContent sx={{ p: '12px 16px !important' }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', mb: 1 }}>
+                  Top Rules
+                </Typography>
+                {ruleChartData.map((r, i) => (
+                  <Box key={r.id} sx={{ mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.3 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight, flexShrink: 0 }}>
+                          #{r.id}
+                        </Typography>
+                        <Typography sx={{ fontSize: 9.5, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.desc}
+                        </Typography>
+                      </Box>
+                      <Typography sx={{ fontSize: 9, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', ml: 0.5, flexShrink: 0 }}>
+                        {fmtNum(r.count)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ height: 4, borderRadius: 2, bgcolor: 'action.hover', overflow: 'hidden' }}>
+                      <Box sx={{
+                        height: '100%', borderRadius: 2,
+                        width: `${r.pct}%`,
+                        background: `linear-gradient(90deg, ${BRAND.purple} 0%, ${BRAND.purpleLight} 100%)`,
+                        opacity: 0.7 + i * 0.04,
+                        transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+                      }} />
+                    </Box>
                   </Box>
                 ))}
-              </Box>
-            </Box>
-
-            <ResponsiveContainer width="100%" height={110}>
-              <AreaChart data={timeline} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
-                <defs>
-                  {[
-                    { id: 'g-total',    color: BRAND.purple, o1: 0.22, o2: 0.01 },
-                    { id: 'g-critical', color: '#EF4444',    o1: 0.45, o2: 0.02 },
-                    { id: 'g-high',     color: BRAND.orange, o1: 0.35, o2: 0.02 },
-                    { id: 'g-medium',   color: '#EAB308',    o1: 0.25, o2: 0.01 },
-                  ].map(g => (
-                    <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor={g.color} stopOpacity={g.o1} />
-                      <stop offset="100%" stopColor={g.color} stopOpacity={g.o2} />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
-                <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
-                  tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
-                  interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} />
-                <RechartTip contentStyle={ChartTip} formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
-                  labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
-                <Area type="monotone" dataKey="count"    stroke={BRAND.purple} strokeWidth={2}   fill="url(#g-total)"    dot={false} name="Total" />
-                <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444"     strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
-                <Area type="monotone" dataKey="severity_breakdown.high"     stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)"     dot={false} name="High" />
-                <Area type="monotone" dataKey="severity_breakdown.medium"   stroke="#EAB308"     strokeWidth={1}   fill="url(#g-medium)"   dot={false} name="Medium" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+      </Grid>
     </Box>
   )
 }
@@ -1566,6 +1729,9 @@ export default function AlertsPage() {
   const [decoderFilter,    setDecoderFilter]    = useState<string>('')
   const [complianceFilter, setComplianceFilter] = useState<string>('all')
 
+  // Group quick-filter
+  const [groupFilter,      setGroupFilter]      = useState<string>('')
+
   // Alert detail
   const [selectedAlert,    setSelected]         = useState<WazuhAlertItem | null>(null)
   const [drawerOpen,       setDrawer]           = useState<boolean>(false)
@@ -1580,6 +1746,9 @@ export default function AlertsPage() {
     const parts: string[] = []
     if (search.trim()) {
       parts.push(search.trim())
+    }
+    if (groupFilter.trim()) {
+      parts.push(`rule.groups:"${groupFilter.trim()}"`)
     }
     if (ruleIdFilter.trim()) {
       parts.push(`rule.id:"${ruleIdFilter.trim()}"`)
@@ -1611,7 +1780,7 @@ export default function AlertsPage() {
 
   // Alerts query
   const { data: rawAlerts = [], isLoading, isError, refetch, dataUpdatedAt } = useQuery<any[]>({
-    queryKey: ['alerts', level, source, timeRange, composedSearchQuery, agentFilter, mitreFilter],
+    queryKey: ['alerts', level, source, timeRange, composedSearchQuery, agentFilter, mitreFilter, groupFilter],
     queryFn: () => alertsApi.list({
       level, source: source || undefined, time_range: timeRange,
       q: composedSearchQuery || undefined, agent: agentFilter || undefined,
@@ -1645,6 +1814,7 @@ export default function AlertsPage() {
   // Active filter chips
   const activeFilters = [
     source && { label: `Source: ${source}`, clear: () => setSource('') },
+    groupFilter && { label: `Group: ${groupFilter}`, clear: () => setGroupFilter('') },
     agentFilter && { label: `Agent: ${agentFilter}`, clear: () => setAgentFilter('') },
     mitreFilter && { label: `MITRE: ${mitreFilter}`, clear: () => setMitreFilter('') },
     search && { label: `ค้นหา: "${search}"`, clear: () => { setSearch(''); setSearchInput('') } },
@@ -1657,6 +1827,7 @@ export default function AlertsPage() {
 
   const handleClearAll = () => {
     setSource('')
+    setGroupFilter('')
     setSearch('')
     setSearchInput('')
     setAgentFilter('')
@@ -1756,9 +1927,53 @@ export default function AlertsPage() {
         </Box>
       </Box>
 
-      {/* ── Stats row ── */}
-      <StatsBar stats={stats} loadingStats={loadingStats} activeLevel={level}
-        onLevelClick={lv => setLevel(prev => prev === lv ? 1 : lv)} />
+      {/* ── Dashboard Section ── */}
+      <DashboardSection
+        stats={stats}
+        loading={loadingStats}
+        activeLevel={level}
+        onLevelClick={lv => setLevel(prev => prev === lv ? 1 : lv)}
+        onGroupClick={g => setGroupFilter(prev => prev === g ? '' : g)}
+      />
+
+      {/* ── Group Quick-Filter Chips ── */}
+      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}>
+        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.disabled', mr: 0.25, letterSpacing: '0.06em' }}>
+          FILTER GROUP:
+        </Typography>
+        {[
+          { key: 'fortigate',    label: 'FortiGate',   color: '#F17422' },
+          { key: 'mikrotik',     label: 'Mikrotik',    color: '#3B82F6' },
+          { key: 'huawei',       label: 'Huawei USG',  color: '#22C55E' },
+          { key: 'infoblox_dns', label: 'Infoblox DNS',color: '#8B5CF6' },
+          { key: 'authentication',label: 'Auth',       color: '#EF4444' },
+          { key: 'compliance',   label: 'Compliance',  color: '#EAB308' },
+          { key: 'suricata',     label: 'Suricata IDS',color: '#EC4899' },
+          { key: 'windows',      label: 'Windows',     color: '#0EA5E9' },
+        ].map(g => {
+          const isActive = groupFilter === g.key
+          return (
+            <Chip
+              key={g.key}
+              label={g.label}
+              size="small"
+              onClick={() => setGroupFilter(prev => prev === g.key ? '' : g.key)}
+              sx={{
+                height: 22, fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+                color: isActive ? g.color : 'text.secondary',
+                border: `1.5px solid ${isActive ? g.color : 'transparent'}`,
+                bgcolor: isActive ? `${g.color}18` : 'action.hover',
+                transition: 'all 0.18s',
+                '&:hover': { bgcolor: `${g.color}20`, color: g.color, borderColor: `${g.color}60` },
+              }}
+            />
+          )
+        })}
+        {groupFilter && (
+          <Chip label="✕ ล้าง" size="small" onClick={() => setGroupFilter('')}
+            sx={{ height: 22, fontSize: 10, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
+        )}
+      </Box>
 
       {/* ── Filter Bar ── */}
       <Card sx={{ mb: 2, p: 1.5, border: '1px solid rgba(123,91,164,0.15)' }}>
@@ -1881,7 +2096,7 @@ export default function AlertsPage() {
               <Chip key={i} label={f.label} size="small" onDelete={f.clear}
                 sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.12)', color: BRAND.purpleLight, '& .MuiChip-deleteIcon': { fontSize: 14, color: BRAND.purpleLight } }} />
             ))}
-            <Chip label="ล้างทั้งหมด" size="small" onClick={() => { setSource(''); setSearch(''); setSearchInput(''); setAgentFilter(''); setMitreFilter(''); setLevel(1) }}
+            <Chip label="ล้างทั้งหมด" size="small" onClick={handleClearAll}
               sx={{ height: 20, fontSize: 10, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
           </Box>
         )}
