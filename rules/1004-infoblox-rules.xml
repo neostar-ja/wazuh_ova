@@ -21,7 +21,9 @@
   <!-- DNS Query — A record (chain จาก 12138 = "Domain A record found")
        ทำงานกับ Format 1 (@handle), Format 2 (response), NIOS 8.x
   -->
-  <rule id="100400" level="3">
+  <!-- DNS query telemetry is very high-volume; keep security-specific DNS
+       rules active, but do not persist every normal query as an alert. -->
+  <rule id="100400" level="0">
     <if_sid>12138</if_sid>
     <field name="dns_domain" type="pcre2">.+</field>
     <description>Infoblox DNS: Query $(dns_domain) (A) from $(srcip)</description>
@@ -32,7 +34,7 @@
   <!-- DNS Query — Non-A records (AAAA, MX, TXT, CNAME, HTTPS etc.)
        chain จาก 12100 ซึ่งเป็น parent ของทุก named event
   -->
-  <rule id="100401" level="3">
+  <rule id="100401" level="0">
     <if_sid>12100</if_sid>
     <field name="dns_domain" type="pcre2">.+</field>
     <field name="dns_type" type="pcre2">^(?!A$).+</field>
@@ -63,7 +65,7 @@
   </rule>
 
   <!-- DNS A Record Query (หมายเหตุ: 100400 ก็รับ A record แล้ว แต่ 100409 เป็น backup) -->
-  <rule id="100409" level="3">
+  <rule id="100409" level="0">
     <if_sid>12138</if_sid>
     <field name="dns_domain" type="pcre2">.+</field>
     <description>Infoblox DNS: A record query for $(dns_domain) from $(srcip)</description>

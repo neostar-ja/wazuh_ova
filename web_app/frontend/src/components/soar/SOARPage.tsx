@@ -849,7 +849,9 @@ function MISPTab({ mispUrl }: { mispUrl?: string }) {
   }, [query, doSearch])
 
   const attrs: MispAttribute[] = searchResp?.response?.Attribute ?? []
-  const byType: Record<string, string> = mispStats?.by_type ?? {}
+  const byType: Record<string, string | number> = mispStats?.by_type ?? {}
+  const statsError = !mispStats?.connected && mispStats?.error
+  const statsAvailable = mispStats?.stats_available !== false
 
   const IOC_TYPES = [
     { value: '',          label: 'All types' },
@@ -873,10 +875,12 @@ function MISPTab({ mispUrl }: { mispUrl?: string }) {
           {statsLoading
             ? <Skeleton width={48} height={32} />
             : <Typography sx={{ fontSize: 26, fontWeight: 900, color: '#14B8A6', fontFamily: '"IBM Plex Mono", monospace', lineHeight: 1 }}>
-                {fmtN(mispStats?.total_iocs ?? 0)}
+                {statsAvailable ? fmtN(mispStats?.total_iocs ?? 0) : 'Live'}
               </Typography>
           }
-          <Typography sx={{ fontSize: 10, color: textMuted, mt: 0.5 }}>all categories</Typography>
+          <Typography sx={{ fontSize: 10, color: textMuted, mt: 0.5 }}>
+            {mispStats?.version ? `MISP ${mispStats.version}` : (statsAvailable ? 'all categories' : 'search ready')}
+          </Typography>
         </Box>
         {Object.entries(byType).slice(0, 3).map(([type, count]) => (
           <Box key={type} className="rounded-2xl p-3.5" sx={{ background: cardBg, border: `1px solid ${cardBord}` }}>
@@ -890,6 +894,12 @@ function MISPTab({ mispUrl }: { mispUrl?: string }) {
           </Box>
         ))}
       </Box>
+
+      {statsError && (
+        <MuiAlert severity="error" variant="outlined" sx={{ borderRadius: 2 }}>
+          {statsError}
+        </MuiAlert>
+      )}
 
       {/* Search bar */}
       <Box className="flex flex-wrap gap-2 items-stretch">

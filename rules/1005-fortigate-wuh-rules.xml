@@ -70,7 +70,9 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   <!-- ============================================================
        TRAFFIC BASE: type="traffic"
   ============================================================ -->
-  <rule id="110010" level="3">
+  <!-- Base traffic telemetry is high-volume; keep it decoded but do not
+       persist every flow as an alert. Child deny/anomaly rules remain active. -->
+  <rule id="110010" level="0">
     <if_sid>110000</if_sid>
     <match>type="traffic"</match>
     <description>FortiGate WUH: Traffic event $(srcip) → $(dstip):$(dstport)</description>
@@ -78,7 +80,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- TRAFFIC: Accept -->
-  <rule id="110011" level="4">
+  <rule id="110011" level="0">
     <if_sid>110010</if_sid>
     <match>action="accept"</match>
     <description>FortiGate WUH: Traffic ALLOWED $(srcip):$(srcport) → $(dstip):$(dstport) [$(service)] [$(policyname)]</description>
@@ -97,7 +99,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- TRAFFIC: TCP RST close (server-rst) -->
-  <rule id="110016" level="3">
+  <rule id="110016" level="0">
     <if_sid>110010</if_sid>
     <match>action="server-rst"</match>
     <description>FortiGate WUH: TCP RST (server-rst) $(srcip):$(srcport) → $(dstip):$(dstport)</description>
@@ -105,7 +107,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- TRAFFIC: TCP RST close (client-rst) -->
-  <rule id="110017" level="3">
+  <rule id="110017" level="0">
     <if_sid>110010</if_sid>
     <match>action="client-rst"</match>
     <description>FortiGate WUH: TCP RST (client-rst) $(srcip):$(srcport) → $(dstip):$(dstport)</description>
@@ -113,7 +115,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- TRAFFIC: SMB/445 allowed (child of accept) -->
-  <rule id="110018" level="4">
+  <rule id="110018" level="0">
     <if_sid>110011</if_sid>
     <match>dstport=445</match>
     <description>FortiGate WUH: SMB/445 ALLOWED $(srcip) → $(dstip) [$(app)] [$(policyname)]</description>
@@ -181,7 +183,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- UTM APP-CTRL BASE: subtype="app-ctrl" -->
-  <rule id="110021" level="3">
+  <rule id="110021" level="0">
     <if_sid>110020</if_sid>
     <match>subtype="app-ctrl"</match>
     <description>FortiGate WUH: App-ctrl DPI — $(app) ($(appcat)) from $(srcip) → $(dstip)</description>
@@ -189,7 +191,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- UTM APP-CTRL: Elevated risk -->
-  <rule id="110022" level="4">
+  <rule id="110022" level="0">
     <if_sid>110021</if_sid>
     <field name="apprisk">^elevated$</field>
     <description>FortiGate WUH: App-ctrl ELEVATED risk — $(app) from $(srcip) → $(dstip)</description>
@@ -200,7 +202,7 @@ Validated: 2026-05-16 with live logs from FW-WUH01/FW-WUH02
   </rule>
 
   <!-- UTM APP-CTRL: SSL DPI with hostname identified -->
-  <rule id="110023" level="3">
+  <rule id="110023" level="0">
     <if_sid>110021</if_sid>
     <match>hostname="</match>
     <description>FortiGate WUH: SSL DPI — $(app) hostname=$(url_hostname) from $(srcip) → $(dstip)</description>

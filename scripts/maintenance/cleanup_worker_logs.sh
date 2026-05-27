@@ -3,8 +3,13 @@
 # Since alerts are already forwarded and indexed in Wazuh Indexer (10.251.151.13),
 # keeping raw and uncompressed logs locally on the worker is not necessary.
 
-RETENTION_DAYS=2
-LOG_DIR="/var/ossec/logs"
+RETENTION_DAYS="${RETENTION_DAYS:-2}"
+LOG_DIR="${LOG_DIR:-/var/ossec/logs}"
+SUDO="sudo"
+
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+    SUDO=""
+fi
 
 echo "🧹 Starting Wazuh Worker log cleanup (Retention: ${RETENTION_DAYS} days)..."
 
@@ -12,32 +17,53 @@ echo "🧹 Starting Wazuh Worker log cleanup (Retention: ${RETENTION_DAYS} days)
 if [ -d "${LOG_DIR}/archives" ]; then
     echo "🗑️ Cleaning up archives..."
     # Remove old archive directories
-    sudo find ${LOG_DIR}/archives/ -mindepth 2 -type f -mtime +${RETENTION_DAYS} -delete
+    ${SUDO} find "${LOG_DIR}/archives/" -mindepth 2 -type f -mtime +"${RETENTION_DAYS}" -delete
     # Remove uncompressed large archives in the root or May directory
-    sudo find ${LOG_DIR}/archives/ -name "*.json" -mtime +${RETENTION_DAYS} -delete
-    sudo find ${LOG_DIR}/archives/ -name "*.log" -mtime +${RETENTION_DAYS} -delete
+    ${SUDO} find "${LOG_DIR}/archives/" -name "*.json" -mtime +"${RETENTION_DAYS}" -delete
+    ${SUDO} find "${LOG_DIR}/archives/" -name "*.log" -mtime +"${RETENTION_DAYS}" -delete
     # Empty main archives.json if it is large and not written to
     if [ -f "${LOG_DIR}/archives/archives.json" ]; then
-        sudo truncate -s 0 ${LOG_DIR}/archives/archives.json
+        ${SUDO} truncate -s 0 "${LOG_DIR}/archives/archives.json"
     fi
+else
+    echo "ℹ️ Archives directory not found: ${LOG_DIR}/archives (skipping)"
 fi
 
 # 2. Clean up alerts
 if [ -d "${LOG_DIR}/alerts" ]; then
     echo "🗑️ Cleaning up alerts..."
     # Remove rotated alerts older than retention days
-    sudo find ${LOG_DIR}/alerts/ -mindepth 2 -type f -mtime +${RETENTION_DAYS} -delete
+    ${SUDO} find "${LOG_DIR}/alerts/" -mindepth 2 -type f -mtime +"${RETENTION_DAYS}" -delete
     # Remove uncompressed large rotated alerts
-    sudo find ${LOG_DIR}/alerts/ -name "ossec-alerts-*.json" -delete
-    sudo find ${LOG_DIR}/alerts/ -name "ossec-alerts-*.log" -delete
+    ${SUDO} find "${LOG_DIR}/alerts/" -name "ossec-alerts-*.json" -delete
+    ${SUDO} find "${LOG_DIR}/alerts/" -name "ossec-alerts-*.log" -delete
+else
+    echo "ℹ️ Alerts directory not found: ${LOG_DIR}/alerts (skipping)"
 fi
 
 # 3. Truncate active alerts to 0 if they are pointing to old logs or are oversized
-echo "📝 Resetting active alert files..."
-sudo truncate -s 0 ${LOG_DIR}/alerts/alerts.json
-sudo truncate -s 0 ${LOG_DIR}/alerts/alerts.log
-sudo chown wazuh:wazuh ${LOG_DIR}/alerts/alerts.json ${LOG_DIR}/alerts/alerts.log
-sudo chmod 640 ${LOG_DIR}/alerts/alerts.json ${LOG_DIR}/alerts/alerts.log
+if [ -d "${LOG_DIR}/alerts" ]; then
+    echo "📝 Resetting active alert files..."
+    active_files=()
+
+    for file in "${LOG_DIR}/alerts/alerts.json" "${LOG_DIR}/alerts/alerts.log"; do
+        if [ -f "${file}" ]; then
+            ${SUDO} truncate -s 0 "${file}"
+            active_files+=("${file}")
+        else
+            echo "ℹ️ Active alert file not found: ${file} (skipping)"
+        fi
+    done
+
+    if [ "${#active_files[@]}" -gt 0 ]; then
+        if getent passwd wazuh >/dev/null 2>&1 && getent group wazuh >/dev/null 2>&1; then
+            ${SUDO} chown wazuh:wazuh "${active_files[@]}"
+        else
+            echo "ℹ️ User/group wazuh not found (skipping ownership reset)"
+        fi
+        ${SUDO} chmod 640 "${active_files[@]}"
+    fi
+fi
 
 # 4. Show free space
 echo "📊 Current disk space usage:"
@@ -45,7 +71,22 @@ df -h /
 
 # 5. Restart services to restore functionality
 echo "🔄 Restarting Wazuh Manager and Filebeat..."
-sudo systemctl restart wazuh-manager
-sudo systemctl restart filebeat
+restart_service() {
+    local service="$1"
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "ℹ️ systemctl not available (skipping ${service})"
+        return
+    fi
+
+    if systemctl list-unit-files "${service}.service" --no-legend 2>/dev/null | grep -q "^${service}.service"; then
+        ${SUDO} systemctl restart "${service}"
+        echo "✅ Restarted ${service}"
+    else
+        echo "ℹ️ ${service}.service not found (skipping)"
+    fi
+}
+
+restart_service "wazuh-manager"
+restart_service "filebeat"
 
 echo "✅ Cleanup and service restart completed successfully!"

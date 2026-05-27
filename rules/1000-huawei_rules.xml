@@ -19,14 +19,18 @@ May 13 2026 07:04:08 WUH-B-DC-USG6712E-1 %%01POLICY/6/POLICYPERMIT(l):...
     <group>network_policy,firewall_drop,access_denied,</group>
   </rule>
 
-  <rule id="100052" level="3">
+  <!-- Permit traffic is high-volume firewall telemetry. Do not write it as
+       alerts; keep deny/drop events visible via rule 100051. -->
+  <rule id="100052" level="0">
     <if_sid>100050</if_sid>
     <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
     <description>Huawei USG: Traffic permitted by policy $(rule_name) from $(srcip):$(srcport) to $(dstip):$(dstport)</description>
     <group>network_policy,policy_permit,</group>
   </rule>
 
-  <rule id="100053" level="4">
+  <!-- QUIC permit telemetry is extremely high-volume on the worker.
+       Keep it decoded for correlation context, but do not write alerts. -->
+  <rule id="100053" level="0">
     <if_sid>100050</if_sid>
     <field name="application">QUIC</field>
     <description>Huawei USG: QUIC traffic observed from $(srcip) to $(dstip):$(dstport) by policy $(rule_name)</description>

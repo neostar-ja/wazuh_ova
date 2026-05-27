@@ -10,7 +10,9 @@
   ============================================================ -->
 
   <!-- PCI 1.3: Prohibit direct public access -->
-  <rule id="120001" level="5">
+  <!-- High-volume compliance overlay for every firewall drop. Keep the
+       underlying firewall deny alert active and avoid duplicate alert writes. -->
+  <rule id="120001" level="0">
     <if_group>firewall_drop</if_group>
     <description>PCI DSS 1.3: Unauthorized network access blocked — $(data.srcip)</description>
     <group>pci_dss_1.3,compliance,firewall,</group>
@@ -312,7 +314,8 @@
     </mitre>
   </rule>
 
-  <rule id="120054" level="6">
+  <!-- NXDOMAIN per-event overlay is noisy; DGA flood rule 120053 stays active. -->
+  <rule id="120054" level="0">
     <if_sid>100407</if_sid>
     <description>NIST SC.5 / TSC CC7.1: DNS NXDOMAIN response anomaly detected</description>
     <group>nist_800_53_SC.5,tsc_CC7.1,compliance,dns,</group>

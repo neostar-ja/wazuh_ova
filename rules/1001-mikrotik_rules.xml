@@ -53,26 +53,27 @@ Validated with real firewall syslog from 10.252.0.1 on 2026-05-13.
     <group>configuration_management,identity,</group>
   </rule>
 
-  <rule id="101050" level="3">
+  <!-- Firewall flow telemetry is too high-volume to persist as alerts. -->
+  <rule id="101050" level="0">
     <decoded_as>mikrotik-firewall</decoded_as>
     <description>MikroTik firewall: $(chain) $(protocol) $(srcip):$(srcport) to $(dstip):$(dstport) state $(connection_state) via $(in_iface) to $(out_iface)</description>
     <group>firewall,network_traffic,nat,</group>
   </rule>
 
-  <rule id="101051" level="3">
+  <rule id="101051" level="0">
     <decoded_as>mikrotik-firewall-no-nat</decoded_as>
     <description>MikroTik firewall: $(chain) $(protocol) $(srcip):$(srcport) to $(dstip):$(dstport) state $(connection_state) via $(in_iface) to $(out_iface)</description>
     <group>firewall,network_traffic,</group>
   </rule>
 
-  <rule id="101052" level="4">
+  <rule id="101052" level="0">
     <if_sid>101050</if_sid>
     <match>proto UDP</match>
     <description>MikroTik firewall: UDP flow $(srcip):$(srcport) to $(dstip):$(dstport) NAT $(nat_public_ip):$(nat_public_port)</description>
     <group>firewall,network_traffic,udp,nat,</group>
   </rule>
 
-  <rule id="101053" level="4">
+  <rule id="101053" level="0">
     <if_sid>101050</if_sid>
     <match>proto TCP</match>
     <description>MikroTik firewall: TCP flow $(srcip):$(srcport) to $(dstip):$(dstport) flags $(tcp_flags) NAT $(nat_public_ip):$(nat_public_port)</description>

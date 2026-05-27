@@ -164,13 +164,26 @@ async def trigger_shuffle_webhook(url: str, payload: dict) -> dict:
 
 # ── MISP ───────────────────────────────────────────────────────────────────────
 
-async def _misp_get(path: str, timeout: int = 90) -> dict:
+def _json_or_error(response: httpx.Response, service: str) -> dict:
+    try:
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as e:
+        return {"error": f"{service} HTTP {e.response.status_code}"}
+    except ValueError:
+        return {"error": f"{service} returned non-JSON response"}
+
+
+async def _misp_get(path: str, timeout: int = _TIMEOUT) -> dict:
     if not settings.misp_url or not settings.misp_api_key:
         return {"error": "MISP not configured"}
     try:
         async with httpx.AsyncClient(verify=_SSL, timeout=timeout) as c:
             r = await c.get(f"{settings.misp_url}{path}", headers=_misp_headers())
-            return r.json()
+            return _json_or_error(r, "MISP")
+    except httpx.TimeoutException:
+        logger.warning("MISP GET %s timed out after %ss", path, timeout)
+        return {"error": f"MISP request timed out after {timeout}s"}
     except Exception as e:
         logger.error("MISP GET %s: %s", path, e)
         return {"error": str(e)}
@@ -182,7 +195,10 @@ async def _misp_post(path: str, data: dict, timeout: int = 30) -> dict:
     try:
         async with httpx.AsyncClient(verify=_SSL, timeout=timeout) as c:
             r = await c.post(f"{settings.misp_url}{path}", headers=_misp_headers(), json=data)
-            return r.json()
+            return _json_or_error(r, "MISP")
+    except httpx.TimeoutException:
+        logger.warning("MISP POST %s timed out after %ss", path, timeout)
+        return {"error": f"MISP request timed out after {timeout}s"}
     except Exception as e:
         logger.error("MISP POST %s: %s", path, e)
         return {"error": str(e)}
@@ -190,18 +206,33 @@ async def _misp_post(path: str, data: dict, timeout: int = 30) -> dict:
 
 async def get_misp_stats() -> dict:
     try:
-        raw = await _misp_get("/attributes/attributeStatistics")
-        if isinstance(raw, dict) and "error" in raw:
-            return {"connected": False, "error": raw["error"]}
-        stats: dict = {}
-        if isinstance(raw, list):
-            for item in raw:
-                stats.update(item)
-        elif isinstance(raw, dict):
-            stats = raw
-        total = sum(int(v) for v in stats.values() if str(v).isdigit())
-        top5 = dict(sorted(stats.items(), key=lambda x: -int(x[1]) if str(x[1]).isdigit() else 0)[:5])
-        return {"connected": True, "total_iocs": total, "by_type": top5, "misp_url": settings.misp_url}
+        version_resp, sample_resp = await asyncio.gather(
+            _misp_get("/servers/getVersion", timeout=5),
+            _misp_post("/attributes/restSearch", {"returnFormat": "json", "limit": 1, "page": 1}, timeout=5),
+        )
+        version_ok = isinstance(version_resp, dict) and "error" not in version_resp
+        sample_ok = isinstance(sample_resp, dict) and "error" not in sample_resp
+        if not version_ok:
+            return {
+                "connected": False,
+                "total_iocs": 0,
+                "by_type": {},
+                "misp_url": settings.misp_url,
+                "stats_available": False,
+                "search_available": sample_ok,
+                "error": version_resp.get("error", "MISP version check failed"),
+            }
+
+        return {
+            "connected": True,
+            "total_iocs": None,
+            "by_type": {},
+            "misp_url": settings.misp_url,
+            "version": version_resp.get("version"),
+            "stats_available": False,
+            "search_available": sample_ok,
+            "stats_note": "Live IOC search is available. Aggregate IOC statistics are skipped because MISP attributeStatistics is slow on this instance.",
+        }
     except Exception as e:
         return {"connected": False, "error": str(e)}
 
