@@ -197,6 +197,28 @@ function CopyBtn({ text }: CopyBtnProps) {
   )
 }
 
+// ── Country flag helper ───────────────────────────────────────────────────────
+const CC: Record<string, string> = {
+  'Thailand':'TH','China':'CN','United States':'US','Russia':'RU','Singapore':'SG',
+  'Japan':'JP','India':'IN','Germany':'DE','France':'FR','United Kingdom':'GB',
+  'Brazil':'BR','Australia':'AU','Vietnam':'VN','Indonesia':'ID','South Korea':'KR',
+  'Hong Kong':'HK','Netherlands':'NL','Canada':'CA','Ukraine':'UA','Pakistan':'PK',
+  'Taiwan':'TW','Malaysia':'MY','Italy':'IT','Spain':'ES','Turkey':'TR','Iran':'IR',
+  'Philippines':'PH','Nigeria':'NG','Bangladesh':'BD','Myanmar':'MM','Cambodia':'KH',
+  'Laos':'LA','Poland':'PL','Mexico':'MX','Argentina':'AR','Sweden':'SE','Norway':'NO',
+  'Finland':'FI','Switzerland':'CH','Belgium':'BE','Austria':'AT','Czech Republic':'CZ',
+  'Portugal':'PT','Romania':'RO','Hungary':'HU','Bulgaria':'BG','Greece':'GR',
+  'Denmark':'DK','Serbia':'RS','Croatia':'HR','Slovenia':'SI','Slovakia':'SK',
+  'United Arab Emirates':'AE','Saudi Arabia':'SA','Israel':'IL','Iraq':'IQ',
+  'Egypt':'EG','South Africa':'ZA','Kenya':'KE','Ethiopia':'ET',
+}
+function getFlag(name?: string): string {
+  if (!name) return ''
+  const code = CC[name] || (name.length === 2 ? name.toUpperCase() : '')
+  if (code.length !== 2) return ''
+  return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65, 0x1F1E6 + code.charCodeAt(1) - 65)
+}
+
 interface MitreTagsProps {
   groups?: string[];
   mitre?: MitreAttackInfo;
@@ -1347,9 +1369,6 @@ function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupCl
 
   const isTotalActive = activeLevel === 1;
 
-  const topAgent = stats?.by_agent?.[0];
-  const topAttacker = stats?.by_srcip?.[0];
-
   return (
     <Box sx={{ mb: 2 }}>
       {/* ── 5 count cards ── */}
@@ -1495,103 +1514,62 @@ function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupCl
         })}
       </Grid>
 
-      {/* ── Additional Stats Cards (Top Agent, Top Attacker) ── */}
-      <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
-        {/* Top Agent */}
-        <Grid item xs={12} sm={6}>
-          <Card variant="outlined" sx={{ bgcolor: 'background.paper', position: 'relative', overflow: 'hidden', borderLeft: `4px solid ${BRAND.purpleLight}` }}>
-            <Box sx={{ position: 'absolute', top: 12, right: 12, color: BRAND.purpleLight, opacity: 0.08, pointerEvents: 'none' }}>
-              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M4 6h16v12H4zm16-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-9 9H5v2h6v-2zm8 0h-6v2h6v-2zm-8-3H5v2h6v-2zm8 0h-6v2h6v-2z"/></svg>
-            </Box>
-            <CardContent sx={{ py: '12px !important', px: 2 }}>
-              <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
-                TOP AFFECTED AGENT (อุปกรณ์ถูกกระทบสูงสุด)
-              </Typography>
-              {loading ? (
-                <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
-              ) : topAgent ? (
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                  <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'text.primary' }}>
-                    {topAgent.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: BRAND.purpleLight, fontWeight: 600 }}>
-                    ({topAgent.count.toLocaleString()} alerts)
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>—</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Top Attacker IP */}
-        <Grid item xs={12} sm={6}>
-          <Card variant="outlined" sx={{ bgcolor: 'background.paper', position: 'relative', overflow: 'hidden', borderLeft: `4px solid ${BRAND.orange}` }}>
-            <Box sx={{ position: 'absolute', top: 12, right: 12, color: BRAND.orange, opacity: 0.08, pointerEvents: 'none' }}>
-              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v2h2v4zm0-8h-2V7h2v2z"/></svg>
-            </Box>
-            <CardContent sx={{ py: '12px !important', px: 2 }}>
-              <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'text.secondary' }}>
-                TOP ATTACKER IP (IP โจมตีสูงสุด)
-              </Typography>
-              {loading ? (
-                <Box sx={{ height: 28, display: 'flex', alignItems: 'center', mt: 0.5 }}><CircularProgress size={16} /></Box>
-              ) : topAttacker ? (
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                  <Typography variant="subtitle1" fontWeight={700} sx={{ fontFamily: '"IBM Plex Mono"', color: 'text.primary' }}>
-                    {topAttacker.name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: BRAND.orange, fontWeight: 600 }}>
-                    ({topAttacker.count.toLocaleString()} alerts)
-                  </Typography>
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>—</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
       {/* ── Timeline + Groups + Top Rules row ── */}
       <Grid container spacing={2}>
         {/* Timeline chart - 7 cols */}
         {timeline.length > 1 && (
           <Grid item xs={12} md={7}>
-            <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden', height: '100%' }}>
-              <CardContent sx={{ p: { xs: '12px 14px !important', sm: '12px 20px !important' } }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25, flexWrap: 'wrap', gap: 0.75 }}>
-                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary' }}>
-                    Alert Timeline
+            <Card sx={{
+              border: '1px solid', borderColor: 'divider', overflow: 'hidden', height: '100%',
+              background: 'linear-gradient(135deg, rgba(123,91,164,0.04) 0%, transparent 60%)',
+              position: 'relative',
+            }}>
+              {/* Decorative glow */}
+              <Box sx={{ position: 'absolute', top: -20, right: -20, width: 120, height: 120, borderRadius: '50%',
+                background: `radial-gradient(circle, ${BRAND.purple}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
+              <CardContent sx={{ p: '16px 20px !important', position: 'relative' }}>
+                {/* Header row */}
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
+                      <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: BRAND.purple }} />
+                      <Typography sx={{ fontSize: 13, fontWeight: 800, color: 'text.primary', letterSpacing: '-0.01em' }}>
+                        Timeline การแจ้งเตือน
+                      </Typography>
+                    </Box>
                     {total > 0 && (
-                      <Box component="span" sx={{ ml: 1, fontSize: 11, fontWeight: 400, color: 'text.disabled' }}>
-                        · {fmtNum(total)} รายการ
-                      </Box>
+                      <Typography sx={{ fontSize: 11, color: 'text.disabled', pl: 1.5 }}>
+                        รวม <Box component="span" sx={{ color: BRAND.purple, fontWeight: 700 }}>{fmtNum(total)}</Box> รายการในช่วงเวลาที่เลือก
+                      </Typography>
                     )}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap' }}>
+                  </Box>
+                  {/* Legend pills */}
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                     {[
-                      { label: 'Critical', color: '#EF4444' },
-                      { label: 'High',     color: BRAND.orange },
-                      { label: 'Medium',   color: '#EAB308' },
-                      { label: 'Total',    color: BRAND.purple },
+                      { label: 'วิกฤต', color: '#EF4444' },
+                      { label: 'สูง',   color: BRAND.orange },
+                      { label: 'กลาง',  color: '#EAB308' },
+                      { label: 'รวม',   color: BRAND.purple },
                     ].map(l => (
-                      <Box key={l.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Box sx={{ width: 10, height: 3, borderRadius: 2, bgcolor: l.color }} />
-                        <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>{l.label}</Typography>
+                      <Box key={l.label} sx={{
+                        display: 'flex', alignItems: 'center', gap: 0.5,
+                        px: 1, py: 0.25, borderRadius: '20px',
+                        bgcolor: `${l.color}12`, border: `1px solid ${l.color}30`,
+                      }}>
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: l.color }} />
+                        <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: l.color, letterSpacing: '0.04em' }}>{l.label}</Typography>
                       </Box>
                     ))}
                   </Box>
                 </Box>
-                <ResponsiveContainer width="100%" height={120}>
-                  <AreaChart data={timeline} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={140}>
+                  <AreaChart data={timeline} margin={{ top: 6, right: 4, left: -28, bottom: 0 }}>
                     <defs>
                       {[
-                        { id: 'g-total',    color: BRAND.purple, o1: 0.22, o2: 0.01 },
-                        { id: 'g-critical', color: '#EF4444',    o1: 0.45, o2: 0.02 },
-                        { id: 'g-high',     color: BRAND.orange, o1: 0.35, o2: 0.02 },
-                        { id: 'g-medium',   color: '#EAB308',    o1: 0.25, o2: 0.01 },
+                        { id: 'gt',  color: BRAND.purple, o1: 0.28, o2: 0.02 },
+                        { id: 'gc',  color: '#EF4444',    o1: 0.50, o2: 0.03 },
+                        { id: 'gh',  color: BRAND.orange, o1: 0.40, o2: 0.03 },
+                        { id: 'gm',  color: '#EAB308',    o1: 0.30, o2: 0.02 },
                       ].map(g => (
                         <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%"   stopColor={g.color} stopOpacity={g.o1} />
@@ -1599,17 +1577,20 @@ function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupCl
                         </linearGradient>
                       ))}
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.06)" vertical={false} />
                     <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
                       tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
                       interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} />
-                    <RechartTip contentStyle={ChartTip} formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
-                      labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
-                    <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={2} fill="url(#g-total)" dot={false} name="Total" />
-                    <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444" strokeWidth={1.5} fill="url(#g-critical)" dot={false} name="Critical" />
-                    <Area type="monotone" dataKey="severity_breakdown.high" stroke={BRAND.orange} strokeWidth={1.5} fill="url(#g-high)" dot={false} name="High" />
-                    <Area type="monotone" dataKey="severity_breakdown.medium" stroke="#EAB308" strokeWidth={1} fill="url(#g-medium)" dot={false} name="Medium" />
+                    <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} width={36} />
+                    <RechartTip
+                      contentStyle={{ ...ChartTip, borderRadius: 10, padding: '8px 12px' }}
+                      formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
+                      labelFormatter={l => { try { return format(new Date(l), 'dd MMM HH:mm') } catch { return l } }}
+                    />
+                    <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={2.5} fill="url(#gt)" dot={false} name="รวม" />
+                    <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444" strokeWidth={1.5} fill="url(#gc)" dot={false} name="วิกฤต" />
+                    <Area type="monotone" dataKey="severity_breakdown.high" stroke={BRAND.orange} strokeWidth={1.5} fill="url(#gh)" dot={false} name="สูง" />
+                    <Area type="monotone" dataKey="severity_breakdown.medium" stroke="#EAB308" strokeWidth={1} fill="url(#gm)" dot={false} name="กลาง" />
                   </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1986,17 +1967,27 @@ export default function AlertsPage() {
             sx={{ minWidth: 220, flex: 1 }} />
 
           {/* Level */}
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: 130 }}>
             <Select value={level} onChange={e => setLevel(Number(e.target.value))} displayEmpty sx={{ fontSize: 12 }}>
-              <MenuItem value={1}>ทุก Level</MenuItem>
-              {SEV.map(s => <MenuItem key={s.key} value={s.min}><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color }} />{s.label} ({s.min}+)</Box></MenuItem>)}
+              <MenuItem value={1}>ทุกระดับ</MenuItem>
+              {SEV.map(s => {
+                const th = { critical: 'วิกฤต', high: 'สูง', medium: 'กลาง', low: 'ต่ำ' }[s.key] || s.label
+                return (
+                  <MenuItem key={s.key} value={s.min}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color }} />
+                      {th} ({s.min}+)
+                    </Box>
+                  </MenuItem>
+                )
+              })}
             </Select>
           </FormControl>
 
           {/* Source */}
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: 130 }}>
             <Select value={source} onChange={e => setSource(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
-              <MenuItem value="">ทุก Source</MenuItem>
+              <MenuItem value="">ทุกแหล่งข้อมูล</MenuItem>
               {SOURCES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
             </Select>
           </FormControl>
@@ -2030,37 +2021,37 @@ export default function AlertsPage() {
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก Agent</MenuItem>
-                {(stats?.by_agent || []).map((a: any) => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count})</MenuItem>)}
+                {(stats?.by_agent || []).map((a: any) => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count.toLocaleString()})</MenuItem>)}
               </Select>
             </FormControl>
 
             {/* MITRE tactic */}
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
               <Select value={mitreFilter} onChange={e => setMitreFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก MITRE Tactic</MenuItem>
-                {(stats?.by_mitre || []).map((m: any) => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count})</MenuItem>)}
+                {(stats?.by_mitre || []).map((m: any) => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count.toLocaleString()})</MenuItem>)}
               </Select>
             </FormControl>
 
             {/* Rule ID */}
-            <TextField size="small" placeholder="Rule ID" value={ruleIdFilter}
+            <TextField size="small" placeholder="Rule ID เช่น 101053" value={ruleIdFilter}
               onChange={e => setRuleIdFilter(e.target.value)}
-              sx={{ minWidth: 100, maxWidth: 120, '& .MuiInputBase-input': { fontSize: 12 } }} />
+              sx={{ minWidth: 130, maxWidth: 140, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
             {/* Source IP */}
-            <TextField size="small" placeholder="Source IP" value={srcIpFilter}
+            <TextField size="small" placeholder="IP ต้นทาง" value={srcIpFilter}
               onChange={e => setSrcIpFilter(e.target.value)}
               sx={{ minWidth: 130, maxWidth: 150, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
             {/* Dest IP */}
-            <TextField size="small" placeholder="Destination IP" value={dstIpFilter}
+            <TextField size="small" placeholder="IP ปลายทาง" value={dstIpFilter}
               onChange={e => setDstIpFilter(e.target.value)}
               sx={{ minWidth: 130, maxWidth: 150, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
             {/* Decoder */}
-            <TextField size="small" placeholder="Decoder" value={decoderFilter}
+            <TextField size="small" placeholder="Decoder / โปรโตคอล" value={decoderFilter}
               onChange={e => setDecoderFilter(e.target.value)}
-              sx={{ minWidth: 120, maxWidth: 140, '& .MuiInputBase-input': { fontSize: 12 } }} />
+              sx={{ minWidth: 140, maxWidth: 160, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
             {/* Compliance Framework */}
             <FormControl size="small" sx={{ minWidth: 180 }}>
@@ -2077,7 +2068,7 @@ export default function AlertsPage() {
             {/* Top attackers quick-filter */}
             {(stats?.by_srcip || []).length > 0 && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: 10, color: 'text.disabled', mr: 0.5 }}>Top Attackers:</Typography>
+                <Typography sx={{ fontSize: 10, color: 'text.disabled', mr: 0.5 }}>IP โจมตีสูงสุด:</Typography>
                 {(stats?.by_srcip || []).slice(0, 5).map((ip: any) => (
                   <Chip key={ip.name} label={ip.name} size="small" onClick={() => setSearchInput(ip.name)}
                     sx={{ height: 18, fontSize: 9, fontFamily: '"IBM Plex Mono"', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
@@ -2102,38 +2093,88 @@ export default function AlertsPage() {
         )}
       </Card>
 
-      {/* ── Alert count + Top stats mini row ── */}
-      {stats && !loadingStats && (
-        <Box sx={{ display: 'flex', gap: 1, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
-            {alerts.length.toLocaleString()} alerts · ทั้งระบบ {(stats.total || 0).toLocaleString()}
+      {/* ── Quick source chips ── */}
+      {stats && !loadingStats && (stats.by_source || []).length > 0 && (
+        <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.disabled', mr: 0.25, letterSpacing: '0.06em' }}>
+            แหล่งข้อมูล:
           </Typography>
-          {(stats.by_source || []).slice(0, 5).map((s: any) => (
-            <Chip key={s.name} label={`${s.name}: ${s.count}`} size="small"
-              onClick={() => setSource(s.name)}
-              sx={{ height: 18, fontSize: 9, cursor: 'pointer', bgcolor: 'rgba(123,91,164,0.08)', color: 'text.secondary', '&:hover': { bgcolor: 'rgba(123,91,164,0.16)' } }} />
+          {(stats.by_source || []).slice(0, 6).map((s: any) => (
+            <Chip key={s.name} label={`${s.name}  ${s.count.toLocaleString()}`} size="small"
+              onClick={() => setSource(prev => prev === s.name ? '' : s.name)}
+              sx={{
+                height: 22, fontSize: 10, cursor: 'pointer',
+                bgcolor: source === s.name ? 'rgba(123,91,164,0.2)' : 'rgba(123,91,164,0.07)',
+                color: source === s.name ? BRAND.purpleLight : 'text.secondary',
+                border: `1px solid ${source === s.name ? BRAND.purple : 'transparent'}`,
+                fontFamily: source === s.name ? 'inherit' : '"IBM Plex Mono"',
+                '&:hover': { bgcolor: 'rgba(123,91,164,0.15)', color: BRAND.purpleLight },
+              }} />
           ))}
         </Box>
       )}
 
       {/* ── Alerts Table ── */}
-      <Card>
-        {isLoading && <LinearProgress sx={{ '& .MuiLinearProgress-bar': { bgcolor: BRAND.purple } }} />}
+      <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+        {isLoading && <LinearProgress sx={{ height: 2, '& .MuiLinearProgress-bar': { bgcolor: BRAND.purple } }} />}
+
+        {/* Table header bar */}
+        <Box sx={{
+          px: 2, py: 1.25,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderBottom: '1px solid', borderColor: 'divider',
+          background: 'linear-gradient(90deg, rgba(123,91,164,0.04) 0%, transparent 100%)',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: BRAND.purple }} />
+            <Typography sx={{ fontSize: 13, fontWeight: 800, color: 'text.primary' }}>รายการแจ้งเตือน</Typography>
+            {!isLoading && (
+              <Chip label={`${alerts.length.toLocaleString()} รายการ`} size="small"
+                sx={{ height: 20, fontSize: 10, fontWeight: 700, bgcolor: `${BRAND.purple}18`, color: BRAND.purpleLight }} />
+            )}
+          </Box>
+          <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>
+            ทั้งระบบ {(stats?.total || 0).toLocaleString()} รายการ
+            {dataUpdatedAt ? ` · ${formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true, locale: th })}` : ''}
+          </Typography>
+        </Box>
+
         <Box sx={{ overflow: 'auto' }} className="scrollbar-thin">
           <Table size="small" stickyHeader>
             <TableHead>
-              <TableRow>
-                {['เวลา', 'Level', 'คำอธิบาย', 'Source', 'Src IP', 'ประเทศ', 'Agent'].map(h => (
-                  <TableCell key={h} sx={{ fontSize: 9, fontWeight: 800, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.08em', py: 1, whiteSpace: 'nowrap', bgcolor: 'inherit' }}>{h}</TableCell>
+              <TableRow sx={{ '& .MuiTableCell-stickyHeader': { bgcolor: 'background.paper', borderBottom: '2px solid', borderColor: 'divider' } }}>
+                {[
+                  { label: 'เวลา',        w: 120 },
+                  { label: 'ระดับ',       w: 90 },
+                  { label: 'คำอธิบาย',    w: 'auto' },
+                  { label: 'แหล่งข้อมูล', w: 120 },
+                  { label: 'IP ต้นทาง',   w: 140 },
+                  { label: '🌐 ประเทศ',   w: 120 },
+                  { label: 'Agent',       w: 110 },
+                ].map(h => (
+                  <TableCell key={h.label} sx={{
+                    fontSize: 10, fontWeight: 800, color: 'text.disabled',
+                    textTransform: 'uppercase', letterSpacing: '0.07em',
+                    py: 1.25, whiteSpace: 'nowrap', width: h.w,
+                  }}>
+                    {h.label}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
               {!isLoading && alerts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} sx={{ textAlign: 'center', py: 8 }}>
-                    <NotificationsActiveRoundedIcon sx={{ fontSize: 40, color: 'rgba(123,91,164,0.25)', mb: 1 }} />
-                    <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>ไม่พบ alerts ตามเงื่อนไขที่กำหนด</Typography>
+                  <TableCell colSpan={7} sx={{ textAlign: 'center', py: 10, border: 'none' }}>
+                    <Box sx={{ opacity: 0.4 }}>
+                      <NotificationsActiveRoundedIcon sx={{ fontSize: 48, color: BRAND.purple, display: 'block', mx: 'auto', mb: 1.5 }} />
+                    </Box>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600, color: 'text.disabled' }}>
+                      ไม่พบรายการแจ้งเตือน
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.5 }}>
+                      ลองเปลี่ยนเงื่อนไขการค้นหาหรือช่วงเวลา
+                    </Typography>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -2141,12 +2182,19 @@ export default function AlertsPage() {
                   const lv      = a.ruleLevel
                   const srcip   = a.sourceIp
                   const country = a.countryName
+                  const flag    = getFlag(country)
                   const groups: string[] = a.groups || []
-                  const mitre: MitreAttackInfo = {
-                    tactic: a.mitreTactics,
-                    technique: a.mitreTechniques,
-                  }
+                  const mitre: MitreAttackInfo = { tactic: a.mitreTactics, technique: a.mitreTechniques }
                   const isCrit  = lv >= 15
+                  const isHigh  = lv >= 12 && lv < 15
+                  const isMed   = lv >= 7  && lv < 12
+                  const accentColor = isCrit ? '#EF4444' : isHigh ? BRAND.orange : isMed ? '#EAB308' : '#22C55E'
+
+                  // Decoder color from GROUP_META
+                  const decoderKey = Object.keys(GROUP_META).find(k => a.decoderName?.toLowerCase().includes(k))
+                  const decoderColor = decoderKey ? GROUP_META[decoderKey].color : BRAND.purpleLight
+                  const decoderLabel = decoderKey ? GROUP_META[decoderKey].label : (a.decoderName || '—')
+
                   return (
                     <TableRow
                       key={i}
@@ -2154,58 +2202,153 @@ export default function AlertsPage() {
                       onClick={() => { setSelected(a); setDrawer(true) }}
                       sx={{
                         cursor: 'pointer',
-                        bgcolor: isCrit ? 'rgba(239,68,68,0.04)' : lv >= 12 ? 'rgba(241,116,34,0.03)' : 'transparent',
-                        '&:hover': { bgcolor: isCrit ? 'rgba(239,68,68,0.08)' : 'rgba(123,91,164,0.06)' },
-                        borderLeft: `3px solid ${isCrit ? '#EF4444' : lv >= 12 ? BRAND.orange : 'transparent'}`,
+                        position: 'relative',
+                        bgcolor: isCrit ? 'rgba(239,68,68,0.03)' : isHigh ? 'rgba(241,116,34,0.025)' : 'transparent',
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          bgcolor: `${accentColor}08`,
+                        },
+                        '& .MuiTableCell-root': {
+                          borderColor: isCrit ? 'rgba(239,68,68,0.08)' : 'divider',
+                        },
                       }}
                     >
-                      {/* Time */}
-                      <TableCell sx={{ fontSize: 10, fontFamily: '"IBM Plex Mono"', whiteSpace: 'nowrap', py: 1, color: 'text.secondary' }}>
-                        {a.timestamp ? format(new Date(a.timestamp), 'dd/MM HH:mm:ss') : '-'}
+                      {/* Time — left accent border */}
+                      <TableCell sx={{
+                        py: 1.25, pl: 1.5,
+                        borderLeft: `3px solid ${isCrit || isHigh ? accentColor : `${accentColor}50`}`,
+                      }}>
+                        <Typography sx={{ fontSize: 10.5, fontFamily: '"IBM Plex Mono"', color: 'text.secondary', lineHeight: 1.2 }}>
+                          {a.timestamp ? format(new Date(a.timestamp), 'dd/MM/yy') : '-'}
+                        </Typography>
+                        <Typography sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono"', color: 'text.primary', fontWeight: 600, lineHeight: 1.2, mt: 0.2 }}>
+                          {a.timestamp ? format(new Date(a.timestamp), 'HH:mm:ss') : '-'}
+                        </Typography>
                       </TableCell>
 
                       {/* Level */}
-                      <TableCell sx={{ py: 1 }}>
-                        <LevelChip level={lv} animate={isCrit} />
+                      <TableCell sx={{ py: 1.25 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                          <LevelChip level={lv} animate={isCrit} />
+                          {a.ruleId && (
+                            <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', color: 'text.disabled' }}>
+                              #{a.ruleId}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
 
-                      {/* Description + MITRE */}
-                      <TableCell sx={{ py: 1, maxWidth: 300 }}>
-                        <Typography sx={{ fontSize: 12, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }}>
+                      {/* Description + MITRE tags */}
+                      <TableCell sx={{ py: 1.25, maxWidth: 320, minWidth: 220 }}>
+                        <Typography sx={{
+                          fontSize: 12.5, lineHeight: 1.4, fontWeight: 500,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          color: isCrit ? '#FCA5A5' : isHigh ? '#FDBA74' : 'text.primary',
+                          maxWidth: 310,
+                        }}>
                           {a.description || '-'}
                         </Typography>
-                        <MitreTags groups={groups} mitre={mitre} />
+                        {(groups.length > 0 || (mitre.tactic && mitre.tactic.length > 0)) && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4, mt: 0.5 }}>
+                            {groups.slice(0, 3).map(g => {
+                              const gKey = Object.keys(GROUP_META).find(k => g.includes(k))
+                              const gColor = gKey ? GROUP_META[gKey].color : '#6B7280'
+                              return (
+                                <Box key={g} sx={{
+                                  px: 0.75, py: 0.15, borderRadius: '4px', fontSize: 9, fontWeight: 700,
+                                  bgcolor: `${gColor}18`, color: gColor, border: `1px solid ${gColor}30`,
+                                  letterSpacing: '0.03em',
+                                }}>
+                                  {g.replace('_', ' ')}
+                                </Box>
+                              )
+                            })}
+                            {(mitre.tactic || []).slice(0, 2).map(t => (
+                              <Box key={t} sx={{
+                                px: 0.75, py: 0.15, borderRadius: '4px', fontSize: 9, fontWeight: 700,
+                                bgcolor: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)',
+                              }}>
+                                ⚔ {t}
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
                       </TableCell>
 
-                      {/* Source */}
-                      <TableCell sx={{ py: 1 }}>
-                        <Chip label={a.decoderName || '-'} size="small" variant="outlined"
-                          sx={{ height: 18, fontSize: 9, borderColor: 'rgba(123,91,164,0.2)', color: 'text.secondary', cursor: 'pointer' }}
-                          onClick={e => { e.stopPropagation(); setSource(a.decoderName || '') }} />
+                      {/* Source (decoder) */}
+                      <TableCell sx={{ py: 1.25 }}>
+                        <Box sx={{
+                          display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                          px: 0.9, py: 0.35, borderRadius: '6px',
+                          bgcolor: `${decoderColor}15`, border: `1px solid ${decoderColor}30`,
+                          cursor: 'pointer', transition: 'all 0.15s',
+                          '&:hover': { bgcolor: `${decoderColor}25` },
+                        }}
+                          onClick={e => { e.stopPropagation(); setSource(a.decoderName || '') }}
+                        >
+                          <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: decoderColor, flexShrink: 0 }} />
+                          <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: decoderColor, whiteSpace: 'nowrap' }}>
+                            {decoderLabel}
+                          </Typography>
+                        </Box>
                       </TableCell>
 
                       {/* Src IP */}
-                      <TableCell sx={{ py: 1 }}>
+                      <TableCell sx={{ py: 1.25 }}>
                         {srcip ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-                            <Typography sx={{ fontSize: 11, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight,
-                              cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            <Typography sx={{
+                              fontSize: 11.5, fontFamily: '"IBM Plex Mono"', fontWeight: 600,
+                              color: BRAND.purpleLight, cursor: 'pointer', lineHeight: 1,
+                              '&:hover': { color: BRAND.purple, textDecoration: 'underline' },
+                            }}
                               onClick={e => { e.stopPropagation(); navigate(`/investigate?q=${srcip}`) }}>
                               {srcip}
                             </Typography>
                             <CopyBtn text={srcip} />
                           </Box>
-                        ) : <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>}
+                        ) : (
+                          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>
+                        )}
+                        {a.sourcePort && (
+                          <Typography sx={{ fontSize: 9.5, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', mt: 0.2 }}>
+                            :{a.sourcePort}
+                          </Typography>
+                        )}
                       </TableCell>
 
-                      {/* Country */}
-                      <TableCell sx={{ fontSize: 11, py: 1, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                        {country || '—'}
+                      {/* Country + flag */}
+                      <TableCell sx={{ py: 1.25 }}>
+                        {country ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            {flag && (
+                              <Box sx={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{flag}</Box>
+                            )}
+                            <Typography sx={{ fontSize: 11, color: 'text.secondary', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 80 }}>
+                              {country}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>
+                        )}
                       </TableCell>
 
                       {/* Agent */}
-                      <TableCell sx={{ fontSize: 11, py: 1, color: 'text.secondary' }}>
-                        {a.agentName || '—'}
+                      <TableCell sx={{ py: 1.25 }}>
+                        {a.agentName ? (
+                          <Box sx={{
+                            display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                            px: 0.8, py: 0.3, borderRadius: '6px',
+                            bgcolor: 'rgba(123,91,164,0.08)', border: '1px solid rgba(123,91,164,0.15)',
+                          }}>
+                            <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: '#22C55E', flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: 10.5, color: 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {a.agentName}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>—</Typography>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
@@ -2216,16 +2359,21 @@ export default function AlertsPage() {
         </Box>
 
         {/* Table footer */}
-        <Box sx={{ px: 2, py: 1.25, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{
+          px: 2, py: 1.25, borderTop: '1px solid', borderColor: 'divider',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'linear-gradient(90deg, rgba(123,91,164,0.02) 0%, transparent 100%)',
+        }}>
           <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
-            แสดง {Math.min(alerts.length, 500)} / {(stats?.total || alerts.length).toLocaleString()} รายการ
-            {dataUpdatedAt ? ` · อัปเดต ${formatDistanceToNow(new Date(dataUpdatedAt), { addSuffix: true, locale: th })}` : ''}
+            แสดง {Math.min(alerts.length, 500).toLocaleString()} จาก {(stats?.total || alerts.length).toLocaleString()} รายการ
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            {[['CSV', 'csv'], ['JSON', 'json']].map(([label, fmt]) => (
+            {[['ดาวน์โหลด CSV', 'csv'], ['ดาวน์โหลด JSON', 'json']].map(([label, fmt]) => (
               <Button key={fmt} size="small" onClick={() => handleExport(fmt as 'csv' | 'json')}
-                sx={{ fontSize: 10, py: 0.4, px: 1, borderRadius: '7px', color: 'text.disabled', '&:hover': { color: BRAND.purpleLight } }}>
-                Export {label}
+                variant="outlined"
+                sx={{ fontSize: 10, py: 0.4, px: 1.25, borderRadius: '8px', color: 'text.secondary', borderColor: 'divider',
+                  '&:hover': { color: BRAND.purpleLight, borderColor: BRAND.purple } }}>
+                {label}
               </Button>
             ))}
           </Box>
