@@ -1,9 +1,49 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+DOTENV_FILE="${DOTENV_FILE:-${REPO_ROOT}/.env}"
+
+dotenv_get() {
+    local key="$1" line value
+
+    [ -f "${DOTENV_FILE}" ] || return 1
+
+    while IFS= read -r line || [ -n "${line}" ]; do
+        line="${line%$'\r'}"
+        case "${line}" in
+            "${key}="*)
+                value="${line#*=}"
+                ;;
+            "export ${key}="*)
+                value="${line#*=}"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+
+        if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+            value="${value:1:${#value}-2}"
+        elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+
+        printf '%s' "${value}"
+        return 0
+    done < "${DOTENV_FILE}"
+
+    return 1
+}
+
+WORKER_TARGET="${WORKER_TARGET:-$(dotenv_get WORKER_TARGET || true)}"
 WORKER_TARGET="${WORKER_TARGET:-10.251.151.12}"
+MANAGER_TARGET="${MANAGER_TARGET:-$(dotenv_get MANAGER_TARGET || true)}"
 MANAGER_TARGET="${MANAGER_TARGET:-10.251.151.11}"
+USERNAME="${USERNAME:-$(dotenv_get USERNAME || dotenv_get SSH_USERNAME || true)}"
 USERNAME="${USERNAME:-wazuh-user}"
+PASSWORD="${PASSWORD:-$(dotenv_get PASSWORD || dotenv_get SSH_PASSWORD || true)}"
 PASSWORD="${PASSWORD:-wazuh}"
 SYSLOG_PORT="${SYSLOG_PORT:-514}"
 INFOBLOX_HOSTNAME="${INFOBLOX_HOSTNAME:-infoblox-gm}"
