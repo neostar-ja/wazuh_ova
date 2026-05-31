@@ -2,7 +2,50 @@
 Custom Rules maintained locally
 Note: Huawei USG rules moved to 1000-huawei_rules.xml for load-order dependency.
 IDs 100300-100302: CDB passive lookup (avoid conflict with 100070-100082 Huawei-AC)
+IDs 100500-100520: Huawei USG general admin/system events
 -->
+
+<!-- ── Huawei USG General Log Rules (100500-100520) ─────────────────────────
+     Handles %%01UM, %%01SHELL, %%01ACLM modules that are not traffic/policy events.
+     Base: decoded_as huawei-usg-general
+     Level: 3 default, 7 for auth failures, 5 for sync failures, 0 to suppress
+-->
+<group name="huawei,huawei_usg,system_event,">
+
+  <!-- Catch-all: any Huawei USG general log (suppress noisy modules) -->
+  <rule id="100500" level="3">
+    <decoded_as>huawei-usg-general</decoded_as>
+    <description>Huawei USG: System event [$(usg_module)/$(usg_event)] on $(usg_hostname)</description>
+    <group>huawei_admin,</group>
+  </rule>
+
+  <!-- Suppress: Very high-volume UM user sync events -->
+  <rule id="100501" level="0">
+    <if_sid>100500</if_sid>
+    <field name="usg_event">IMPORTSUCCESS|SYNCSTART|SYNCEND|CHECKPASS</field>
+    <description>Huawei USG: UM user sync event (suppressed — high volume)</description>
+  </rule>
+
+  <!-- Auth failure from UM module -->
+  <rule id="100502" level="7">
+    <if_sid>100500</if_sid>
+    <field name="usg_module">UM</field>
+    <field name="usg_event">SYNCFAIL|LOGINFAILED|AUTHFAILED</field>
+    <description>Huawei USG: UM authentication/sync failure — $(usg_message)</description>
+    <group>authentication,authentication_failed,</group>
+  </rule>
+
+  <!-- Shell command recording (admin activity) -->
+  <rule id="100503" level="5">
+    <if_sid>100500</if_sid>
+    <field name="usg_module">SHELL</field>
+    <field name="usg_event">CMDRECORD</field>
+    <description>Huawei USG: Admin command recorded on $(usg_hostname): $(usg_message)</description>
+    <group>configuration_management,admin_activity,</group>
+  </rule>
+
+</group>
+
 <group name="threat_intel,">
 
   <!-- ── OTX Threat Intelligence (100060-100061) ──────────────

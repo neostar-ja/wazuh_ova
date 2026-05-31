@@ -54,7 +54,7 @@ obj_search = {
             "data.dstport",
             "data.service",
             "data.app",
-            "data.policyname",
+            "data.policyid",
             "data.username",
         ],
         "sort": [["timestamp", "desc"]],
@@ -405,11 +405,11 @@ vis_objects = [
         query=DENY_QUERY
     ),
 
-    # ── Panel 4: Traffic by policy name ───────────────────────────────────
+    # ── Panel 4: Traffic by policy ID ─────────────────────────────────────
     make_bar(
         "fgt-wuh-policy-bar",
-        "FortiGate WUH — Traffic by Policy Name",
-        "data.policyname.keyword",
+        "FortiGate WUH — Traffic by Policy ID",
+        "data.policyid",
         query=TRAFFIC_QUERY
     ),
 

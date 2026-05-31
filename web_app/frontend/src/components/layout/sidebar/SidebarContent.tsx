@@ -103,7 +103,7 @@ export default function SidebarContent({ collapsed, onClose, onToggleCollapse }:
               <span style={{
                 fontSize: 11.5, fontWeight: 700,
                 color: isDark ? 'rgba(34,197,94,0.9)' : '#15803D',
-              }}>Monitoring Active</span>
+              }}>กำลังตรวจสอบระบบ</span>
             </Box>
           </Box>
         </Box>

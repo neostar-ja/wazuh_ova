@@ -14,6 +14,27 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 # Rule descriptions cache (populated from aggregation results)
 _RULE_DESC_CACHE: dict[str, str] = {}
 
+_GROUP_TO_SOURCE = [
+    ("fortigate_wuh", "FortiGate WUH"),
+    ("huawei_ac",     "Huawei AC WiFi"),
+    ("mikrotik",      "MikroTik Router"),
+    ("infoblox_dhcp", "Infoblox DHCP"),
+    ("infoblox_dns",  "Infoblox DNS"),
+    ("infoblox",      "Infoblox"),
+    ("suricata",      "Suricata IDS"),
+    ("ids",           "Suricata IDS"),
+]
+
+
+def _resolve_source(alert: dict) -> str:
+    """Derive human-readable source label from rule.groups or predecoder.program_name."""
+    groups = alert.get("rule", {}).get("groups", [])
+    for grp_key, label in _GROUP_TO_SOURCE:
+        if grp_key in groups:
+            return label
+    prog = alert.get("predecoder", {}).get("program_name", "")
+    return prog or "unknown"
+
 
 # ── List alerts ────────────────────────────────────────────────────────────────
 
@@ -105,11 +126,17 @@ async def alert_stats(
         return [{"name": b["key"], "count": b["doc_count"]}
                 for b in aggs.get(key, {}).get("buckets", [])[:n]]
 
+    def _source_buckets(key, n=10):
+        raw = aggs.get(key, {}).get("buckets", {})
+        result = [{"name": name, "count": b["doc_count"]} for name, b in raw.items() if b["doc_count"] > 0]
+        result.sort(key=lambda x: x["count"], reverse=True)
+        return result[:n]
+
     return {
         "total":      total,
         "by_level":   by_level,
         "timeline":   timeline,
-        "by_source":  _buckets("by_source"),
+        "by_source":  _source_buckets("by_source"),
         "by_rule":    _buckets("by_rule", 15),
         "by_agent":   _buckets("by_agent"),
         "by_country": _buckets("by_country"),
@@ -159,7 +186,7 @@ async def export_alerts(
             "level":       rule.get("level", ""),
             "rule_id":     rule.get("id", ""),
             "description": rule.get("description", ""),
-            "source":      a.get("predecoder", {}).get("program_name", ""),
+            "source":      _resolve_source(a),
             "srcip":       a.get("data", {}).get("srcip", ""),
             "dstip":       a.get("data", {}).get("dstip", ""),
             "country":     a.get("GeoLocation", {}).get("country_name", ""),

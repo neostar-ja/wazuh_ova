@@ -94,6 +94,7 @@ wazuh_ova/
 - **Bind address**: OpenSearch binds to `10.251.151.13:9200` (not localhost) — use IP in all API calls
 - **GeoIP dashboard index pattern**: `wazuh-alerts-geoip` excludes historical conflicting indexes `wazuh-alerts-4.x-2026.05.14-proper-timestamp` and `wazuh-alerts-4.x-2026.05.15` so `GeoLocation.location` remains usable as `geo_point` in Coordinate Map visualizations
 - **MikroTik GeoIP map pattern**: `wazuh-mikrotik-geoip-clean` excludes `wazuh-alerts-4.x-2026.05.13`, `wazuh-alerts-4.x-2026.05.14-proper-timestamp`, and `wazuh-alerts-4.x-2026.05.15` so both `GeoLocation.location` and `DestLocation.location` remain usable as `geo_point` in MikroTik source/destination map panels
+- **MikroTik import note**: `visualizations/mikrotik_routeros_dashboard.ndjson` intentionally excludes index-pattern saved objects so imports do not overwrite live field metadata with stale definitions; run `scripts/maintenance/fix_wazuh_dashboard_saved_objects.py --apply` after import if the target stack still has older MikroTik saved objects
 
 ### Compliance Dashboard
 

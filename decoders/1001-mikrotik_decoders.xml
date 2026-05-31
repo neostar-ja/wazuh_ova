@@ -2,64 +2,170 @@
 MikroTik RouterOS custom decoders
 Purpose: Parse RouterOS login, VPN, config change, and firewall/NAT logs.
 Validated with real syslog from 10.252.0.1 on 2026-05-13.
+Updated 2026-05-29: fixed prematch specificity + added ICMP/proto-only firewall formats.
+
+Log formats handled:
+  firewall,info CHAIN: in:IF out:IF, connection-state:STATE[,NAT_ACTION] src-mac MAC, proto PROTO[ (DESC)], IP[:PORT]->IP[:PORT][, NAT (IP[:P]->IP[:P])->IP[:P]], len N
+  system,error,critical login failure for user USER from IP via METHOD
+  user USER logged ACTION from IP via METHOD
+  wireguard user USER logged ACTION from IP
+  USER logged ACTION, LOCALIP from SRCIP
+  filter rule ACTION by tcp-msg(winbox):USER@IP (DETAILS)
+  raw rule ACTION by tcp-msg(winbox):USER@IP (DETAILS)
+  user USER ACTION by tcp-msg(winbox):USER@IP (DETAILS)
 -->
 
+<!--
+  IMPORTANT: Each decoder uses a specific prematch to avoid false matches on other
+  vendor logs (Huawei USG, FortiGate) that also contain words like "user" or "logged".
+-->
+
+<!-- ══════════════════════════════════════════════════════════════════
+     AUTHENTICATION DECODERS
+     ══════════════════════════════════════════════════════════════════ -->
+
+<!-- Login success: "user admin logged in from 10.0.0.1 via ssh" -->
 <decoder name="mikrotik-user-login">
-  <prematch>user </prematch>
+  <prematch type="pcre2"> logged (in|out) from \S+ via \S</prematch>
   <regex type="pcre2">user (\S+) logged (\S+) from (\S+) via (\S+)</regex>
   <order>username, action, srcip, access_method</order>
 </decoder>
 
+<!-- Login failure: "login failure for user admin from 103.184.94.40 via winbox" -->
 <decoder name="mikrotik-user-login-failure">
   <prematch>login failure for user </prematch>
   <regex type="pcre2">login failure for user (\S+) from (\S+) via (\S+)</regex>
   <order>username, srcip, access_method</order>
 </decoder>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     VPN DECODERS
+     ══════════════════════════════════════════════════════════════════ -->
+
+<!-- WireGuard: "wireguard user admin logged in from 10.0.0.1" -->
 <decoder name="mikrotik-wireguard">
   <prematch>wireguard user </prematch>
   <regex type="pcre2">wireguard user (\S+) logged (\S+) from (\S+)</regex>
   <order>username, action, srcip</order>
 </decoder>
 
+<!-- OpenVPN: "admin logged in, 10.8.0.2 from 1.2.3.4" -->
 <decoder name="mikrotik-ovpn">
-  <prematch> logged </prematch>
+  <prematch type="pcre2"> logged (in|out), \S+ from </prematch>
   <regex type="pcre2">(\S+) logged (\S+), (\S+) from (\S+)</regex>
   <order>username, action, localip, srcip</order>
 </decoder>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     CONFIGURATION CHANGE DECODERS (Winbox TCP)
+     ══════════════════════════════════════════════════════════════════ -->
+
+<!-- Filter rule change: "filter rule changed by tcp-msg(winbox):admin@10.0.0.1 (chain=forward ...)" -->
 <decoder name="mikrotik-filter-rule-change">
   <prematch type="pcre2">filter rule (changed|removed|added) by</prematch>
   <regex type="pcre2">filter rule (changed|removed|added) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
   <order>action, username, srcip, rule_details</order>
 </decoder>
 
+<!-- Raw rule change -->
 <decoder name="mikrotik-raw-rule-change">
   <prematch type="pcre2">raw rule (changed|removed|added) by</prematch>
   <regex type="pcre2">raw rule (changed|removed|added) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
   <order>action, username, srcip, rule_details</order>
 </decoder>
 
+<!-- User account change: "user bob added by tcp-msg(winbox):admin@..." -->
 <decoder name="mikrotik-user-change">
   <prematch type="pcre2">user (\S+) (added|password changed|removed) by</prematch>
   <regex type="pcre2">user (\S+) (added|password changed|removed) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
   <order>newuser, action, username, srcip, rule_details</order>
 </decoder>
 
+<!-- Generic Winbox config change (catch-all for other object types) -->
 <decoder name="mikrotik-log">
   <prematch type="pcre2">\bby tcp-msg\(winbox\):</prematch>
   <regex type="pcre2">(\S+) (\S+) (\S+) by tcp-msg\(winbox\):(\S+)@(\S+) \((.*)\)</regex>
   <order>type, target, action, username, srcip, rule_details</order>
 </decoder>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     FIREWALL DECODERS
+     All share prematch "firewall,info " (unique to MikroTik RouterOS)
+
+     Format variants:
+       A) With NAT + port numbers  (TCP/UDP)
+       B) With NAT + no ports      (ICMP with NAT)
+       C) No NAT + port numbers    (TCP/UDP, local traffic)
+       D) No NAT + no ports        (ICMP, IGMP, protocol-number only)
+       E) Catch-all                (anything else)
+
+     Note: Wazuh tries decoders in file order; most-specific first.
+     ══════════════════════════════════════════════════════════════════ -->
+
+<!--
+  A) NAT + ports (TCP/UDP):
+     firewall,info prerouting: in:LAN out:(unknown 0), connection-state:established,snat
+       src-mac b0:19:21:11:45:50, proto TCP (ACK), 10.252.0.66:58172->103.4.158.89:16000,
+       NAT (10.252.0.66:58172->1.20.198.230:58172)->103.4.158.89:16000, len 40
+-->
 <decoder name="mikrotik-firewall">
   <prematch>firewall,info </prematch>
   <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+),(\S+) src-mac (\S+), proto (\S+)(?: \(([^)]*)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), NAT \((\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+)\)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
   <order>chain,in_iface,out_iface,connection_state,nat_action,srcmac,protocol,tcp_flags,srcip,srcport,dstip,dstport,nat_srcip,nat_srcport,nat_public_ip,nat_public_port,nat_dstip,nat_dstport,length</order>
 </decoder>
 
+<!--
+  B) NAT + no ports (ICMP/IGMP with NAT):
+     firewall,info prerouting: in:LAN out:(unknown 0), connection-state:related,snat
+       src-mac e0:63:da:87:9f:93, proto ICMP (type 3, code 3), 10.252.0.105->8.8.8.8,
+       NAT (10.252.0.105->1.20.198.230)->8.8.8.8, len 225
+-->
+<decoder name="mikrotik-firewall-icmp-nat">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+),(\S+) src-mac (\S+), proto (\S+)(?: \(([^)]*)\))?, (\d+\.\d+\.\d+\.\d+)->(\d+\.\d+\.\d+\.\d+), NAT \((\d+\.\d+\.\d+\.\d+)->(\d+\.\d+\.\d+\.\d+)\)->(\d+\.\d+\.\d+\.\d+), len (\d+)</regex>
+  <order>chain,in_iface,out_iface,connection_state,nat_action,srcmac,protocol,proto_desc,srcip,dstip,nat_srcip,nat_public_ip,nat_dstip,length</order>
+</decoder>
+
+<!--
+  C) No NAT + ports (TCP/UDP without NAT or local-in):
+     firewall,info forward: in:LAN out:WAN, connection-state:new,snat
+       src-mac aa:bb:cc:dd:ee:ff, proto TCP (SYN), 10.0.0.1:1234->8.8.8.8:443, len 60
+-->
 <decoder name="mikrotik-firewall-no-nat">
   <prematch>firewall,info </prematch>
   <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+),(\S+) src-mac (\S+), proto (\S+)(?: \(([^)]*)\))?, (\d+\.\d+\.\d+\.\d+):(\d+)->(\d+\.\d+\.\d+\.\d+):(\d+), len (\d+)</regex>
   <order>chain,in_iface,out_iface,connection_state,nat_action,srcmac,protocol,tcp_flags,srcip,srcport,dstip,dstport,length</order>
+</decoder>
+
+<!--
+  D) No nat_action + no ports (IGMP/multicast, proto number only):
+     firewall,info prerouting: in:LAN out:(unknown 0), connection-state:new
+       src-mac 9c:7b:ef:4a:66:1e, proto 2, 10.252.0.60->224.0.0.22, len 40
+     Note: "connection-state:new" followed by SPACE (no comma before src-mac)
+-->
+<decoder name="mikrotik-firewall-proto">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+) src-mac (\S+), proto (\S+), (\d+\.\d+\.\d+\.\d+)->(\d+\.\d+\.\d+\.\d+), len (\d+)</regex>
+  <order>chain,in_iface,out_iface,connection_state,srcmac,protocol,srcip,dstip,length</order>
+</decoder>
+
+<!--
+  E) No nat_action + no ports + proto with description (ICMP without NAT):
+     firewall,info prerouting: in:LAN out:(unknown 0), connection-state:new
+       src-mac ff:ff:ff:ff:ff:ff, proto ICMP (type 8, code 0), 10.0.0.1->8.8.8.8, len 84
+-->
+<decoder name="mikrotik-firewall-icmp-nonat">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+): in:(.*) out:(.*), connection-state:(\S+) src-mac (\S+), proto (\S+) \(([^)]*)\), (\d+\.\d+\.\d+\.\d+)->(\d+\.\d+\.\d+\.\d+), len (\d+)</regex>
+  <order>chain,in_iface,out_iface,connection_state,srcmac,protocol,proto_desc,srcip,dstip,length</order>
+</decoder>
+
+<!--
+  F) Catch-all: any unmatched firewall log — extract chain and state at minimum
+     Ensures no firewall log falls through to wrong decoders
+-->
+<decoder name="mikrotik-firewall-generic">
+  <prematch>firewall,info </prematch>
+  <regex type="pcre2">firewall,info (\S+):</regex>
+  <order>chain</order>
 </decoder>

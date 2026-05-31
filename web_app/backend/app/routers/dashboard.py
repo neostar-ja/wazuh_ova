@@ -18,6 +18,18 @@ def _buckets(aggs: dict, key: str, n: int = 10):
     ]
 
 
+def _source_buckets(aggs: dict, key: str, n: int = 10) -> list:
+    """Convert filters-aggregation buckets (name→count dict) to sorted list."""
+    raw = aggs.get(key, {}).get("buckets", {})
+    result = [
+        {"name": name, "count": bucket["doc_count"]}
+        for name, bucket in raw.items()
+        if bucket["doc_count"] > 0
+    ]
+    result.sort(key=lambda x: x["count"], reverse=True)
+    return result[:n]
+
+
 @router.get("/stats")
 async def stats(
     time_range: str = Query("24h"),
@@ -73,7 +85,7 @@ async def stats(
         "low":        _lv("low"),
         "eps":        eps,
         "timeline":   timeline,
-        "by_source":  _buckets(aggs, "by_source"),
+        "by_source":  _source_buckets(aggs, "by_source"),
         "by_country": _buckets(aggs, "by_country"),
         "by_rule":    _buckets(aggs, "by_rule", 12),
         "by_agent":   _buckets(aggs, "by_agent"),

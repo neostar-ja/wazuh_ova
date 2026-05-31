@@ -155,4 +155,12 @@ export const adminApi = {
   auditLog: (limit = 100): Promise<AxiosResponse<any>> => api.get<any>(`/admin/audit?limit=${limit}`),
 }
 
+export const pushApi = {
+  getVapidKey: (): Promise<AxiosResponse<{ publicKey: string }>> => api.get('/push/vapid-key'),
+  subscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<AxiosResponse<any>> =>
+    api.post('/push/subscribe', sub),
+  unsubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<AxiosResponse<any>> =>
+    api.delete('/push/subscribe', { data: sub }),
+}
+
 export default api

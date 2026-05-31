@@ -80,7 +80,40 @@ async def get_sca_results(agent_id: str = "000"):
 
 
 async def get_vulnerabilities(agent_id: str = "000"):
-    return await wazuh_get(f"/vulnerability/{agent_id}?limit=100")
+    """Query OpenSearch vulnerability index (Wazuh API /vulnerability endpoint removed in 4.x)."""
+    from opensearchpy import OpenSearch
+    from ..core.config import settings
+    client = OpenSearch(
+        hosts=[{"host": settings.opensearch_host, "port": settings.opensearch_port}],
+        http_auth=(settings.opensearch_user, settings.opensearch_pass),
+        use_ssl=True, verify_certs=settings.opensearch_verify_ssl, ssl_show_warn=False, timeout=20,
+    )
+    try:
+        body = {
+            "size": 200,
+            "query": {"term": {"agent.id": agent_id}},
+            "_source": ["agent", "package", "vulnerability", "host"],
+        }
+        resp = client.search(index="wazuh-states-vulnerabilities-wazuh", body=body)
+        items = []
+        for hit in resp.get("hits", {}).get("hits", []):
+            src = hit["_source"]
+            vuln = src.get("vulnerability") or {}
+            pkg  = src.get("package") or {}
+            score = vuln.get("score") or {}
+            items.append({
+                "agent":   src.get("agent") or {},
+                "cve":     vuln.get("id") or vuln.get("cve") or "-",
+                "severity": vuln.get("severity") or "unknown",
+                "name":    pkg.get("name") or "-",
+                "version": pkg.get("version") or "-",
+                "score":   {"base": score.get("base"), "version": score.get("version")},
+                "detected_at": vuln.get("detected_at"),
+                "status":  "open",
+            })
+        return {"data": {"affected_items": items, "total_affected_items": len(items), "total_failed_items": 0, "failed_items": []}, "error": 0}
+    except Exception:
+        return {"data": {"affected_items": [], "total_affected_items": 0, "total_failed_items": 0, "failed_items": []}, "error": 1}
 
 
 # ─── Decoders ────────────────────────────────────────────────────────────────

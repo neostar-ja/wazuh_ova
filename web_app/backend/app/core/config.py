@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
+    # Web Push (VAPID)
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
+    vapid_email: str = "mailto:soc@hospital.wu.ac.th"
+
     # SOAR Integration
     shuffle_url: str = ""
     shuffle_token: str = ""

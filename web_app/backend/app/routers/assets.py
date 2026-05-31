@@ -72,7 +72,8 @@ async def wifi_sessions(
             "bool": {
                 "must": [
                     {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
-                    {"term": {"predecoder.program_name.keyword": "huawei-ac"}},
+                    {"term": {"rule.groups": "huawei_ac"}},
+                    {"exists": {"field": "data.ac_msg_type"}},
                 ]
             }
         },

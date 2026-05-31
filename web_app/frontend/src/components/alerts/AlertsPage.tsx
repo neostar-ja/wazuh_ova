@@ -2144,18 +2144,19 @@ export default function AlertsPage() {
             <TableHead>
               <TableRow sx={{ '& .MuiTableCell-stickyHeader': { bgcolor: 'background.paper', borderBottom: '2px solid', borderColor: 'divider' } }}>
                 {[
-                  { label: 'เวลา',        w: 120 },
-                  { label: 'ระดับ',       w: 90 },
-                  { label: 'คำอธิบาย',    w: 'auto' },
-                  { label: 'แหล่งข้อมูล', w: 120 },
-                  { label: 'IP ต้นทาง',   w: 140 },
-                  { label: '🌐 ประเทศ',   w: 120 },
-                  { label: 'Agent',       w: 110 },
+                  { label: 'เวลา',        w: 120, mobile: true  },
+                  { label: 'ระดับ',       w: 90,  mobile: true  },
+                  { label: 'คำอธิบาย',    w: 'auto', mobile: true },
+                  { label: 'แหล่งข้อมูล', w: 120, mobile: false },
+                  { label: 'IP ต้นทาง',   w: 140, mobile: false },
+                  { label: '🌐 ประเทศ',   w: 120, mobile: false },
+                  { label: 'Agent',       w: 110, mobile: false },
                 ].map(h => (
                   <TableCell key={h.label} sx={{
                     fontSize: 10, fontWeight: 800, color: 'text.disabled',
                     textTransform: 'uppercase', letterSpacing: '0.07em',
                     py: 1.25, whiteSpace: 'nowrap', width: h.w,
+                    display: h.mobile ? 'table-cell' : { xs: 'none', md: 'table-cell' },
                   }}>
                     {h.label}
                   </TableCell>
@@ -2275,8 +2276,8 @@ export default function AlertsPage() {
                         )}
                       </TableCell>
 
-                      {/* Source (decoder) */}
-                      <TableCell sx={{ py: 1.25 }}>
+                      {/* Source (decoder) — hidden on mobile */}
+                      <TableCell sx={{ py: 1.25, display: { xs: 'none', md: 'table-cell' } }}>
                         <Box sx={{
                           display: 'inline-flex', alignItems: 'center', gap: 0.5,
                           px: 0.9, py: 0.35, borderRadius: '6px',
@@ -2293,8 +2294,8 @@ export default function AlertsPage() {
                         </Box>
                       </TableCell>
 
-                      {/* Src IP */}
-                      <TableCell sx={{ py: 1.25 }}>
+                      {/* Src IP — hidden on mobile */}
+                      <TableCell sx={{ py: 1.25, display: { xs: 'none', md: 'table-cell' } }}>
                         {srcip ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
                             <Typography sx={{
@@ -2317,8 +2318,8 @@ export default function AlertsPage() {
                         )}
                       </TableCell>
 
-                      {/* Country + flag */}
-                      <TableCell sx={{ py: 1.25 }}>
+                      {/* Country + flag — hidden on mobile */}
+                      <TableCell sx={{ py: 1.25, display: { xs: 'none', md: 'table-cell' } }}>
                         {country ? (
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                             {flag && (
@@ -2333,8 +2334,8 @@ export default function AlertsPage() {
                         )}
                       </TableCell>
 
-                      {/* Agent */}
-                      <TableCell sx={{ py: 1.25 }}>
+                      {/* Agent — hidden on mobile */}
+                      <TableCell sx={{ py: 1.25, display: { xs: 'none', md: 'table-cell' } }}>
                         {a.agentName ? (
                           <Box sx={{
                             display: 'inline-flex', alignItems: 'center', gap: 0.5,

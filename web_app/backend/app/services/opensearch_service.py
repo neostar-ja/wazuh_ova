@@ -35,7 +35,26 @@ async def get_alerts(
             level_range["lte"] = level_max
         must.append({"range": {"rule.level": level_range}})
     if sources:
-        must.append({"terms": {"predecoder.program_name.keyword": sources}})
+        # Map custom source names to rule.groups for devices that lack predecoder.program_name
+        _GROUP_MAP = {
+            "fortigate": "fortigate_wuh", "fortigate_wuh": "fortigate_wuh",
+            "huawei-ac": "huawei_ac", "huawei_ac": "huawei_ac",
+            "mikrotik": "mikrotik", "routeros": "mikrotik",
+            "infoblox": "infoblox", "infoblox_dhcp": "infoblox_dhcp",
+            "infoblox_dns": "infoblox_dns",
+            "suricata": "ids", "ids": "ids",
+        }
+        group_filters, prog_filters = [], []
+        for s in sources:
+            if s.lower() in _GROUP_MAP:
+                group_filters.append({"term": {"rule.groups": _GROUP_MAP[s.lower()]}})
+            else:
+                prog_filters.append(s)
+        if group_filters or prog_filters:
+            should = group_filters[:]
+            if prog_filters:
+                should.append({"terms": {"predecoder.program_name.keyword": prog_filters}})
+            must.append({"bool": {"should": should, "minimum_should_match": 1}})
     if query_str:
         must.append({"query_string": {"query": query_str, "default_operator": "AND"}})
     if agent_name:
@@ -58,7 +77,7 @@ async def get_alerts(
             "data.srcuser", "data.dstuser", "data.url", "data.command",
             "data.win.system.eventID", "data.win.eventdata.targetUserName",
             "agent.name", "agent.id",
-            "GeoLocation", "predecoder.program_name", "full_log",
+            "GeoLocation", "predecoder", "decoder", "full_log",
         ],
     }
     try:
@@ -109,7 +128,18 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
                     }
                 },
             },
-            "by_source":  {"terms": {"field": "predecoder.program_name.keyword", "size": 10}},
+            "by_source": {
+                "filters": {"filters": {
+                    "FortiGate WUH": {"term": {"rule.groups": "fortigate_wuh"}},
+                    "Huawei AC WiFi": {"term": {"rule.groups": "huawei_ac"}},
+                    "MikroTik Router": {"term": {"rule.groups": "mikrotik"}},
+                    "Infoblox DHCP": {"term": {"rule.groups": "infoblox_dhcp"}},
+                    "Infoblox DNS": {"term": {"rule.groups": "infoblox_dns"}},
+                    "Suricata IDS": {"term": {"rule.groups": "ids"}},
+                    "Linux/SSH": {"term": {"predecoder.program_name": "sshd"}},
+                    "Linux/System": {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
+                }}
+            },
             "by_rule":    {"terms": {"field": "rule.id", "size": 15}},
             "by_agent":   {"terms": {"field": "agent.name.keyword", "size": 10}},
             "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
@@ -147,7 +177,18 @@ async def get_alert_stats(time_range="24h"):
                     ],
                 }
             },
-            "by_source": {"terms": {"field": "predecoder.program_name.keyword", "size": 10}},
+            "by_source": {
+                "filters": {"filters": {
+                    "FortiGate WUH": {"term": {"rule.groups": "fortigate_wuh"}},
+                    "Huawei AC WiFi": {"term": {"rule.groups": "huawei_ac"}},
+                    "MikroTik Router": {"term": {"rule.groups": "mikrotik"}},
+                    "Infoblox DHCP": {"term": {"rule.groups": "infoblox_dhcp"}},
+                    "Infoblox DNS": {"term": {"rule.groups": "infoblox_dns"}},
+                    "Suricata IDS": {"term": {"rule.groups": "ids"}},
+                    "Linux/SSH": {"term": {"predecoder.program_name": "sshd"}},
+                    "Linux/System": {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
+                }}
+            },
             "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
             "timeline": {
                 "date_histogram": {

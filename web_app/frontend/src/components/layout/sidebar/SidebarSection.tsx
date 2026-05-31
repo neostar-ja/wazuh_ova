@@ -26,8 +26,7 @@ export default function SidebarSection({ label, collapsed }: SidebarSectionProps
       <Typography sx={{
         fontSize: 10.5, fontWeight: 800,
         color: isDark ? 'rgba(155,125,196,0.5)' : 'rgba(123,91,164,0.55)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
+        letterSpacing: '0.04em',
         flexShrink: 0,
         lineHeight: 1,
       }}>

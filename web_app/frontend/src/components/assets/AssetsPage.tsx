@@ -690,13 +690,13 @@ export default function AssetsPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Asset</TableCell>
-                      <TableCell>OS</TableCell>
-                      <TableCell>Network</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>OS</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Network</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Risk</TableCell>
-                      <TableCell align="right">Alerts</TableCell>
-                      <TableCell align="right">Interfaces</TableCell>
-                      <TableCell>Last Seen</TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Alerts</TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Interfaces</TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Last Seen</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -707,29 +707,29 @@ export default function AssetsPage() {
                         sx={{ cursor: 'pointer' }}
                         onClick={() => setSelectedIdentifier(device.asset_id || device.agent_id || device.ip || device.hostname || device.mac)}
                       >
-                        <TableCell sx={{ minWidth: 220 }}>
+                        <TableCell sx={{ minWidth: 160 }}>
                           <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>{device.hostname || device.agent || '—'}</Typography>
                           <Typography sx={{ fontSize: 10.5, color: 'text.secondary' }}>
                             Agent {device.agent_id || '—'}{device.group ? ` • ${device.group}` : ''}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 190 }}>
+                        <TableCell sx={{ minWidth: 140, display: { xs: 'none', md: 'table-cell' } }}>
                           <Typography sx={{ fontSize: 12 }}>{device.os || '—'}</Typography>
                           <Typography sx={{ fontSize: 10.5, color: 'text.secondary' }}>{device.os_version || device.architecture || '—'}</Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 200 }}>
+                        <TableCell sx={{ minWidth: 160, display: { xs: 'none', md: 'table-cell' } }}>
                           <MonoValue value={device.ip} />
                           <Typography sx={{ fontSize: 10.5, color: 'text.secondary' }}>{device.mac || '—'}</Typography>
                         </TableCell>
                         <TableCell><AssetStatus status={device.status} /></TableCell>
                         <TableCell><RiskChip value={device.risk_score || 0} /></TableCell>
-                        <TableCell align="right" sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700 }}>
+                        <TableCell align="right" sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>
                           {(device.event_count || 0).toLocaleString()}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700 }}>
+                        <TableCell align="right" sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 700, display: { xs: 'none', lg: 'table-cell' } }}>
                           {(device.interface_count || 0).toLocaleString()}
                         </TableCell>
-                        <TableCell sx={{ fontSize: 11.5 }}>{formatRelative(device.last_seen)}</TableCell>
+                        <TableCell sx={{ fontSize: 11.5, display: { xs: 'none', sm: 'table-cell' } }}>{formatRelative(device.last_seen)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

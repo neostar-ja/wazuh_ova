@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Box, IconButton, Typography, Badge, Avatar,
-  Menu, MenuItem, Divider, Tooltip, useTheme, useMediaQuery,
+  Menu, MenuItem, Divider, Tooltip, useTheme, useMediaQuery, InputBase,
 } from '@mui/material'
 import MenuRoundedIcon               from '@mui/icons-material/MenuRounded'
 import DarkModeRoundedIcon           from '@mui/icons-material/DarkModeRounded'
 import LightModeRoundedIcon          from '@mui/icons-material/LightModeRounded'
 import NotificationsRoundedIcon      from '@mui/icons-material/NotificationsRounded'
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded'
+import NotificationsOffRoundedIcon   from '@mui/icons-material/NotificationsOffRounded'
 import LogoutRoundedIcon             from '@mui/icons-material/LogoutRounded'
 import TuneRoundedIcon               from '@mui/icons-material/TuneRounded'
 import FiberManualRecordIcon         from '@mui/icons-material/FiberManualRecord'
 import ChevronRightRoundedIcon       from '@mui/icons-material/ChevronRightRounded'
 import GridViewRoundedIcon           from '@mui/icons-material/GridViewRounded'
+import SearchRoundedIcon             from '@mui/icons-material/SearchRounded'
+import { pushApi } from '../../services/api'
 import { useThemeMode } from '../../theme/ThemeContext'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -37,14 +40,15 @@ interface PageMeta {
 }
 
 const PAGE_META: Record<string, PageMeta> = {
-  '/':            { titleTh: 'ภาพรวมระบบ',        titleEn: 'Dashboard',       color: '#7B5BA4' },
-  '/alerts':      { titleTh: 'การแจ้งเตือน',       titleEn: 'Threat Alerts',   color: '#EF4444' },
-  '/investigate': { titleTh: 'วิเคราะห์เหตุการณ์', titleEn: 'Investigation',   color: '#3B82F6' },
-  '/ioc':         { titleTh: 'ตรวจจับภัยคุกคาม',   titleEn: 'IOC Lookup',      color: '#F17422' },
-  '/compliance':  { titleTh: 'Compliance',          titleEn: 'Compliance',      color: '#22C55E' },
-  '/assets':      { titleTh: 'อุปกรณ์เครือข่าย',  titleEn: 'Network Assets',  color: '#0EA5E9' },
-  '/kpi':         { titleTh: 'KPI & Metrics',       titleEn: 'KPI & Metrics',   color: '#F59E0B' },
-  '/admin':       { titleTh: 'Administration',      titleEn: 'Administration',  color: '#64748B' },
+  '/':            { titleTh: 'ภาพรวมระบบ',        titleEn: 'Dashboard',               color: '#7B5BA4' },
+  '/alerts':      { titleTh: 'การแจ้งเตือนภัย',   titleEn: 'Threat Alerts',           color: '#EF4444' },
+  '/investigate': { titleTh: 'วิเคราะห์เหตุการณ์', titleEn: 'Investigation',           color: '#3B82F6' },
+  '/ioc':         { titleTh: 'ตรวจสอบ IOC',        titleEn: 'IOC Lookup',              color: '#F17422' },
+  '/compliance':  { titleTh: 'Compliance',          titleEn: 'Compliance',              color: '#22C55E' },
+  '/assets':      { titleTh: 'อุปกรณ์เครือข่าย',  titleEn: 'Network Assets',          color: '#0EA5E9' },
+  '/kpi':         { titleTh: 'KPI & เมตริก',       titleEn: 'KPI & Metrics',           color: '#F59E0B' },
+  '/soar':        { titleTh: 'SOAR & ตอบสนองภัย',  titleEn: 'SOAR & Incident Response', color: '#8B5CF6' },
+  '/admin':       { titleTh: 'การจัดการระบบ',      titleEn: 'Administration',          color: '#64748B' },
 }
 
 // ── Live clock ────────────────────────────────────────────────────────────────
@@ -92,6 +96,51 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const [newAlerts, setNewAlerts] = useState<number>(0)
   const [wsConnected, setWsConnected] = useState<boolean>(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const [searchQ, setSearchQ] = useState('')
+  const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem('soc-push-enabled') === '1')
+
+  const handleTogglePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('Browser ของคุณไม่รองรับ Push Notification')
+      return
+    }
+    if (pushEnabled) {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        if (sub) {
+          const keys = sub.toJSON().keys as { p256dh: string; auth: string }
+          await pushApi.unsubscribe({ endpoint: sub.endpoint, keys })
+          await sub.unsubscribe()
+        }
+        setPushEnabled(false)
+        localStorage.setItem('soc-push-enabled', '0')
+      } catch { /* ignore */ }
+    } else {
+      try {
+        const permission = await Notification.requestPermission()
+        if (permission !== 'granted') return
+        const { data } = await pushApi.getVapidKey()
+        const vapidKey = data.publicKey
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey,
+        })
+        const json = sub.toJSON()
+        await pushApi.subscribe({ endpoint: sub.endpoint, keys: json.keys as { p256dh: string; auth: string } })
+        setPushEnabled(true)
+        localStorage.setItem('soc-push-enabled', '1')
+      } catch { /* ignore */ }
+    }
+  }
+
+  const handleSearch = () => {
+    const q = searchQ.trim()
+    if (!q) return
+    navigate(`/investigate?q=${encodeURIComponent(q)}`)
+    setSearchQ('')
+  }
 
   // WebSocket for live alert count
   useEffect(() => {
@@ -108,7 +157,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         ws.onmessage = e => {
           try {
             const d = JSON.parse(e.data)
-            if (d.count > 0) setNewAlerts(c => c + d.count)
+            setNewAlerts(d.count ?? 0)
           } catch { /* ignore parse errors */ }
         }
       } catch { /* ignore connection errors */ }
@@ -224,6 +273,54 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
               {page.titleTh}
             </Typography>
           </Box>
+        </Box>
+
+        {/* ── Global search bar (sm+) ── */}
+        <Box sx={{
+          display: { xs: 'none', sm: 'flex' },
+          alignItems: 'center',
+          width: { sm: 170, md: 220, lg: 260 },
+          flexShrink: 0,
+          borderRadius: '10px',
+          border: '1px solid',
+          borderColor: isDark ? 'rgba(123,91,164,0.18)' : 'rgba(123,91,164,0.14)',
+          bgcolor: isDark ? 'rgba(123,91,164,0.06)' : 'rgba(123,91,164,0.04)',
+          px: 1, py: 0.55,
+          gap: 0.75,
+          transition: 'border-color 0.18s',
+          '&:focus-within': {
+            borderColor: isDark ? 'rgba(123,91,164,0.5)' : 'rgba(123,91,164,0.38)',
+            bgcolor: isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.07)',
+          },
+        }}>
+          <SearchRoundedIcon
+            onClick={handleSearch}
+            sx={{
+              fontSize: 16, flexShrink: 0, cursor: 'pointer',
+              color: isDark ? 'rgba(237,233,250,0.35)' : 'rgba(26,16,51,0.35)',
+              '&:hover': { color: '#7B5BA4' },
+              transition: 'color 0.15s',
+            }}
+          />
+          <InputBase
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+            placeholder="IP / MAC / Hostname..."
+            inputProps={{ 'aria-label': 'ค้นหา IP, MAC หรือ Hostname' }}
+            sx={{
+              flex: 1,
+              '& input': {
+                fontSize: 12.5, fontWeight: 500, p: 0,
+                color: isDark ? 'rgba(237,233,250,0.85)' : 'rgba(26,16,51,0.85)',
+                '&::placeholder': {
+                  color: isDark ? 'rgba(237,233,250,0.28)' : 'rgba(26,16,51,0.3)',
+                  opacity: 1,
+                  fontSize: 12,
+                },
+              },
+            }}
+          />
         </Box>
 
         {/* ── Right controls ── */}
@@ -450,6 +547,31 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             <Divider sx={{ mx: 1 }} />
           </>
         )}
+
+        {/* Push notification toggle */}
+        <MenuItem
+          onClick={() => { setAnchorEl(null); handleTogglePush() }}
+          sx={{
+            gap: 1.5, py: 1.1, mx: 1, my: 0.4, borderRadius: '10px',
+            fontSize: 13, fontWeight: 500,
+            transition: 'all 0.18s',
+            '&:hover': {
+              bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
+              color: '#7B5BA4',
+              transform: 'translateX(3px)',
+            },
+          }}
+        >
+          {pushEnabled
+            ? <NotificationsOffRoundedIcon sx={{ fontSize: 17, color: 'text.secondary' }} />
+            : <NotificationsActiveRoundedIcon sx={{ fontSize: 17, color: '#22C55E' }} />
+          }
+          <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
+            {pushEnabled ? 'ปิดการแจ้งเตือน Browser' : 'เปิดการแจ้งเตือน Browser'}
+          </Typography>
+        </MenuItem>
+
+        <Divider sx={{ mx: 1 }} />
 
         <MenuItem
           onClick={handleLogout}

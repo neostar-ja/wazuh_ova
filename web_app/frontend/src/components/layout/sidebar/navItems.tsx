@@ -4,15 +4,15 @@ import { NavGroupData } from './sidebar.types'
 export const NAV_GROUPS: NavGroupData[] = [
   {
     id: 'overview',
-    section: 'OVERVIEW',
+    section: 'ภาพรวม',
     items: [
       {
         id: 'dashboard',
-        label: 'Dashboard',
+        label: 'แดชบอร์ด',
         descriptionTh: 'ภาพรวมสถานะความมั่นคงปลอดภัยของระบบ',
         path: '/',
         exact: true,
-        section: 'OVERVIEW',
+        section: 'ภาพรวม',
         color: '#7B5BA4',
         gradient: 'linear-gradient(135deg,#7B5BA4,#4A2D7A)',
         glow: 'rgba(123,91,164,0.55)',
@@ -26,14 +26,14 @@ export const NAV_GROUPS: NavGroupData[] = [
   },
   {
     id: 'security-ops',
-    section: 'SECURITY OPERATIONS',
+    section: 'ปฏิบัติการรักษาความปลอดภัย',
     items: [
       {
         id: 'threat-alerts',
-        label: 'Threat Alerts',
+        label: 'การแจ้งเตือนภัย',
         descriptionTh: 'ตรวจสอบและติดตามการแจ้งเตือนภัยคุกคามจาก Wazuh',
         path: '/alerts',
-        section: 'SECURITY OPERATIONS',
+        section: 'ปฏิบัติการรักษาความปลอดภัย',
         color: '#EF4444',
         gradient: 'linear-gradient(135deg,#EF4444,#B91C1C)',
         glow: 'rgba(239,68,68,0.55)',
@@ -45,10 +45,10 @@ export const NAV_GROUPS: NavGroupData[] = [
       },
       {
         id: 'investigation',
-        label: 'Investigation',
+        label: 'วิเคราะห์เหตุการณ์',
         descriptionTh: 'ค้นหาและวิเคราะห์ IP, Host, User, IOC และเหตุการณ์ที่เกี่ยวข้อง',
         path: '/investigate',
-        section: 'SECURITY OPERATIONS',
+        section: 'ปฏิบัติการรักษาความปลอดภัย',
         color: '#3B82F6',
         gradient: 'linear-gradient(135deg,#3B82F6,#1D4ED8)',
         glow: 'rgba(59,130,246,0.55)',
@@ -60,10 +60,10 @@ export const NAV_GROUPS: NavGroupData[] = [
       },
       {
         id: 'ioc-lookup',
-        label: 'IOC Lookup',
+        label: 'ตรวจสอบ IOC',
         descriptionTh: 'ตรวจสอบตัวบ่งชี้ภัยคุกคาม เช่น IP, Domain, Hash และ URL',
         path: '/ioc',
-        section: 'SECURITY OPERATIONS',
+        section: 'ปฏิบัติการรักษาความปลอดภัย',
         color: '#F17422',
         gradient: 'linear-gradient(135deg,#F17422,#C05310)',
         glow: 'rgba(241,116,34,0.55)',
@@ -75,10 +75,10 @@ export const NAV_GROUPS: NavGroupData[] = [
       },
       {
         id: 'soar-ir',
-        label: 'SOAR & IR',
+        label: 'SOAR & ตอบสนองภัย',
         descriptionTh: 'Shuffle SOAR, DFIR-IRIS Incident Response และ MISP Threat Intelligence',
         path: '/soar',
-        section: 'SECURITY OPERATIONS',
+        section: 'ปฏิบัติการรักษาความปลอดภัย',
         color: '#8B5CF6',
         gradient: 'linear-gradient(135deg,#8B5CF6,#6D28D9)',
         glow: 'rgba(139,92,246,0.55)',
@@ -92,14 +92,14 @@ export const NAV_GROUPS: NavGroupData[] = [
   },
   {
     id: 'governance',
-    section: 'GOVERNANCE',
+    section: 'ธรรมาภิบาล',
     items: [
       {
         id: 'compliance',
         label: 'Compliance',
         descriptionTh: 'ติดตามสถานะมาตรฐานความปลอดภัย เช่น CIS, NIST, HIPAA และ PCI-DSS',
         path: '/compliance',
-        section: 'GOVERNANCE',
+        section: 'ธรรมาภิบาล',
         color: '#22C55E',
         gradient: 'linear-gradient(135deg,#22C55E,#15803D)',
         glow: 'rgba(34,197,94,0.55)',
@@ -111,10 +111,10 @@ export const NAV_GROUPS: NavGroupData[] = [
       },
       {
         id: 'kpi-metrics',
-        label: 'KPI & Metrics',
+        label: 'KPI & เมตริก',
         descriptionTh: 'ดูตัวชี้วัด ประสิทธิภาพ และแนวโน้มด้านความมั่นคงปลอดภัย',
         path: '/kpi',
-        section: 'GOVERNANCE',
+        section: 'ธรรมาภิบาล',
         color: '#F59E0B',
         gradient: 'linear-gradient(135deg,#F59E0B,#B45309)',
         glow: 'rgba(245,158,11,0.55)',
@@ -128,14 +128,14 @@ export const NAV_GROUPS: NavGroupData[] = [
   },
   {
     id: 'infrastructure',
-    section: 'INFRASTRUCTURE',
+    section: 'โครงสร้างพื้นฐาน',
     items: [
       {
         id: 'network-assets',
-        label: 'Network Assets',
+        label: 'อุปกรณ์เครือข่าย',
         descriptionTh: 'ตรวจสอบอุปกรณ์ เครือข่าย Agent และทรัพยากรที่เชื่อมต่อ',
         path: '/assets',
-        section: 'INFRASTRUCTURE',
+        section: 'โครงสร้างพื้นฐาน',
         color: '#0EA5E9',
         gradient: 'linear-gradient(135deg,#0EA5E9,#0284C7)',
         glow: 'rgba(14,165,233,0.55)',
@@ -149,15 +149,15 @@ export const NAV_GROUPS: NavGroupData[] = [
   },
   {
     id: 'management',
-    section: 'MANAGEMENT',
+    section: 'การจัดการ',
     roles: ['admin', 'superadmin'],
     items: [
       {
         id: 'administration',
-        label: 'Administration',
+        label: 'การจัดการระบบ',
         descriptionTh: 'ตั้งค่าระบบ ผู้ใช้ สิทธิ์การเข้าถึง และการจัดการส่วนกลาง',
         path: '/admin',
-        section: 'MANAGEMENT',
+        section: 'การจัดการ',
         roles: ['admin', 'superadmin'],
         color: '#64748B',
         gradient: 'linear-gradient(135deg,#64748B,#334155)',

@@ -16,3 +16,17 @@ Validated with real POLICY/POLICYPERMIT logs from May 13 2026.
   <regex type="pcre2">source-ip=([^,]+), source-port=([0-9]+), destination-ip=([^,]+)</regex>
   <order>dyn_srcip, dummy_port, dyn_dstip</order>
 </decoder>
+
+<!--
+  Huawei USG General Log Decoder
+  Purpose: Catch Huawei USG %%01UM, %%01SHELL, %%01ACLM, %%01WEBPKI and other
+           non-traffic modules that are NOT captured by huawei-usg-custom above.
+  Format: Month Day Year HH:MM:SS HOSTNAME %%01MODULE/SEVERITY/EVENT(l)[SEQ]:Message
+  NOTE: Loaded FIRST (file 0000-local_decoder.xml naming assumed) so it runs before
+        MikroTik decoders to prevent false-positive matching of USG admin logs.
+-->
+<decoder name="huawei-usg-general">
+  <prematch type="pcre2">^\w+\s+\d+\s+\d{4}\s+\d+:\d+:\d+\s+\S+\s+%%\d\d\w+/\d/\w+</prematch>
+  <regex type="pcre2">(\w{3}\s+\d+\s+\d{4}\s+\d+:\d+:\d+)\s+(\S+)\s+%%(\d\d)(\w+)/(\d)/(\w+)\(\w\)(?:\[\d+\])?:\s*(.*)</regex>
+  <order>usg_timestamp, usg_hostname, usg_facility, usg_module, usg_severity, usg_event, usg_message</order>
+</decoder>

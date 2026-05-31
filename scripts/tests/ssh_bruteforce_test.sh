@@ -165,8 +165,35 @@ EOF
         rm -f /tmp/suricata_ssh_bruteforce_test.json
     "
     sleep 8
-    echo "--- MANAGER ALERT ---"
-    if manager_ssh "sudo python3 - <<'PY'
+    echo "--- WORKER ALERT ---"
+    if remote_ssh "sudo python3 - <<'PY'
+from collections import deque
+import json
+found = []
+with open('/var/ossec/logs/alerts/alerts.json', 'r', encoding='utf-8', errors='ignore') as handle:
+    for line in deque(handle, maxlen=500):
+        line = line.strip()
+        if not line.startswith('{'):
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        rule = obj.get('rule', {})
+        desc = rule.get('description', '')
+        if rule.get('id') in {'200021', '200090', '120004'} or 'Suricata: SSH brute force' in desc:
+            found.append(line)
+if found:
+    print(found[-1])
+    raise SystemExit(0)
+print('(Alert not found in worker alerts.json)')
+raise SystemExit(1)
+PY"
+    then
+        :
+    else
+        echo "--- MANAGER ALERT ---"
+        if manager_ssh "sudo python3 - <<'PY'
 from collections import deque
 import json
 found = []
@@ -189,19 +216,20 @@ if found:
 print('(Alert not found in manager alerts.json)')
 raise SystemExit(1)
 PY"
-    then
-        :
-    else
-        echo "--- MANAGER FALLBACK ---"
-        echo "No manager alert detected from eve.json path. Invoking custom-suricata-telegram directly on ${MANAGER_TARGET}..."
-        manager_scp "${manager_fixture}" "/tmp/suricata_manager_fixture_alert.json" >/dev/null
-        manager_ssh "
-            sudo /var/ossec/integrations/custom-suricata-telegram /tmp/suricata_manager_fixture_alert.json dummy;
-            rc=\$?;
-            echo \"integration_rc=\${rc}\";
-            sudo rm -f /tmp/suricata_manager_fixture_alert.json;
-            exit \${rc}
-        "
+        then
+            :
+        else
+            echo "--- MANAGER FALLBACK ---"
+            echo "No worker/manager alert detected from eve.json path. Invoking custom-suricata-telegram directly on ${MANAGER_TARGET}..."
+            manager_scp "${manager_fixture}" "/tmp/suricata_manager_fixture_alert.json" >/dev/null
+            manager_ssh "
+                sudo /var/ossec/integrations/custom-suricata-telegram /tmp/suricata_manager_fixture_alert.json dummy;
+                rc=\$?;
+                echo \"integration_rc=\${rc}\";
+                sudo rm -f /tmp/suricata_manager_fixture_alert.json;
+                exit \${rc}
+            "
+        fi
     fi
     echo "--- MANAGER TELEGRAM DEBUG ---"
     manager_ssh "

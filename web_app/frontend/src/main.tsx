@@ -10,6 +10,11 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
 })
 
+if ('serviceWorker' in navigator) {
+  const BASE = import.meta.env.VITE_BASE_PATH || '/wazuh'
+  navigator.serviceWorker.register(`${BASE}/sw.js`).catch(() => {/* SW registration is best-effort */})
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
