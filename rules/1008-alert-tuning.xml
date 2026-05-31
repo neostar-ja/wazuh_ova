@@ -66,6 +66,30 @@
     <group>nist_800_53_SC.5,tsc_CC7.2,compliance,dhcp,dos,tuned,</group>
   </rule>
 
+  <!--
+    Date        : 2026-05-31
+    Rule ID     : 110041
+    Rule Desc   : FortiGate local-in-policy deny (IPv6 multicast/mDNS/broadcast noise)
+    Original    : rule 120001 level=5 (fires for all firewall_drop via if_group)
+    Tuned to    : level=0 (suppress)
+    Reason      : FortiGate generates ~600 local-in-policy deny/sec for IPv6 multicast
+                  (ff02::/16, mDNS 5353, LLMNR 5355, DHCP6) and IPv4 broadcast.
+                  policytype="local-in-policy" and "local-in-policy6" are normal
+                  infrastructure behavior, not security events.
+                  Keeps forward-deny (policytype="policy") visible via rule 120001.
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-08-31
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="110041" level="0">
+    <if_sid>120001</if_sid>
+    <match>policytype="local-in-policy</match>
+    <description>FortiGate WUH: Local-in-policy DENY suppressed (infrastructure noise)</description>
+    <group>firewall_drop,local_policy,tuned,</group>
+  </rule>
+
   <!-- ════════════════════════════════════════════════════════════
        EXPIRED / REVERTED TUNING RULES
        (เก็บไว้เป็น audit trail — ห้ามลบ)

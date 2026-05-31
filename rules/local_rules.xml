@@ -46,6 +46,33 @@ IDs 100500-100520: Huawei USG general admin/system events
 
 </group>
 
+<!-- ── Huawei USG SECLOG Rules (100510-100519) ────────────────────────────
+     Handles %%01SECLOG/SESSION_TEARDOWN (allowed traffic summary) and
+     %%01SECLOG/PACKET_DENY (per-packet deny). Source: 10.251.0.5
+-->
+<group name="huawei,huawei_usg,firewall,">
+
+  <!-- Catch-all: any Huawei USG SECLOG event — SESSION_TEARDOWN (level 0 = high volume) -->
+  <rule id="100510" level="0">
+    <decoded_as>huawei-usg-seclog</decoded_as>
+    <field name="usg_event">^SESSION_TEARDOWN$</field>
+    <description>Huawei USG: Session closed $(srcip):$(srcport) → $(dstip):$(dstport) [$(policy_rule)]</description>
+    <group>network_traffic,</group>
+  </rule>
+
+  <!-- PACKET_DENY: traffic denied by policy (per-packet, no established session) -->
+  <rule id="100511" level="5">
+    <decoded_as>huawei-usg-seclog</decoded_as>
+    <field name="usg_event">^PACKET_DENY$</field>
+    <description>Huawei USG: Traffic DENIED $(srcip):$(srcport) → $(dstip):$(dstport) [$(protocol)] zone=$(data.src_zone)→$(data.dst_zone) policy=$(policy_rule)</description>
+    <group>network_traffic,access_denied,</group>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+</group>
+
 <group name="threat_intel,">
 
   <!-- ── OTX Threat Intelligence (100060-100061) ──────────────

@@ -22,11 +22,30 @@ Validated with real POLICY/POLICYPERMIT logs from May 13 2026.
   Purpose: Catch Huawei USG %%01UM, %%01SHELL, %%01ACLM, %%01WEBPKI and other
            non-traffic modules that are NOT captured by huawei-usg-custom above.
   Format: Month Day Year HH:MM:SS HOSTNAME %%01MODULE/SEVERITY/EVENT(l)[SEQ]:Message
-  NOTE: Loaded FIRST (file 0000-local_decoder.xml naming assumed) so it runs before
-        MikroTik decoders to prevent false-positive matching of USG admin logs.
+  Source: 10.251.1.3 and 10.251.1.4 (management logs)
 -->
 <decoder name="huawei-usg-general">
   <prematch type="pcre2">^\w+\s+\d+\s+\d{4}\s+\d+:\d+:\d+\s+\S+\s+%%\d\d\w+/\d/\w+</prematch>
   <regex type="pcre2">(\w{3}\s+\d+\s+\d{4}\s+\d+:\d+:\d+)\s+(\S+)\s+%%(\d\d)(\w+)/(\d)/(\w+)\(\w\)(?:\[\d+\])?:\s*(.*)</regex>
   <order>usg_timestamp, usg_hostname, usg_facility, usg_module, usg_severity, usg_event, usg_message</order>
+</decoder>
+
+<!--
+  Huawei USG SECLOG Decoder
+  Purpose: Parse per-session traffic logs from Huawei USG SECLOG module.
+  Format:  YYYY-MM-DD HH:MM:SS HOSTNAME %%01SECLOG/SEV/EVENT(l):KeyValue,...
+  Source:  10.251.0.5 (B-DC USG6712E-1 traffic syslog, different IP from mgmt logs)
+  Log types:
+    %%01SECLOG/4/PACKET_DENY      - traffic denied by policy (per-packet)
+    %%01SECLOG/6/SESSION_TEARDOWN - session closed (allowed + denied sessions)
+  NOTE: Built-in windows-date-format decoder matches YYYY-MM-DD prefix first.
+        This is a SIBLING child of windows-date-format (no grandchild chains in Wazuh).
+        All fields extracted in a single pass with PCRE2 non-greedy matching.
+-->
+<decoder name="huawei-usg-seclog">
+  <parent>windows-date-format</parent>
+  <use_own_name>true</use_own_name>
+  <prematch offset="after_parent">^\S+\s+%%01SECLOG/</prematch>
+  <regex type="pcre2" offset="after_parent">^(\S+)\s+%%01SECLOG/(\d)/(\w+)\(\w\):.*?Protocol=(\w+),SourceIP=([^,]+),DestinationIP=([^,]+),SourcePort=(\d+),DestinationPort=(\d+).*?SourceZone=([^,]+),DestinationZone=([^,]+),PolicyName=([^,]+),CloseReason=([^.,]+)</regex>
+  <order>usg_hostname, usg_severity, usg_event, protocol, srcip, dstip, srcport, dstport, data.src_zone, data.dst_zone, policy_rule, data.close_reason</order>
 </decoder>
