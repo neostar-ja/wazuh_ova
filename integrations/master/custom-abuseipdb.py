@@ -53,8 +53,16 @@ def is_blocked_traffic(rule_groups, data):
     ).lower().strip()
     return any(a in action for a in BLOCKED_ACTIONS)
 
-def detect_device(data):
-    """ระบุชื่ออุปกรณ์ต้นทางจาก decoded fields"""
+# syslog source IP → ชื่ออุปกรณ์ (fallback เมื่อ decoded fields ไม่ครบ)
+LOCATION_DEVICE_MAP = {
+    "10.251.151.1": "FortiGate",
+    "10.251.0.5":   "Huawei USG (WUH-B-DC-USG6712E-1)",
+    "10.251.1.3":   "Huawei Firewall",
+    "10.252.0.1":   "MikroTik",
+}
+
+def detect_device(data, location=""):
+    """ระบุชื่ออุปกรณ์ต้นทาง — ตรวจ decoded fields ก่อน แล้ว fallback ด้วย syslog source IP"""
     if data.get("devname"):
         return f"FortiGate ({data['devname']})"
     if data.get("usg_hostname"):
@@ -63,12 +71,25 @@ def detect_device(data):
         return "MikroTik"
     if data.get("fgt_type"):
         return "FortiGate"
+    # Huawei zone-based firewall fields (dst_zone/src_zone/rule_name จาก SECLOG)
+    if data.get("dst_zone") or data.get("src_zone") or data.get("rule_name"):
+        return "Huawei Firewall"
+    # fallback: map syslog source IP → device name
+    for ip, name in LOCATION_DEVICE_MAP.items():
+        if location and ip in location:
+            return name
     return ""
+
+def _norm_ts(ts_str):
+    """Normalize timestamp string ให้ fromisoformat รับได้ทุก format"""
+    s = re.sub(r'\.\d+', '', ts_str)                      # strip .ms
+    s = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', s)  # +0000 → +00:00
+    return s.replace("Z", "+00:00")
 
 def build_dashboard_url(timestamp_str, rule_id, ip_field, ip):
     """สร้าง Discover URL พร้อม KQL filter และ time window ±5 นาที"""
     try:
-        ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(_norm_ts(timestamp_str))
         t_from = (ts - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         t_to   = (ts + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     except Exception:
@@ -239,7 +260,8 @@ def main():
     orig_level    = rule.get("level", "N/A")
     orig_desc     = rule.get("description", "N/A")
     agent_name    = agent.get("name", "N/A")
-    device_info   = detect_device(data)
+    location      = alert_json.get("location", "")
+    device_info   = detect_device(data, location)
     dash_url      = build_dashboard_url(timestamp, orig_rule_id, ip_field, ip_to_check)
 
     dstip    = data.get("dstip", data.get("dst_ip", ""))
@@ -263,9 +285,9 @@ def main():
     if domain:
         msg += f"🌍 <b>โดเมน:</b>  {domain}\n"
     if last_seen:
-        msg += f"🕐 <b>พบล่าสุด:</b>  {fmt_ts(last_seen)}\n"
+        msg += f"🕐 <b>รายงานล่าสุด (AbuseIPDB):</b>  {fmt_ts(last_seen)}\n"
     if timestamp:
-        msg += f"📅 <b>เวลาตรวจพบ:</b>  {fmt_ts(timestamp)}\n"
+        msg += f"📅 <b>เวลาเหตุการณ์:</b>  {fmt_ts(timestamp)}\n"
 
     msg += "─────────────────────────────\n"
     msg += f"📌 <b>กฎที่ตรงกัน</b>\n"

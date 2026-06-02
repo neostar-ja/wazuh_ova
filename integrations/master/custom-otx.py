@@ -48,8 +48,15 @@ def is_blocked_traffic(rule_groups, data):
     ).lower().strip()
     return any(a in action for a in BLOCKED_ACTIONS)
 
-def detect_device(data):
-    """ระบุชื่ออุปกรณ์ต้นทางจาก decoded fields"""
+LOCATION_DEVICE_MAP = {
+    "10.251.151.1": "FortiGate",
+    "10.251.0.5":   "Huawei USG (WUH-B-DC-USG6712E-1)",
+    "10.251.1.3":   "Huawei Firewall",
+    "10.252.0.1":   "MikroTik",
+}
+
+def detect_device(data, location=""):
+    """ระบุชื่ออุปกรณ์ต้นทาง — ตรวจ decoded fields ก่อน แล้ว fallback ด้วย syslog source IP"""
     if data.get("devname"):
         return f"FortiGate ({data['devname']})"
     if data.get("usg_hostname"):
@@ -58,12 +65,22 @@ def detect_device(data):
         return "MikroTik"
     if data.get("fgt_type"):
         return "FortiGate"
+    if data.get("dst_zone") or data.get("src_zone") or data.get("rule_name"):
+        return "Huawei Firewall"
+    for ip, name in LOCATION_DEVICE_MAP.items():
+        if location and ip in location:
+            return name
     return ""
+
+def _norm_ts(ts_str):
+    s = re.sub(r'\.\d+', '', ts_str)
+    s = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', s)
+    return s.replace("Z", "+00:00")
 
 def build_dashboard_url(timestamp_str, rule_id, ip_field, ip):
     """สร้าง Discover URL พร้อม KQL filter และ time window ±5 นาที"""
     try:
-        ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(_norm_ts(timestamp_str))
         t_from = (ts - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         t_to   = (ts + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     except Exception:
@@ -159,7 +176,7 @@ def main():
     orig_level    = rule.get("level", "N/A")
     orig_desc     = rule.get("description", "")
     agent_name    = agent.get("name", "N/A")
-    device_info   = detect_device(data)
+    device_info   = detect_device(data, alert_json.get("location", ""))
 
     iocs = []  # (ioc_type, value, field_label)
 
@@ -251,7 +268,7 @@ def main():
         if first_name:
             msg += f"📋 <b>Feed หลัก:</b>  {first_name}\n"
         if timestamp:
-            msg += f"🕐 <b>เวลาตรวจพบ:</b>  {fmt_ts(timestamp)}\n"
+            msg += f"📅 <b>เวลาเหตุการณ์:</b>  {fmt_ts(timestamp)}\n"
 
         msg += "─────────────────────────────\n"
         msg += f"📌 <b>กฎที่ตรงกัน</b>\n"

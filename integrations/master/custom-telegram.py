@@ -72,11 +72,23 @@ if level < MIN_LEVEL:
 
 # ── helpers ───────────────────────────────────────────────────
 
-def detect_device(d):
-    if d.get("devname"):     return f"FortiGate ({d['devname']})"
-    if d.get("usg_hostname"): return f"Huawei USG ({d['usg_hostname']})"
+LOCATION_DEVICE_MAP = {
+    "10.251.151.1": "FortiGate",
+    "10.251.0.5":   "Huawei USG (WUH-B-DC-USG6712E-1)",
+    "10.251.1.3":   "Huawei Firewall",
+    "10.252.0.1":   "MikroTik",
+}
+
+def detect_device(d, location=""):
+    if d.get("devname"):       return f"FortiGate ({d['devname']})"
+    if d.get("usg_hostname"):  return f"Huawei USG ({d['usg_hostname']})"
     if d.get("access_method"): return "MikroTik"
-    if d.get("fgt_type"):    return "FortiGate"
+    if d.get("fgt_type"):      return "FortiGate"
+    if d.get("dst_zone") or d.get("src_zone") or d.get("rule_name"):
+        return "Huawei Firewall"
+    for ip, name in LOCATION_DEVICE_MAP.items():
+        if location and ip in location:
+            return name
     return ""
 
 def fmt_ts(ts_str):
@@ -92,9 +104,14 @@ def fmt_ts(ts_str):
     except Exception:
         return ts_str
 
+def _norm_ts(ts_str):
+    s = re.sub(r'\.\d+', '', ts_str)
+    s = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', s)
+    return s.replace("Z", "+00:00")
+
 def build_dashboard_url(ts_str, rule_id, agent_name):
     try:
-        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(_norm_ts(ts_str))
         t_from = (ts - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         t_to   = (ts + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     except Exception:
@@ -112,7 +129,7 @@ def build_dashboard_url(ts_str, rule_id, agent_name):
 rid        = rule.get("id", "?")
 desc       = rule.get("description", "?")
 aname      = agent.get("name", "?")
-device     = detect_device(data)
+device     = detect_device(data, alert_json.get("location", ""))
 dash_url   = build_dashboard_url(timestamp, rid, aname)
 
 # ข้อมูลเสริมจาก data fields
