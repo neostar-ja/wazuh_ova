@@ -8,6 +8,20 @@ from fastapi import APIRouter, Depends, Query
 from ..routers.auth import get_current_user
 from ..services import opensearch_service, wazuh_service
 
+# Rule descriptions for known threat rules
+RULE_DESCRIPTIONS = {
+    "100304": "Malicious IP ALLOWED",
+    "100300": "CDB Blocklist Match",
+    "100301": "CDB Blocklist Dst",
+    "100201": "AbuseIPDB Malicious IP",
+    "100200": "AbuseIPDB Suspicious IP",
+    "100061": "OTX: MALICIOUS IOC",
+    "100060": "OTX: Suspicious IOC",
+    "5503":   "Brute Force Attempt",
+    "5712":   "SSH Auth Failed",
+    "1002":   "Unknown error",
+}
+
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
@@ -163,9 +177,69 @@ async def sources(time_range: str = Query("24h"), current_user=Depends(get_curre
     return data.get("aggregations", {}).get("by_source", {}).get("buckets", [])
 
 
+@router.get("/threat_stats")
+async def threat_stats(
+    time_range: str = Query("24h"),
+    current_user=Depends(get_current_user),
+):
+    """
+    Threat-focused aggregations — level 12+ only.
+    Unlike /stats which includes all traffic noise (67M+ low-level logs),
+    this endpoint returns data meaningful for threat analysis:
+    top attacking IPs, countries, MITRE tactics, threat rules, affected agents.
+    """
+    raw = await opensearch_service.get_threat_aggs(time_range=time_range)
+    if not raw:
+        return _empty_threat()
+
+    aggs  = raw.get("aggregations", {})
+    total_obj = raw.get("hits", {}).get("total", {})
+    total = total_obj.get("value", 0) if isinstance(total_obj, dict) else int(total_obj or 0)
+
+    tl_buckets = aggs.get("timeline", {}).get("buckets", [])
+    timeline = []
+    for b in tl_buckets:
+        sev = {sv["key"]: sv["doc_count"] for sv in b.get("by_severity", {}).get("buckets", [])}
+        timeline.append({
+            "time":     b["key_as_string"],
+            "total":    b["doc_count"],
+            "critical": sev.get("critical", 0),
+            "high":     sev.get("high", 0),
+        })
+
+    # Enrich rule buckets with known descriptions
+    raw_rules = _buckets(aggs, "by_rule", 10)
+    by_rule = [
+        {"name": r["name"], "count": r["count"],
+         "description": RULE_DESCRIPTIONS.get(str(r["name"]), "")}
+        for r in raw_rules
+    ]
+
+    return {
+        "total":      total,
+        "critical":   aggs.get("critical_count", {}).get("doc_count", 0),
+        "high":       aggs.get("high_count", {}).get("doc_count", 0),
+        "timeline":   timeline,
+        "by_rule":    by_rule,
+        "by_srcip":   _buckets(aggs, "by_srcip",   10),
+        "by_country": _buckets(aggs, "by_country",  10),
+        "by_mitre":   _buckets(aggs, "by_mitre",    10),
+        "by_agent":   _buckets(aggs, "by_agent",     8),
+        "by_source":  _source_buckets(aggs, "by_source"),
+    }
+
+
 def _empty():
     return {
         "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "eps": 0,
         "timeline": [], "by_source": [], "by_country": [], "by_rule": [],
         "by_agent": [], "by_mitre": [], "by_srcip": [],
+    }
+
+
+def _empty_threat():
+    return {
+        "total": 0, "critical": 0, "high": 0,
+        "timeline": [], "by_rule": [], "by_srcip": [],
+        "by_country": [], "by_mitre": [], "by_agent": [], "by_source": [],
     }

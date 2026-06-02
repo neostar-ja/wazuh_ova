@@ -48,10 +48,11 @@ export const authApi = {
 }
 
 export const dashboardApi = {
-  stats:   (timeRange = '24h'): Promise<AxiosResponse<DashboardStats>> => api.get<DashboardStats>('/dashboard/stats', { params: { time_range: timeRange } }),
-  cluster: (): Promise<AxiosResponse<ClusterHealth>>                  => api.get<ClusterHealth>('/dashboard/cluster'),
-  agents:  (): Promise<AxiosResponse<any>>                  => api.get<any>('/dashboard/agents'),
-  sources: (timeRange = '24h'): Promise<AxiosResponse<any>> => api.get<any>('/dashboard/sources', { params: { time_range: timeRange } }),
+  stats:       (timeRange = '24h'): Promise<AxiosResponse<DashboardStats>> => api.get<DashboardStats>('/dashboard/stats', { params: { time_range: timeRange } }),
+  threatStats: (timeRange = '24h'): Promise<AxiosResponse<any>>            => api.get<any>('/dashboard/threat_stats', { params: { time_range: timeRange } }),
+  cluster:     (): Promise<AxiosResponse<ClusterHealth>>                   => api.get<ClusterHealth>('/dashboard/cluster'),
+  agents:      (): Promise<AxiosResponse<any>>                             => api.get<any>('/dashboard/agents'),
+  sources:     (timeRange = '24h'): Promise<AxiosResponse<any>>            => api.get<any>('/dashboard/sources', { params: { time_range: timeRange } }),
 }
 
 export const alertsApi = {

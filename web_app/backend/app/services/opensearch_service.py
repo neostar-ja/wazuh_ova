@@ -155,6 +155,68 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
         return {}
 
 
+async def get_threat_aggs(time_range: str = "24h"):
+    """Aggregations for level >= 12 threats only.
+    Returns srcip, country, mitre, rule, agent, timeline data that is
+    meaningful for security analysis (not dominated by network traffic noise).
+    """
+    client = get_client()
+    body = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {"bool": {"must": [
+            {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+            {"range": {"rule.level": {"gte": 12}}},
+        ]}},
+        "aggs": {
+            "timeline": {
+                "date_histogram": {
+                    "field": "@timestamp",
+                    "fixed_interval": _pick_interval(time_range),
+                    "min_doc_count": 0,
+                    "extended_bounds": {"min": f"now-{time_range}", "max": "now"},
+                },
+                "aggs": {
+                    "by_severity": {
+                        "range": {
+                            "field": "rule.level",
+                            "ranges": [
+                                {"key": "critical", "from": 15},
+                                {"key": "high",     "from": 12, "to": 15},
+                            ],
+                        }
+                    }
+                },
+            },
+            "by_rule":    {"terms": {"field": "rule.id",                       "size": 10}},
+            "by_srcip":   {"terms": {"field": "data.srcip",                    "size": 10}},
+            "by_country": {"terms": {"field": "GeoLocation.country_name",      "size": 10}},
+            "by_mitre":   {"terms": {"field": "rule.mitre.tactic",             "size": 10}},
+            "by_agent":   {"terms": {"field": "agent.name",                    "size": 8}},
+            "by_source":  {
+                "filters": {"filters": {
+                    "FortiGate WUH": {"term": {"rule.groups": "fortigate_wuh"}},
+                    "Huawei Firewall": {"bool": {"should": [
+                        {"term": {"rule.groups": "huawei_usg"}},
+                        {"term": {"rule.groups": "huawei"}},
+                    ]}},
+                    "MikroTik Router": {"term": {"rule.groups": "mikrotik"}},
+                    "Threat Intel":    {"term": {"rule.groups": "threat_intel"}},
+                    "CDB Blocklist":   {"term": {"rule.groups": "cdb_intel"}},
+                    "Suricata IDS":    {"term": {"rule.groups": "ids"}},
+                }}
+            },
+            # count by level range for critical vs high
+            "critical_count": {"filter": {"range": {"rule.level": {"gte": 15}}}},
+            "high_count":     {"filter": {"range": {"rule.level": {"gte": 12, "lt": 15}}}},
+        },
+    }
+    try:
+        return client.search(index=settings.opensearch_index, body=body)
+    except Exception:
+        return {}
+
+
 def _pick_interval(time_range: str) -> str:
     mapping = {"1h": "5m", "6h": "15m", "24h": "1h", "7d": "6h", "30d": "1d", "90d": "3d"}
     return mapping.get(time_range, "1h")
