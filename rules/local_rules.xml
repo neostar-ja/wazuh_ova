@@ -52,8 +52,8 @@ IDs 100500-100520: Huawei USG general admin/system events
 -->
 <group name="huawei,huawei_usg,firewall,">
 
-  <!-- Catch-all: any Huawei USG SECLOG event — SESSION_TEARDOWN (level 0 = high volume) -->
-  <rule id="100510" level="0">
+  <!-- SESSION_TEARDOWN: raised from level 0 → level 3 for full traffic visibility -->
+  <rule id="100510" level="3">
     <decoded_as>huawei-usg-seclog</decoded_as>
     <field name="usg_event">^SESSION_TEARDOWN$</field>
     <description>Huawei USG: Session closed $(srcip):$(srcport) → $(dstip):$(dstport) [$(policy_rule)]</description>

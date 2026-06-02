@@ -45,6 +45,7 @@
 - `rules/local_abuseipdb_rules.xml`
 - `rules/local_rules.xml`
 - `rules/1007-compliance-tags.xml`
+- `rules/1008-alert-tuning.xml` — overrides + FortiGate compliance recovery rules 110042-110045
 
 ### Compliance Dashboard
 

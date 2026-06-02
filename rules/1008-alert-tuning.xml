@@ -91,6 +91,253 @@
   </rule>
 
   <!-- ════════════════════════════════════════════════════════════
+       FORTIGATE COMPLIANCE RECOVERY RULES (110042-110045)
+       ════════════════════════════════════════════════════════════
+       ปัญหา: Compliance overlay rules (if_group) ใน 1007-compliance-tags.xml
+              เป็น "deeper child" เสมอ → ชนะ FortiGate rules และแทนที่
+              rule.id + rule.groups ทำให้ FortiGate dashboard หา events ไม่เจอ
+
+       วิธีแก้: Recovery rules เป็นลูกของ compliance rule อีกต่อ (if_sid) →
+               deeper ที่สุดใน chain → ชนะ → alert มี fortigate_wuh group กลับมา
+
+       สิ่งที่ต้องไม่ใส่ใน group ของ recovery rules:
+         firewall_drop, authentication_failed, admin_login, config_changed, brute_force
+         (ป้องกันการ trigger compliance chain ซ้ำ)
+
+       Validated: 2026-06-01
+       ════════════════════════════════════════════════════════════ -->
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 110042
+    Rule Desc   : FortiGate traffic DENY recovery — re-tag after compliance 120001 overrides
+    Original    : 120001 level=5 (PCI DSS 1.3, compliance overlay, no fortigate_wuh group)
+    Tuned to    : 110042 level=5 (FortiGate-tagged, deeper child → wins over 120001)
+    Reason      : 120001 (if_group: firewall_drop) fires as child of 110012 and replaces
+                  rule.id + rule.groups → FortiGate dashboard shows no traffic deny events.
+                  Recovery rule fires as child of 120001 (if_sid) and is deeper → wins.
+                  policytype="policy" excludes local-in-policy (suppressed by 110041).
+                  Does NOT include firewall_drop group (avoids re-triggering 120001).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="110042" level="5">
+    <if_sid>120001</if_sid>
+    <field name="devname">^FW-WUH</field>
+    <match>policytype="policy"</match>
+    <description>FortiGate WUH: Traffic DENIED $(srcip) → $(dstip):$(dstport) [$(service)]</description>
+    <group>fortigate,firewall,fortigate_wuh,pci_dss_1.3,nist_800_53_CM.7,compliance,</group>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 110043
+    Rule Desc   : FortiGate admin login FAIL recovery — re-tag after compliance 120003 overrides
+    Original    : 120003 level=7 (PCI DSS 8.3, compliance overlay, no fortigate_wuh group)
+    Tuned to    : 110043 level=7 (FortiGate-tagged, deeper child → wins over 120003)
+    Reason      : 120003 (if_group: authentication_failed) fires as child of 110034 and
+                  replaces FortiGate context. Recovery restores FortiGate identity while
+                  preserving all compliance tags (PCI 8.3, HIPAA 164.308, NIST AC.3, TSC CC6.1).
+                  Does NOT include authentication_failed group (avoids re-triggering compliance chain).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="110043" level="7">
+    <if_sid>120003</if_sid>
+    <field name="devname">^FW-WUH</field>
+    <description>FortiGate WUH: Admin LOGIN FAILED from $(srcip) [$(devname)]</description>
+    <group>fortigate,firewall,fortigate_wuh,pci_dss_8.3,hipaa_164.308.a.5.ii.c,nist_800_53_AC.3,tsc_CC6.1,compliance,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 110044
+    Rule Desc   : FortiGate admin login SUCCESS recovery — re-tag after compliance 120005 overrides
+    Original    : 120005 level=5 (PCI DSS 10.2, compliance overlay, no fortigate_wuh group)
+    Tuned to    : 110044 level=5 (FortiGate-tagged, deeper child → wins over 120005)
+    Reason      : 120005 (if_group: admin_login) fires as child of 110033 and replaces
+                  FortiGate context. Recovery restores FortiGate identity.
+                  Does NOT include admin_login group (avoids re-triggering compliance chain).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="110044" level="5">
+    <if_sid>120005</if_sid>
+    <field name="devname">^FW-WUH</field>
+    <description>FortiGate WUH: Admin LOGIN SUCCESS from $(srcip) [$(devname)]</description>
+    <group>fortigate,firewall,fortigate_wuh,pci_dss_10.2,hipaa_164.312.b,nist_800_53_AU.14,compliance,</group>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 110045
+    Rule Desc   : FortiGate config CHANGED recovery — re-tag after compliance 120023 overrides
+    Original    : 120023 level=8 (GDPR Art 5, compliance overlay, no fortigate_wuh group)
+    Tuned to    : 110045 level=8 (FortiGate-tagged, deeper child → wins over 120023)
+    Reason      : 120023 (if_group: config_changed) fires as child of 110036/110037 and
+                  replaces FortiGate context. Recovery restores FortiGate identity.
+                  Does NOT include config_changed group (avoids re-triggering compliance chain).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="110045" level="8">
+    <if_sid>120023</if_sid>
+    <field name="devname">^FW-WUH</field>
+    <description>FortiGate WUH: CONFIGURATION CHANGED on $(devname) [by $(dstuser)]</description>
+    <group>fortigate,firewall,fortigate_wuh,gdpr_IV_5.1.f,tsc_CC8.1,compliance,</group>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+  </rule>
+
+  <!-- ════════════════════════════════════════════════════════════
+       HUAWEI USG COMPLIANCE RECOVERY RULES (100512-100513)
+       ════════════════════════════════════════════════════════════
+       ปัญหา: เหมือนกัน FortiGate — compliance overlay (if_group) ชนะ 100051/100502
+       วิธีแก้: Recovery rules เป็น if_sid children ของ compliance rule
+
+       Discriminator: <match>%%01POLICY</match> ระบุ Huawei USG POLICY* log
+                      ไม่ conflict กับ FortiGate recovery (110042 ใช้ devname=FW-WUH)
+
+       Group ที่ต้องไม่ใส่: firewall_drop, authentication_failed (re-trigger compliance chain)
+       Validated: 2026-06-01
+       ════════════════════════════════════════════════════════════ -->
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 100512
+    Rule Desc   : Huawei USG POLICYDENY recovery — re-tag after compliance 120001 overrides
+    Original    : 120001 level=5 (PCI DSS 1.3, no huawei_usg group)
+    Tuned to    : 100512 level=5 (Huawei-tagged, deeper child → wins)
+    Reason      : 120001 (if_group: firewall_drop) fires as child of 100051 and replaces
+                  rule.id + rule.groups → Huawei USG deny panel shows nothing.
+                  <match>%%01POLICY</match> discriminates Huawei USG POLICY* logs from
+                  FortiGate logs (which use devname field, not %%01POLICY).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Status      : active
+  -->
+  <rule id="100512" level="5">
+    <if_sid>120001</if_sid>
+    <match>%%01POLICY</match>
+    <description>Huawei USG: Traffic DENIED $(srcip):$(srcport) → $(dstip):$(dstport) [$(protocol)]</description>
+    <group>huawei,firewall,huawei_usg,access_denied,pci_dss_1.3,nist_800_53_CM.7,compliance,</group>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 100513
+    Rule Desc   : Huawei USG UM auth failure recovery — re-tag after compliance 120003 overrides
+    Original    : 120003 level=7 (PCI DSS 8.3, no huawei_usg group)
+    Tuned to    : 100513 level=7 (Huawei-tagged, deeper child → wins)
+    Reason      : 120003 (if_group: authentication_failed) fires as child of 100502 and
+                  replaces rule.id + rule.groups.
+                  <match>%%01UM</match> discriminates Huawei USG UM auth logs.
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Status      : active
+  -->
+  <rule id="100513" level="7">
+    <if_sid>120003</if_sid>
+    <match>%%01UM</match>
+    <description>Huawei USG: UM authentication/sync failure — $(usg_message)</description>
+    <group>huawei,huawei_usg,system_event,pci_dss_8.3,hipaa_164.308.a.5.ii.c,nist_800_53_AC.3,tsc_CC6.1,compliance,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- ════════════════════════════════════════════════════════════
+       HUAWEI AC COMPLIANCE RECOVERY RULES (100083-100084)
+       ════════════════════════════════════════════════════════════
+       ปัญหา: 36K+ auth failure events/6h แสดงเป็น 120003 (compliance)
+              แทน 100071/100073 (Huawei AC) เพราะ if_group: authentication_failed
+
+       Discriminator: <match>AgileController</match>
+         - Huawei USG recovery ใช้ %%01POLICY → ไม่ conflict
+         - FortiGate recovery ใช้ devname=FW-WUH → ไม่ conflict
+         - Infoblox ไม่มี authentication_failed → ไม่ต้อง recovery
+
+       Dashboard impact: decoder.name: "huawei-ac" filter ยังเห็น events แต่
+         rule.id/description ผิด → recovery ทำให้ถูกต้อง
+       Validated: 2026-06-01
+       ════════════════════════════════════════════════════════════ -->
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 100083
+    Rule Desc   : Huawei AC auth failure recovery — re-tag after compliance 120003 overrides
+    Original    : 120003 level=7 (PCI DSS 8.3, no huawei_ac group)
+    Tuned to    : 100083 level=7 (Huawei AC-tagged, deeper child → wins)
+    Reason      : 120003 (if_group: authentication_failed) fires as child of 100071/100073
+                  replacing rule.id + rule.groups. 36K+ events/6h show as compliance rule.
+                  <match>AgileController</match> discriminates Huawei AC logs.
+                  Does NOT include authentication_failed group (avoids re-triggering compliance chain).
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Status      : active
+  -->
+  <rule id="100083" level="7">
+    <if_sid>120003</if_sid>
+    <match>AgileController</match>
+    <description>Huawei AC: Authentication failed — $(dstuser) from $(srcip) [$(switch_name)]</description>
+    <group>huawei,huawei_ac,wireless,pci_dss_8.3,hipaa_164.308.a.5.ii.c,nist_800_53_AC.3,tsc_CC6.1,compliance,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!--
+    Date        : 2026-06-01
+    Rule ID     : 100084
+    Rule Desc   : Huawei AC brute force recovery — re-tag after compliance 120004 overrides
+    Original    : 120004 level=12 (PCI DSS 8.3 brute force, no huawei_ac group)
+    Tuned to    : 100084 level=12 (Huawei AC-tagged, deeper child → wins)
+    Reason      : 120004 (if_group: brute_force) fires as child of 100074.
+                  Preventive recovery rule — no occurrences observed yet but correct as a safeguard.
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-01
+    Status      : active
+  -->
+  <rule id="100084" level="12">
+    <if_sid>120004</if_sid>
+    <match>AgileController</match>
+    <description>Huawei AC: BRUTE FORCE — repeated auth failures from $(srcip) [$(switch_name)]</description>
+    <group>huawei,huawei_ac,wireless,pci_dss_8.3,compliance,</group>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <!-- ════════════════════════════════════════════════════════════
        EXPIRED / REVERTED TUNING RULES
        (เก็บไว้เป็น audit trail — ห้ามลบ)
        ════════════════════════════════════════════════════════════ -->

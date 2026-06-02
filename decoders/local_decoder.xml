@@ -6,7 +6,9 @@ Validated with real POLICY/POLICYPERMIT logs from May 13 2026.
 
 <decoder name="huawei-usg-custom">
   <prematch type="pcre2">^\w+\s+\d+\s+\d+\s+\d+:\d+:\d+\s+\S+\s+%%\d\d(?:POLICY|SECURITY)/\d/(?:POLICYPERMIT|POLICYDENY|ACCESSPOLICY_ALLOW|ACCESSPOLICY_DENY)\(\w\):</prematch>
-  <regex type="pcre2">protocol=([^,]+), source-ip=([^,]+), source-port=([0-9]+), destination-ip=([^,]+), destination-port=([0-9]+), time=[A-Za-z]+ [0-9]+ [0-9]+ [0-9:]+, source-zone=([^,]+), destination-zone=([^,]+), application-name=([^,]*), rule-name=(.+?)\.?$</regex>
+  <!-- NOTE: time format "Jun  1 2026 14:20:49" uses double-space before single-digit days
+            [A-Za-z]+ +[0-9]+ handles both "Jun 12" and "Jun  1" -->
+  <regex type="pcre2">protocol=([^,]+), source-ip=([^,]+), source-port=([0-9]+), destination-ip=([^,]+), destination-port=([0-9]+), time=[A-Za-z]+ +[0-9]+ [0-9]+ [0-9:]+, source-zone=([^,]+), destination-zone=([^,]+), application-name=([^,]*), rule-name=(.+?)\.?$</regex>
   <order>protocol, srcip, srcport, dstip, dstport, src_zone, dst_zone, application, rule_name</order>
 </decoder>
 

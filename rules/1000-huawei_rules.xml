@@ -19,20 +19,19 @@ May 13 2026 07:04:08 WUH-B-DC-USG6712E-1 %%01POLICY/6/POLICYPERMIT(l):...
     <group>network_policy,firewall_drop,access_denied,</group>
   </rule>
 
-  <!-- Permit traffic is high-volume firewall telemetry. Do not write it as
-       alerts; keep deny/drop events visible via rule 100051. -->
-  <rule id="100052" level="0">
+  <!-- Permit traffic: raised from level 0 → level 3 for full traffic visibility -->
+  <rule id="100052" level="3">
     <if_sid>100050</if_sid>
     <match>POLICYPERMIT|ACCESSPOLICY_ALLOW|permitted</match>
     <description>Huawei USG: Traffic permitted by policy $(rule_name) from $(srcip):$(srcport) to $(dstip):$(dstport)</description>
     <group>network_policy,policy_permit,</group>
   </rule>
 
-  <!-- QUIC permit telemetry is extremely high-volume on the worker.
-       Keep it decoded for correlation context, but do not write alerts. -->
-  <rule id="100053" level="0">
+  <!-- QUIC permit: raised from level 0 → level 3 (note: high-volume, ~major portion of all traffic) -->
+  <!-- NOTE: use <match> not <field> for application — static decoder field issue same as crlevel/apprisk -->
+  <rule id="100053" level="3">
     <if_sid>100050</if_sid>
-    <field name="application">QUIC</field>
+    <match>application-name=QUIC</match>
     <description>Huawei USG: QUIC traffic observed from $(srcip) to $(dstip):$(dstport) by policy $(rule_name)</description>
     <group>network_policy,application_control,quic,</group>
   </rule>
