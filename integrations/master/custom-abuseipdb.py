@@ -2,28 +2,36 @@
 """
 AbuseIPDB Integration for Wazuh
 - Per-IP cache (TTL 1 hour, max 500 entries) to stay within free-tier 1000 req/day
-- Skips RFC1918/private IPs and whitelisted IPs
-- Sends rich Telegram alert when score >= 50
-- Prints JSON result for Wazuh rule matching
+- กรองทราฟฟิคที่ถูก block/deny ออก (ไม่ต้องแจ้งเตือน)
+- ระบุอุปกรณ์ต้นทาง (FortiGate / Huawei USG / MikroTik)
+- ส่ง Telegram alert พร้อม link ไปยัง Wazuh Dashboard
 """
 import sys
 import json
 import os
 import time
 import ipaddress
+import re
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 
 try:
     import requests
 except ImportError:
     sys.exit(0)
 
-# Live server currently stores these values directly in production.
-# The repo keeps them externalized to avoid committing secrets.
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "<REDACTED_LIVE_SERVER_TOKEN>")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "<REDACTED_LIVE_SERVER_CHAT_ID>")
-CACHE_FILE         = "/var/ossec/tmp/abuseipdb_cache.json"
-CACHE_TTL          = 3600   # 1 hour per IP
-CACHE_MAX          = 500    # max IPs to keep
+DASHBOARD_BASE     = os.environ.get("WAZUH_DASHBOARD_URL", "https://10.251.151.14")
+THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.",
+               "ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
+TZ_THAI     = timezone(timedelta(hours=7))
+CACHE_FILE  = "/var/ossec/tmp/abuseipdb_cache.json"
+CACHE_TTL          = 3600
+CACHE_MAX          = 500
+
+# actions ที่หมายความว่าทราฟฟิคถูกปิดกั้น — ไม่ต้องแจ้งเตือน
+BLOCKED_ACTIONS = {"block", "deny", "drop", "reset", "close", "reject", "blocked", "denied"}
 
 def is_public_ip(ip_str):
     try:
@@ -34,13 +42,66 @@ def is_public_ip(ip_str):
     except Exception:
         return False
 
+def is_blocked_traffic(rule_groups, data):
+    """คืนค่า True ถ้าทราฟฟิคถูกปิดกั้นโดย firewall แล้ว (ไม่ต้องแจ้งเตือน)"""
+    if "firewall_drop" in rule_groups:
+        return True
+    action = (
+        data.get("action", "")
+        or data.get("fgt_action", "")
+        or data.get("usg_action", "")
+    ).lower().strip()
+    return any(a in action for a in BLOCKED_ACTIONS)
+
+def detect_device(data):
+    """ระบุชื่ออุปกรณ์ต้นทางจาก decoded fields"""
+    if data.get("devname"):
+        return f"FortiGate ({data['devname']})"
+    if data.get("usg_hostname"):
+        return f"Huawei USG ({data['usg_hostname']})"
+    if data.get("access_method"):
+        return "MikroTik"
+    if data.get("fgt_type"):
+        return "FortiGate"
+    return ""
+
+def build_dashboard_url(timestamp_str, rule_id, ip_field, ip):
+    """สร้าง Discover URL พร้อม KQL filter และ time window ±5 นาที"""
+    try:
+        ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        t_from = (ts - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        t_to   = (ts + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    except Exception:
+        t_from, t_to = "now-1h", "now"
+    kql = f'rule.id:{rule_id} AND data.{ip_field}:"{ip}"'
+    return (
+        f"{DASHBOARD_BASE}/app/discover#/"
+        f"?_g=(time:(from:'{t_from}',to:'{t_to}'))"
+        f"&_a=(index:'wazuh-alerts-*',"
+        f"query:(language:kuery,query:'{urllib.parse.quote(kql, safe='')}'))"
+    )
+
+def fmt_ts(ts_str):
+    """แปลง ISO timestamp เป็นเวลาไทย (UTC+7, พ.ศ.)"""
+    try:
+        s = re.sub(r'\.\d+', '', ts_str)                          # ตัด .milliseconds
+        s = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', s)      # +0000 → +00:00
+        s = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        dt_th = dt.astimezone(TZ_THAI)
+        month = THAI_MONTHS[dt_th.month - 1]
+        return f"{dt_th.day:02d} {month} {dt_th.year + 543}  {dt_th.hour:02d}:{dt_th.minute:02d} น."
+    except Exception:
+        return ts_str
+
 def send_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         requests.post(url, json={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg,
-            "parse_mode": "Markdown"
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
         }, timeout=10)
     except Exception:
         pass
@@ -82,8 +143,7 @@ def check_abuseipdb(ip, api_key):
     cached = get_cached(ip)
     if cached is not None:
         return cached
-
-    url = "https://api.abuseipdb.com/api/v2/check"
+    url     = "https://api.abuseipdb.com/api/v2/check"
     headers = {"Accept": "application/json", "Key": api_key}
     params  = {"ipAddress": ip, "maxAgeInDays": 30, "verbose": ""}
     try:
@@ -105,13 +165,20 @@ def main():
     except Exception:
         sys.exit(0)
 
-    api_key = sys.argv[2]
-    data    = alert_json.get("data", {})
-    rule    = alert_json.get("rule", {})
-    level   = int(rule.get("level", 0))
-    if level < 12:
+    api_key     = sys.argv[2]
+    data        = alert_json.get("data", {})
+    rule        = alert_json.get("rule", {})
+    level       = int(rule.get("level", 0))
+    rule_groups = set(rule.get("groups", []))
+    agent       = alert_json.get("agent", {})
+    timestamp   = alert_json.get("timestamp", "")
+
+    # กรองทราฟฟิคที่ถูกปิดกั้นแล้ว — ไม่มีความเสี่ยงที่ต้องแจ้งเตือน
+    if is_blocked_traffic(rule_groups, data):
         sys.exit(0)
-    agent   = alert_json.get("agent", {})
+
+    if level < 10:
+        sys.exit(0)
 
     ip_to_check = None
     ip_field    = None
@@ -129,22 +196,23 @@ def main():
     if not result:
         sys.exit(0)
 
-    score       = result.get("abuseConfidenceScore", 0)
+    score        = result.get("abuseConfidenceScore", 0)
     if score < 50:
         sys.exit(0)
     if result.get("isWhitelisted", False):
         sys.exit(0)
 
-    country      = result.get("countryCode", "N/A")
-    isp          = result.get("isp", "N/A")
-    last_seen    = result.get("lastReportedAt", "N/A")
-    total_reports= result.get("totalReports", 0)
-    domain       = result.get("domain", "N/A")
-    usage_type   = result.get("usageType", "N/A")
-    is_tor       = result.get("isTor", False)
+    country       = result.get("countryCode", "")
+    isp           = result.get("isp", "")
+    last_seen     = result.get("lastReportedAt", "")
+    total_reports = result.get("totalReports", 0)
+    domain        = result.get("domain", "")
+    is_tor        = result.get("isTor", False)
 
-    severity = "MALICIOUS"  if score >= 80 else "SUSPICIOUS"
-    flag     = "🔴"         if score >= 80 else "🟡"
+    severity  = "อันตรายสูงมาก" if score >= 80 else "น่าสงสัย"
+    flag      = "🔴" if score >= 80 else "🟡"
+    tor_badge = "  🧅 <b>TOR Node</b>" if is_tor else ""
+    is_allowed = "firewall_allowed" in rule_groups
 
     output = {
         "integration": "abuseipdb",
@@ -152,35 +220,65 @@ def main():
             "ip":         ip_to_check,
             "field":      ip_field,
             "score":      score,
-            "severity":   severity,
+            "severity":   "MALICIOUS" if score >= 80 else "SUSPICIOUS",
             "reports":    total_reports,
             "country":    country,
             "isp":        isp,
             "domain":     domain,
-            "usage_type": usage_type,
             "is_tor":     is_tor,
             "last_seen":  last_seen,
         }
     }
     print(json.dumps(output))
 
-    orig_rule_id   = rule.get("id", "N/A")
-    orig_rule_desc = rule.get("description", "N/A")
-    agent_name     = agent.get("name", "N/A")
-    orig_level     = rule.get("level", "N/A")
-    tor_badge      = " 🧅 TOR" if is_tor else ""
+    # ส่ง Telegram เฉพาะ High (12-14) และ Critical (15+) เท่านั้น
+    if level < 12:
+        sys.exit(0)
 
-    msg  = f"{flag} *AbuseIPDB Alert — {severity}*{tor_badge}\n\n"
-    msg += f"🌐 *IP:* `{ip_to_check}` ({ip_field})\n"
-    msg += f"📊 *Score:* {score}/100 ({total_reports} reports)\n"
-    msg += f"🏳️ *Country:* {country}\n"
-    msg += f"🏢 *ISP:* {isp}\n"
-    msg += f"🌍 *Domain:* {domain}\n"
-    msg += f"🕐 *Last Seen:* {last_seen}\n\n"
-    msg += f"📌 *Triggered by:*\n"
-    msg += f"  Rule {orig_rule_id} (Level {orig_level})\n"
-    msg += f"  {orig_rule_desc}\n"
-    msg += f"🖥️ *Source:* {agent_name}"
+    orig_rule_id  = rule.get("id", "N/A")
+    orig_level    = rule.get("level", "N/A")
+    orig_desc     = rule.get("description", "N/A")
+    agent_name    = agent.get("name", "N/A")
+    device_info   = detect_device(data)
+    dash_url      = build_dashboard_url(timestamp, orig_rule_id, ip_field, ip_to_check)
+
+    dstip    = data.get("dstip", data.get("dst_ip", ""))
+    dstport  = data.get("dstport", "")
+    dst_info = f"<code>{dstip}:{dstport}</code>" if dstip and dstport else (f"<code>{dstip}</code>" if dstip else "")
+
+    msg  = f"{flag} <b>แจ้งเตือน — IP {severity}</b>{tor_badge}\n"
+    if is_allowed:
+        msg += "⚠️ <b>TRAFFIC ALLOWED — ต้องดำเนินการด่วน!</b>\n"
+    msg += "─────────────────────────────\n"
+
+    msg += f"🌐 <b>IP:</b>  <code>{ip_to_check}</code>  ({ip_field})\n"
+    if dst_info:
+        msg += f"🎯 <b>ปลายทาง:</b>  {dst_info}\n"
+    msg += f"📊 <b>คะแนน AbuseIPDB:</b>  {score}/100  ·  {total_reports:,} รายงาน\n"
+    if country:
+        msg += f"🏳️ <b>ประเทศ:</b>  {country}"
+        if isp:
+            msg += f"  ·  🏢 <b>ISP:</b>  {isp}"
+        msg += "\n"
+    if domain:
+        msg += f"🌍 <b>โดเมน:</b>  {domain}\n"
+    if last_seen:
+        msg += f"🕐 <b>พบล่าสุด:</b>  {fmt_ts(last_seen)}\n"
+    if timestamp:
+        msg += f"📅 <b>เวลาตรวจพบ:</b>  {fmt_ts(timestamp)}\n"
+
+    msg += "─────────────────────────────\n"
+    msg += f"📌 <b>กฎที่ตรงกัน</b>\n"
+    msg += f"   Rule {orig_rule_id}  (Level {orig_level})\n"
+    msg += f"   {orig_desc}\n"
+
+    msg += "─────────────────────────────\n"
+    msg += f"🖥️ <b>Agent:</b>  {agent_name}\n"
+    if device_info:
+        msg += f"🔌 <b>อุปกรณ์:</b>  {device_info}\n"
+
+    msg += f"\n🔗 <a href=\"{dash_url}\">ดู Log ทั้งหมดใน Dashboard</a>"
+
     send_telegram(msg)
 
 if __name__ == "__main__":

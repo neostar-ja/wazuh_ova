@@ -337,6 +337,32 @@
     </mitre>
   </rule>
 
+  <!--
+    Date        : 2026-06-02
+    Rule ID     : 100303
+    Rule Desc   : CDB Blocklist: Source IP matches malicious-ip list but traffic was denied/blocked
+    Original    : level=10 (triggers AbuseIPDB + Telegram via worker integration level≥10)
+    Tuned to    : level=8  (Dashboard only — blocked traffic requires no Telegram; already handled)
+    Reason      : Worker ossec.conf integration custom-abuseipdb triggers at level≥10.
+                  Rule 100303 at level 10 causes Telegram for BLOCKED traffic, which is unnecessary
+                  noise — the firewall already mitigated the threat.
+                  Level 8 keeps the event visible in Dashboard (MEDIUM tier) but below the
+                  integration threshold, so no Telegram or AbuseIPDB API call is wasted.
+                  Rule 100304 (new, level 15) handles the inverse case (ALLOWED malicious) with
+                  CRITICAL priority. Rule 100300 (level 10, ambiguous) still triggers AbuseIPDB.
+    Requester   : SOC Admin
+    Approved by : SOC Admin
+    Review date : 2026-09-02
+    Ticket/Ref  : -
+    Status      : active
+  -->
+  <rule id="100303" level="8" overwrite="yes">
+    <if_sid>100300</if_sid>
+    <match>POLICYDENY|ACCESSPOLICY_DENY|action="deny"|action="block"|action="blocked"|action="drop"|action="dropped"|action="close"|action="reset"|denied|blocked|dropped</match>
+    <description>CDB Blocklist: Source IP $(srcip) blocked by firewall (no Telegram — already mitigated)</description>
+    <group>cdb_intel,cdb_malicious_ip,firewall_drop,pci_dss_11.4,</group>
+  </rule>
+
   <!-- ════════════════════════════════════════════════════════════
        EXPIRED / REVERTED TUNING RULES
        (เก็บไว้เป็น audit trail — ห้ามลบ)

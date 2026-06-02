@@ -52,6 +52,9 @@ SKIP_GROUPS = {
     'network_anomaly',
     'suricata',
     'ids',
+    # cdb_malicious_ip: AbuseIPDB integration sends a richer message for these events
+    # (includes score, ISP, country, allowed/blocked status). Suppress duplicate here.
+    'cdb_malicious_ip',
 }
 if SKIP_GROUPS & set(groups):
     dbg(f'Skipping - group in SKIP_GROUPS: {SKIP_GROUPS & set(groups)}')

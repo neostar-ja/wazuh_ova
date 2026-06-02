@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """
 Wazuh Generic Telegram Integration
-Deployed to: /var/ossec/integrations/custom-telegram.py
-Sends alerts for level >= 12 only:
-  Level 12-14  -> 🟠 HIGH
-  Level 15+    -> 🔴 CRITICAL
+- Level 12-14  → 🟠 แจ้งเตือนระดับสูง (HIGH)
+- Level 15+    → 🔴 แจ้งเตือนวิกฤต (CRITICAL)
+- ข้ามกลุ่มที่มี integration เฉพาะอยู่แล้ว (AbuseIPDB, OTX, Suricata)
+- ระบุอุปกรณ์ต้นทาง (FortiGate / Huawei USG / MikroTik)
+- แนบ link ไปยัง Wazuh Dashboard
 """
 import sys
 import json
-import requests
-from datetime import datetime
+import re
+import os
+import urllib.parse
+from datetime import datetime, timedelta, timezone
+
+try:
+    import requests
+except ImportError:
+    sys.exit(0)
 
 DEBUG_LOG = "/var/ossec/logs/telegram_generic_debug.log"
 
-
-def log_debug(message: str) -> None:
+def dbg(msg):
     try:
-        with open(DEBUG_LOG, "a", encoding="utf-8") as handle:
-            handle.write(f"{datetime.now().isoformat()} - {message}\n")
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {msg}\n")
     except Exception:
         pass
 
@@ -30,53 +37,130 @@ try:
 except Exception:
     sys.exit(0)
 
-hook_url = sys.argv[3]
-chat_id  = sys.argv[2]
+hook_url  = sys.argv[3]
+chat_id   = sys.argv[2]
 
-rule   = alert_json.get("rule", {})
-agent  = alert_json.get("agent", {})
-groups = rule.get("groups", [])
+DASHBOARD_BASE = os.environ.get("WAZUH_DASHBOARD_URL", "https://10.251.151.14")
+THAI_MONTHS    = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.",
+                  "ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."]
+TZ_THAI        = timezone(timedelta(hours=7))
 
-# Skip: these integrations already send their own rich Telegram alerts
+# กลุ่มที่มี integration เฉพาะที่ส่ง Telegram รายละเอียดกว่าอยู่แล้ว
 SKIP_GROUPS = {
-    "abuseipdb", "otx_intel", "otx_malicious", "otx_suspicious",
-    "abuseipdb_malicious", "abuseipdb_suspicious",
+    "abuseipdb", "abuseipdb_malicious", "abuseipdb_suspicious",
+    "otx_intel", "otx_malicious", "otx_suspicious",
+    "cdb_malicious_ip",   # AbuseIPDB integration จัดการแล้วพร้อม score/ISP/country
+    "network_anomaly",
+    "suricata", "ids",
 }
-if SKIP_GROUPS & set(groups):
-    log_debug(f"Skipping rule_id={rule.get('id')} due to dedicated integration groups={groups}")
+
+rule        = alert_json.get("rule", {})
+agent       = alert_json.get("agent", {})
+data        = alert_json.get("data", {})
+rule_groups = set(rule.get("groups", []))
+timestamp   = alert_json.get("timestamp", "")
+
+if SKIP_GROUPS & rule_groups:
+    dbg(f"skip rule_id={rule.get('id')} groups={rule_groups & SKIP_GROUPS}")
     sys.exit(0)
 
-MIN_ALERT_LEVEL = 12
 level = int(rule.get("level", 0))
-if level < MIN_ALERT_LEVEL:
-    log_debug(f"Skipping rule_id={rule.get('id')} level={level} below minimum {MIN_ALERT_LEVEL}")
+MIN_LEVEL = 12
+if level < MIN_LEVEL:
+    dbg(f"skip rule_id={rule.get('id')} level={level} < {MIN_LEVEL}")
     sys.exit(0)
+
+# ── helpers ───────────────────────────────────────────────────
+
+def detect_device(d):
+    if d.get("devname"):     return f"FortiGate ({d['devname']})"
+    if d.get("usg_hostname"): return f"Huawei USG ({d['usg_hostname']})"
+    if d.get("access_method"): return "MikroTik"
+    if d.get("fgt_type"):    return "FortiGate"
+    return ""
+
+def fmt_ts(ts_str):
+    """แปลง ISO timestamp เป็นเวลาไทย (UTC+7, พ.ศ.)"""
+    try:
+        s = re.sub(r'\.\d+', '', ts_str)
+        s = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', s)
+        s = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        dt_th = dt.astimezone(TZ_THAI)
+        month = THAI_MONTHS[dt_th.month - 1]
+        return f"{dt_th.day:02d} {month} {dt_th.year + 543}  {dt_th.hour:02d}:{dt_th.minute:02d} น."
+    except Exception:
+        return ts_str
+
+def build_dashboard_url(ts_str, rule_id, agent_name):
+    try:
+        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        t_from = (ts - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        t_to   = (ts + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    except Exception:
+        t_from, t_to = "now-1h", "now"
+    kql = f'rule.id:{rule_id} AND agent.name:"{agent_name}"'
+    return (
+        f"{DASHBOARD_BASE}/app/discover#/"
+        f"?_g=(time:(from:'{t_from}',to:'{t_to}'))"
+        f"&_a=(index:'wazuh-alerts-*',"
+        f"query:(language:kuery,query:'{urllib.parse.quote(kql, safe='')}'))"
+    )
+
+# ── build message ─────────────────────────────────────────────
+
+rid        = rule.get("id", "?")
+desc       = rule.get("description", "?")
+aname      = agent.get("name", "?")
+device     = detect_device(data)
+dash_url   = build_dashboard_url(timestamp, rid, aname)
+
+# ข้อมูลเสริมจาก data fields
+srcip   = data.get("srcip", data.get("src_ip", ""))
+dstip   = data.get("dstip", data.get("dst_ip", ""))
+dstport = data.get("dstport", "")
+username = data.get("username", data.get("user", ""))
 
 if level >= 15:
-    severity_emoji = "\U0001f534"   # 🔴
-    severity_label = "CRITICAL"
+    flag  = "🔴"
+    label = "วิกฤต (CRITICAL)"
 else:
-    severity_emoji = "\U0001f7e0"   # 🟠
-    severity_label = "HIGH"
+    flag  = "🟠"
+    label = "สูง (HIGH)"
 
-desc  = rule.get("description", "?")
-rid   = rule.get("id", "?")
-aname = agent.get("name", "?")
+msg  = f"{flag} <b>แจ้งเตือน Wazuh — {label}  Level {level}</b>\n"
+msg += "─────────────────────────────\n"
+msg += f"📝 {desc}\n"
 
-msg  = f"{severity_emoji} *Wazuh Alert — {severity_label} (Level {level})*\n"
-msg += f"\U0001f4cc *Description:* {desc}\n"
-msg += f"\U0001f5a5️ *Agent:* {aname}\n"
-msg += f"\U0001f194 *Rule ID:* {rid}\n"
+# แสดงข้อมูลเสริมเฉพาะที่มีค่า
+if srcip:
+    msg += f"🌐 <b>IP ต้นทาง:</b>  <code>{srcip}</code>\n"
+if dstip:
+    dst_str = f"{dstip}:{dstport}" if dstport else dstip
+    msg += f"🎯 <b>ปลายทาง:</b>  <code>{dst_str}</code>\n"
+if username:
+    msg += f"👤 <b>ผู้ใช้:</b>  <code>{username}</code>\n"
+
+msg += "─────────────────────────────\n"
+msg += f"📋 <b>Rule {rid}</b>  (Level {level})\n"
+if timestamp:
+    msg += f"🕐 <b>เวลา:</b>  {fmt_ts(timestamp)}\n"
+
+msg += "─────────────────────────────\n"
+msg += f"🖥️ <b>Agent:</b>  {aname}\n"
+if device:
+    msg += f"🔌 <b>อุปกรณ์:</b>  {device}\n"
+
+msg += f"\n🔗 <a href=\"{dash_url}\">ดู Log ทั้งหมดใน Dashboard</a>"
 
 try:
-    log_debug(
-        f"Sending rule_id={rid} level={level} agent={aname} chat_id={chat_id}"
-    )
-    response = requests.post(hook_url, json={
+    dbg(f"sending rule_id={rid} level={level} agent={aname}")
+    resp = requests.post(hook_url, json={
         "chat_id": chat_id,
         "text": msg,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
     }, timeout=10)
-    log_debug(f"Telegram status={response.status_code} body={response.text[:200]}")
-except Exception:
-    log_debug(f"Telegram send error for rule_id={rid}")
+    dbg(f"status={resp.status_code}")
+except Exception as e:
+    dbg(f"send error rule_id={rid}: {e}")
