@@ -1,7 +1,7 @@
 """SOAR Integration Service — Shuffle SOAR, DFIR-IRIS, MISP"""
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, List
 
 import httpx
 
@@ -29,32 +29,41 @@ def _shuffle_headers() -> dict:
     return {"Authorization": f"Bearer {settings.shuffle_token}"}
 
 
-# ── DFIR-IRIS ──────────────────────────────────────────────────────────────────
-# IRIS 2.4.x API paths (not /api/v2): /alerts/filter, /manage/cases/list, /alerts/add
+# ── DFIR-IRIS helpers ──────────────────────────────────────────────────────────
 
-async def _iris_get(path: str) -> dict:
+async def _iris_get(path: str, timeout: int = _TIMEOUT) -> dict:
     if not settings.iris_url or not settings.iris_api_key:
         return {"error": "IRIS not configured"}
     try:
-        async with httpx.AsyncClient(verify=_SSL, timeout=_TIMEOUT) as c:
+        async with httpx.AsyncClient(verify=_SSL, timeout=timeout) as c:
             r = await c.get(f"{settings.iris_url}{path}", headers=_iris_headers())
+            r.raise_for_status()
             return r.json()
+    except httpx.HTTPStatusError as e:
+        logger.error("IRIS GET %s HTTP %s", path, e.response.status_code)
+        return {"error": f"HTTP {e.response.status_code}", "status_code": e.response.status_code}
     except Exception as e:
         logger.error("IRIS GET %s: %s", path, e)
         return {"error": str(e)}
 
 
-async def _iris_post(path: str, data: dict) -> dict:
+async def _iris_post(path: str, data: dict, timeout: int = _TIMEOUT) -> dict:
     if not settings.iris_url or not settings.iris_api_key:
         return {"error": "IRIS not configured"}
     try:
-        async with httpx.AsyncClient(verify=_SSL, timeout=_TIMEOUT) as c:
+        async with httpx.AsyncClient(verify=_SSL, timeout=timeout) as c:
             r = await c.post(f"{settings.iris_url}{path}", headers=_iris_headers(), json=data)
+            r.raise_for_status()
             return r.json()
+    except httpx.HTTPStatusError as e:
+        logger.error("IRIS POST %s HTTP %s: %s", path, e.response.status_code, e.response.text[:200])
+        return {"error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
     except Exception as e:
         logger.error("IRIS POST %s: %s", path, e)
         return {"error": str(e)}
 
+
+# ── IRIS Stats ─────────────────────────────────────────────────────────────────
 
 async def get_iris_stats() -> dict:
     try:
@@ -65,7 +74,6 @@ async def get_iris_stats() -> dict:
         if "error" in alerts_resp:
             return {"connected": False, "error": alerts_resp["error"]}
         total = alerts_resp.get("data", {}).get("total", 0)
-        # count open alerts (status_id=2 = New)
         open_alerts = sum(
             1 for a in alerts_resp.get("data", {}).get("alerts", [])
             if a.get("status", {}).get("status_id") in (2, 3)
@@ -82,6 +90,8 @@ async def get_iris_stats() -> dict:
         return {"connected": False, "error": str(e)}
 
 
+# ── IRIS Alerts ────────────────────────────────────────────────────────────────
+
 async def get_iris_alerts(page: int = 1, per_page: int = 20, status_id: Optional[int] = None) -> dict:
     params = f"?page={page}&per_page={per_page}"
     if status_id:
@@ -89,8 +99,8 @@ async def get_iris_alerts(page: int = 1, per_page: int = 20, status_id: Optional
     return await _iris_get(f"/alerts/filter{params}")
 
 
-async def get_iris_cases(page: int = 1, per_page: int = 20) -> dict:
-    return await _iris_get("/manage/cases/list")
+async def get_iris_alert(alert_id: int) -> dict:
+    return await _iris_get(f"/alerts/filter?alert_id={alert_id}")
 
 
 async def create_iris_alert(
@@ -114,6 +124,121 @@ async def create_iris_alert(
             {"ioc_value": ioc_value, "ioc_description": "From SOC Web App", "ioc_tlp_id": 2, "ioc_type_id": 76}
         ]
     return await _iris_post("/alerts/add", body)
+
+
+async def update_iris_alert(alert_id: int, data: dict) -> dict:
+    return await _iris_post(f"/alerts/update/{alert_id}", data)
+
+
+async def escalate_iris_alerts(
+    alert_ids: List[int],
+    case_title: str,
+    note: str = "",
+    customer_id: int = 1,
+) -> dict:
+    return await _iris_post("/alerts/escalate", {
+        "alert_ids": alert_ids,
+        "iocs_import_mode": "as_event",
+        "assets_import_mode": "as_event",
+        "note": note,
+        "case_title": case_title,
+        "case_customer_id": customer_id,
+    })
+
+
+# ── IRIS Cases ─────────────────────────────────────────────────────────────────
+
+async def get_iris_cases(page: int = 1, per_page: int = 20) -> dict:
+    return await _iris_get("/manage/cases/list")
+
+
+async def get_iris_case(case_id: int) -> dict:
+    return await _iris_get(f"/case/summary?cid={case_id}")
+
+
+async def create_iris_case(
+    name: str,
+    description: str,
+    customer_id: int = 1,
+) -> dict:
+    return await _iris_post("/manage/cases/add", {
+        "case_name": name,
+        "case_description": description,
+        "case_customer_id": customer_id,
+        "case_soc_id": 0,
+    })
+
+
+async def update_iris_case(case_id: int, data: dict) -> dict:
+    return await _iris_post("/case/update", {"cid": case_id, **data})
+
+
+async def close_iris_case(case_id: int) -> dict:
+    return await _iris_get(f"/manage/cases/{case_id}/close")
+
+
+async def reopen_iris_case(case_id: int) -> dict:
+    return await _iris_post(f"/manage/cases/{case_id}/reopen", {})
+
+
+# ── Case Notes ─────────────────────────────────────────────────────────────────
+
+async def get_case_note_groups(case_id: int) -> dict:
+    return await _iris_get(f"/case/notes/groups/list?cid={case_id}")
+
+
+async def add_case_note_group(case_id: int, title: str) -> dict:
+    return await _iris_post(f"/case/notes/groups/add?cid={case_id}", {"group_title": title})
+
+
+async def add_case_note(case_id: int, title: str, content: str, group_id: int) -> dict:
+    return await _iris_post(f"/case/notes/add?cid={case_id}", {
+        "note_title": title,
+        "note_content": content,
+        "group_id": group_id,
+    })
+
+
+# ── Case IOCs ──────────────────────────────────────────────────────────────────
+
+async def get_case_iocs(case_id: int) -> dict:
+    return await _iris_get(f"/case/ioc/list?cid={case_id}")
+
+
+async def add_case_ioc(
+    case_id: int,
+    value: str,
+    type_id: int = 76,
+    tlp_id: int = 2,
+    description: str = "",
+) -> dict:
+    return await _iris_post(f"/case/ioc/add?cid={case_id}", {
+        "ioc_value": value,
+        "ioc_type_id": type_id,
+        "ioc_tlp_id": tlp_id,
+        "ioc_description": description,
+    })
+
+
+# ── Case Timeline ──────────────────────────────────────────────────────────────
+
+async def get_case_timeline(case_id: int) -> dict:
+    return await _iris_get(f"/case/timeline/events/list?cid={case_id}")
+
+
+async def add_case_timeline_event(
+    case_id: int,
+    title: str,
+    content: str,
+    event_date: str,
+) -> dict:
+    return await _iris_post(f"/case/timeline/events/add?cid={case_id}", {
+        "event_title": title,
+        "event_content": content,
+        "event_date": event_date,
+        "event_in_summary": False,
+        "event_color": "#1bfac3",
+    })
 
 
 # ── Shuffle SOAR ───────────────────────────────────────────────────────────────
@@ -231,7 +356,7 @@ async def get_misp_stats() -> dict:
             "version": version_resp.get("version"),
             "stats_available": False,
             "search_available": sample_ok,
-            "stats_note": "Live IOC search is available. Aggregate IOC statistics are skipped because MISP attributeStatistics is slow on this instance.",
+            "stats_note": "Live IOC search is available. Aggregate statistics are skipped because attributeStatistics is slow on this instance.",
         }
     except Exception as e:
         return {"connected": False, "error": str(e)}
