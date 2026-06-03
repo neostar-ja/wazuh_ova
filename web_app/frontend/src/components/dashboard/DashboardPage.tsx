@@ -32,7 +32,7 @@ import {
 import { dashboardApi, alertsApi } from '../../services/api'
 import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
-import WorldMap from './WorldMap'
+import WorldMap, { countryFlag } from './WorldMap'
 import { useSnackbar } from 'notistack'
 import { PageHeader } from '../ui/PageHeader'
 import { SectionCard } from '../ui/SectionCard'
@@ -340,6 +340,71 @@ function HBar({ items = [], isLoading, limit = 8, colorFn, mono, onItemClick, em
   )
 }
 
+// ─── IP + Country Bar ─────────────────────────────────────────────────────────
+function IPWithCountryBar({ items = [], isLoading, onItemClick }:
+  { items?: any[]; isLoading: boolean; onItemClick?: (item: any) => void }) {
+  if (isLoading) return (
+    <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={38} sx={{ borderRadius:'8px' }}/>)}</div>
+  )
+  if (!items.length) return (
+    <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', py:5, gap:1.5 }}>
+      <RouterRoundedIcon sx={{ fontSize:26, color:'text.disabled', opacity:0.35 }} />
+      <Typography sx={{ fontSize:12, color:'text.disabled', fontWeight:500 }}>ไม่มีภัยคุกคามที่มี srcip</Typography>
+    </Box>
+  )
+  const max = Math.max(...items.map(i => i.count), 1)
+  return (
+    <div className="flex flex-col gap-2">
+      {items.slice(0, 7).map((item, i) => {
+        const color   = i === 0 ? B.red : i < 3 ? B.orange : B.purple
+        const pct     = Math.round((item.count / max) * 100)
+        const country = item.country || ''
+        const flag    = country ? countryFlag(country) : ''
+        return (
+          <Box key={item.name || i} onClick={() => onItemClick?.(item)} sx={{
+            p:'6px 10px', borderRadius:'10px',
+            bgcolor: i === 0 ? `${color}12` : `${color}08`,
+            border:`1px solid ${color}${i === 0 ? '30' : '18'}`,
+            cursor: onItemClick ? 'pointer' : 'default',
+            transition:'all 0.2s ease',
+            '&:hover': onItemClick ? { bgcolor:`${color}18`, transform:'translateX(3px)' } : {},
+          }}>
+            {/* IP + country row */}
+            <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', mb:0.6 }}>
+              <Box sx={{ display:'flex', alignItems:'center', gap:0.75, minWidth:0, flex:1 }}>
+                <Box sx={{ width:16, height:16, borderRadius:'5px', bgcolor:`${color}20`,
+                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <Typography sx={{ fontSize:8.5, fontWeight:900, color }}>{i+1}</Typography>
+                </Box>
+                <Typography sx={{ fontSize:11, color, fontFamily:'"IBM Plex Mono",monospace',
+                  fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {item.name}
+                </Typography>
+              </Box>
+              <Typography sx={{ fontSize:11, fontWeight:800, color, fontFamily:'"IBM Plex Mono",monospace', flexShrink:0, ml:1 }}>
+                {N(item.count)}
+              </Typography>
+            </Box>
+            {/* Country + flag */}
+            {country && (
+              <Box sx={{ display:'flex', alignItems:'center', gap:0.5, mb:0.6, ml:'24px' }}>
+                {flag && <Typography sx={{ fontSize:12, lineHeight:1 }}>{flag}</Typography>}
+                <Typography sx={{ fontSize:10, color:'text.disabled' }}>{country}</Typography>
+              </Box>
+            )}
+            {/* Progress bar */}
+            <Box sx={{ height:4, borderRadius:3, bgcolor:`${color}15`, overflow:'hidden', ml:'24px' }}>
+              <Box sx={{ height:'100%', width:`${pct}%`, borderRadius:3,
+                background:`linear-gradient(90deg, ${color} 0%, ${color}80 100%)`,
+                transition:'width 0.8s ease', boxShadow:`0 0 8px ${color}50` }} />
+            </Box>
+          </Box>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Network Source Donut ─────────────────────────────────────────────────────
 function NetworkDonut({ data = [], isLoading }: { data?: any[]; isLoading: boolean }) {
   if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius:'12px' }} />
@@ -438,40 +503,65 @@ function MitreTactics({ data = [], isLoading }: { data?: any[]; isLoading: boole
   )
 }
 
-// ─── Countries Panel ──────────────────────────────────────────────────────────
+// ─── Countries Panel with Flags ──────────────────────────────────────────────
 function CountriesPanel({ countries = [], isLoading, onCountryClick }:
   { countries?: any[]; isLoading: boolean; onCountryClick?: (c: any) => void }) {
-  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={26}/>)}</div>
+  if (isLoading) return <div className="flex flex-col gap-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} height={34}/>)}</div>
   if (!countries.length) return (
     <Box className="flex flex-col items-center py-6 gap-2">
       <PublicRoundedIcon sx={{ fontSize:28, color:'text.disabled', opacity:0.3 }} />
       <Typography sx={{ fontSize:11, color:'text.disabled', textAlign:'center' }}>ไม่มีข้อมูล GeoIP</Typography>
-      <Typography sx={{ fontSize:10, color:'text.disabled', opacity:0.6, textAlign:'center' }}>
-        ข้อมูลมาจากภัยคุกคาม Level 12+
-      </Typography>
+      <Typography sx={{ fontSize:10, color:'text.disabled', opacity:0.6, textAlign:'center' }}>ข้อมูลมาจาก Level 12+</Typography>
     </Box>
   )
-  const max = Math.max(...countries.map(c => c.count), 1)
+  const max   = Math.max(...countries.map(c => c.count), 1)
+  const total = countries.reduce((s, c) => s + c.count, 0)
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       {countries.slice(0, 8).map((c, i) => {
-        const color = i < 3 ? B.red : i < 6 ? B.orange : B.purple
+        const color = i === 0 ? B.red : i < 3 ? B.orange : i < 6 ? B.yellow : B.purple
         const pct   = Math.round((c.count / max) * 100)
+        const sharePct = total > 0 ? ((c.count / total) * 100).toFixed(1) : '0'
+        const flag  = countryFlag(c.name)
         return (
-          <div key={c.name} onClick={() => onCountryClick?.(c)}
-            style={{ cursor: onCountryClick ? 'pointer' : 'default' }}>
-            <div className="flex justify-between items-center mb-0.5">
-              <Typography sx={{ fontSize:11, color:'text.secondary', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'75%' }}>
-                {c.name || 'Unknown'}
-              </Typography>
-              <Typography sx={{ fontSize:10, fontWeight:700, color, ml:1, flexShrink:0 }}>{N(c.count)}</Typography>
-            </div>
-            <Box sx={{ height:5, borderRadius:2.5, bgcolor:`${color}15`, overflow:'hidden', transition:'all 0.2s' }}>
-              <Box sx={{ height:'100%', width:`${pct}%`, borderRadius:2.5,
-                background:`linear-gradient(90deg, ${color} 0%, ${color}80 100%)`,
-                transition:'width 0.7s ease', boxShadow:`0 0 8px ${color}40` }} />
+          <Box key={c.name} onClick={() => onCountryClick?.(c)} sx={{
+            p:'7px 10px', borderRadius:'10px',
+            bgcolor: i === 0 ? `${color}12` : `${color}07`,
+            border:`1px solid ${color}${i === 0 ? '30' : '18'}`,
+            cursor: onCountryClick ? 'pointer' : 'default',
+            transition:'all 0.2s',
+            '&:hover': onCountryClick ? { bgcolor:`${color}18`, border:`1px solid ${color}35` } : {},
+          }}>
+            <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', mb:0.6 }}>
+              <Box sx={{ display:'flex', alignItems:'center', gap:1, minWidth:0, flex:1 }}>
+                {/* Rank badge */}
+                <Box sx={{ width:16, height:16, borderRadius:'5px', bgcolor:`${color}20`,
+                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <Typography sx={{ fontSize:8.5, fontWeight:900, color }}>{i+1}</Typography>
+                </Box>
+                {/* Flag */}
+                {flag && (
+                  <Typography sx={{ fontSize:16, lineHeight:1, flexShrink:0 }}>{flag}</Typography>
+                )}
+                {/* Country name */}
+                <Typography sx={{ fontSize:11.5, color:'text.secondary', overflow:'hidden',
+                  textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight: i === 0 ? 700 : 500 }}>
+                  {c.name || 'Unknown'}
+                </Typography>
+              </Box>
+              <Box sx={{ display:'flex', alignItems:'center', gap:1, flexShrink:0 }}>
+                <Typography sx={{ fontSize:9.5, color:'text.disabled' }}>{sharePct}%</Typography>
+                <Typography sx={{ fontSize:11, fontWeight:800, color, fontFamily:'"IBM Plex Mono",monospace' }}>
+                  {N(c.count)}
+                </Typography>
+              </Box>
             </Box>
-          </div>
+            <Box sx={{ height:5, borderRadius:3, bgcolor:`${color}15`, overflow:'hidden' }}>
+              <Box sx={{ height:'100%', width:`${pct}%`, borderRadius:3,
+                background:`linear-gradient(90deg, ${color} 0%, ${color}90 100%)`,
+                transition:'width 0.8s ease', boxShadow:`0 0 8px ${color}50` }} />
+            </Box>
+          </Box>
         )
       })}
     </div>
@@ -986,25 +1076,22 @@ export default function DashboardPage() {
 
       {/* ══ ROW 4: Threat data panels ═══════════════════════════════════════ */}
       <ContentGrid variant="dashboard" gap="md">
-        {/* Top Attacking IPs (from threats only) */}
+        {/* Top Attacking IPs with country */}
         <div className="col-span-12 sm:col-span-6 lg:col-span-3">
           <Panel
             title="IP โจมตีสูงสุด"
             icon={<RouterRoundedIcon sx={{ fontSize:16 }} />}
             accent={B.red}
-            subtitle="Level 12+ เท่านั้น"
+            subtitle="Level 12+ · พร้อมประเทศ"
             action={
               <Chip label="Threats" size="small"
                 sx={{ height:18, fontSize:9.5, bgcolor:`${B.red}15`, color:B.red, border:`1px solid ${B.red}30`,
                   '& .MuiChip-label': { px:0.7 } }} />
             }
           >
-            <HBar
+            <IPWithCountryBar
               items={threatStats?.by_srcip||[]}
               isLoading={threatLoading}
-              colorFn={() => B.red}
-              mono limit={7}
-              emptyMsg="ไม่มีภัยคุกคามที่มี srcip"
               onItemClick={item => navigate(`/investigate?q=${encodeURIComponent(item.name)}`)}
             />
           </Panel>

@@ -35,7 +35,7 @@ import { alertsApi, investigateApi } from '../../services/api'
 import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
-import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters } from '../../types/alert'
+import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters, AlertFacets } from '../../types/alert'
 import { BRAND as TOKENS, CHART_TIP_STYLE, sevColor, sevLabelShort } from '../ui/tokens'
 import { PageShell } from '../ui/layout'
 
@@ -60,7 +60,29 @@ const SEV: SeverityOption[] = [
 const LC = sevColor
 const LL = sevLabelShort
 
-const SOURCES = ['fortigate', 'mikrotik', 'infoblox', 'huawei-ac', 'suricata', 'syscheck', 'ossec', 'syslog']
+// Mapping from stats.by_source label → GET /alerts?source= key
+const SOURCE_LABEL_TO_KEY: Record<string, string> = {
+  'MikroTik Router':  'mikrotik',
+  'FortiGate WUH':    'fortigate',
+  'Huawei USG/FW':    'huawei_ac',
+  'Huawei AC WiFi':   'huawei_ac',
+  'Infoblox DNS':     'infoblox_dns',
+  'Infoblox DHCP':    'infoblox_dhcp',
+  'Suricata IDS':     'suricata',
+  'Linux/SSH':        'sshd',
+  'Linux/System':     'systemd',
+}
+const SOURCE_COLOR_MAP: Record<string, string> = {
+  'MikroTik Router':  '#3B82F6',
+  'FortiGate WUH':    '#F17422',
+  'Huawei USG/FW':    '#22C55E',
+  'Huawei AC WiFi':   '#10B981',
+  'Infoblox DNS':     '#8B5CF6',
+  'Infoblox DHCP':    '#7C3AED',
+  'Suricata IDS':     '#EC4899',
+  'Linux/SSH':        '#EAB308',
+  'Linux/System':     '#64748B',
+}
 const TIME_OPTS = [
   { value: '1h',  label: '1 ชั่วโมง' },
   { value: '6h',  label: '6 ชั่วโมง' },
@@ -159,6 +181,10 @@ export function normalizeStats(rawStats: any): AlertStats {
     by_mitre: rawStats.by_mitre || [],
     by_srcip: rawStats.by_srcip || [],
     by_source: rawStats.by_source || [],
+    by_group: rawStats.by_group || [],
+    by_rule: rawStats.by_rule || [],
+    by_country: rawStats.by_country || [],
+    by_decoder: rawStats.by_decoder || [],
   };
 }
 
@@ -1285,15 +1311,24 @@ const GROUP_META: Record<string, { color: string; label: string }> = {
   routeros:       { color: '#3B82F6', label: 'RouterOS' },
   huawei:         { color: '#22C55E', label: 'Huawei USG' },
   huawei_usg:     { color: '#22C55E', label: 'Huawei USG' },
-  infoblox:       { color: '#8B5CF6', label: 'Infoblox DNS' },
-  infoblox_dns:   { color: '#8B5CF6', label: 'DNS Query' },
+  huawei_ac:      { color: '#10B981', label: 'Huawei AC' },
+  infoblox:       { color: '#8B5CF6', label: 'Infoblox' },
+  infoblox_dns:   { color: '#8B5CF6', label: 'Infoblox DNS' },
+  infoblox_dhcp:  { color: '#7C3AED', label: 'Infoblox DHCP' },
   dns_query:      { color: '#8B5CF6', label: 'DNS Query' },
+  ids:            { color: '#EC4899', label: 'Suricata IDS' },
+  suricata:       { color: '#EC4899', label: 'Suricata IDS' },
   compliance:     { color: '#EAB308', label: 'Compliance' },
   authentication: { color: '#EF4444', label: 'Auth Failure' },
   windows:        { color: '#0EA5E9', label: 'Windows' },
-  suricata:       { color: '#EC4899', label: 'Suricata IDS' },
   syscheck:       { color: '#64748B', label: 'FIM/Syscheck' },
   firewall:       { color: '#64748B', label: 'Firewall' },
+  ossec:          { color: '#94A3B8', label: 'OSSEC' },
+  threat_intel:   { color: '#EF4444', label: 'Threat Intel' },
+  cdb_intel:      { color: '#EF4444', label: 'CDB Blocklist' },
+  web:            { color: '#38BDF8', label: 'Web Attacks' },
+  pam:            { color: '#EAB308', label: 'PAM Auth' },
+  sshd:           { color: '#EAB308', label: 'SSH Auth' },
 }
 
 const CHART_GROUPS = ['fortigate', 'mikrotik', 'huawei', 'infoblox_dns', 'compliance', 'authentication', 'windows', 'suricata', 'syscheck']
@@ -1321,6 +1356,418 @@ const RULE_DESC: Record<string, string> = {
   '100303': 'Auth: Multiple failures',
 }
 
+// ── Alert Metric Card (MetricHero style) ─────────────────────────────────────
+interface AlertMetricCardProps {
+  title: string
+  count?: number | null
+  subtitle?: string
+  subtitleLabel?: string
+  color: string
+  icon: React.ReactNode
+  sparklineData?: { timestamp: string; count: number }[]
+  isActive?: boolean
+  loading?: boolean
+  onClick?: () => void
+  badge?: string
+  accentLabel?: string
+}
+
+function AlertMetricCard({ title, count, subtitle, subtitleLabel, color, icon, sparklineData, isActive, loading, onClick, badge, accentLabel }: AlertMetricCardProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  return (
+    <Card onClick={onClick} sx={{
+      cursor: onClick ? 'pointer' : 'default',
+      position: 'relative', overflow: 'hidden',
+      height: { xs: 'auto', sm: '116px' },
+      border: `1px solid`,
+      borderColor: isActive ? color : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'),
+      background: isActive
+        ? `linear-gradient(135deg, ${color}14 0%, ${color}04 100%)`
+        : isDark ? 'rgba(16,14,30,0.7)' : 'rgba(255,255,255,0.85)',
+      boxShadow: isActive
+        ? `0 0 0 2px ${color}25, 0 4px 16px ${color}18`
+        : isDark ? '0 1px 6px rgba(0,0,0,0.3)' : '0 1px 6px rgba(0,0,0,0.06)',
+      transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+      '&:hover': onClick ? {
+        transform: 'translateY(-3px)',
+        boxShadow: isActive
+          ? `0 0 0 2px ${color}35, 0 8px 24px ${color}25`
+          : `0 6px 20px ${color}18`,
+        borderColor: color,
+        '& .card-watermark': { opacity: 0.08 },
+      } : {},
+    }}>
+      {/* Top accent bar */}
+      <Box sx={{ height: 2.5, background: `linear-gradient(90deg, ${color} 0%, ${color}55 100%)` }} />
+      {/* Watermark icon — very faint */}
+      <Box className="card-watermark" sx={{
+        position: 'absolute', bottom: 4, right: 4,
+        color, opacity: 0.05, lineHeight: 1,
+        transform: 'scale(2.6)', transformOrigin: 'bottom right',
+        pointerEvents: 'none', transition: 'opacity 0.25s ease',
+      }}>{icon}</Box>
+      <CardContent sx={{ p: '10px 14px !important', position: 'relative', zIndex: 1, height: 'calc(100% - 2.5px)', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        {/* Label row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.09em', color: isActive ? color : 'text.disabled', lineHeight: 1 }}>
+            {title}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+            {badge && <Box sx={{ px: 0.6, py: 0.1, borderRadius: '4px', bgcolor: `${color}25`, border: `1px solid ${color}40` }}>
+              <Typography sx={{ fontSize: 8, fontWeight: 900, color, lineHeight: 1, letterSpacing: '0.06em' }}>{badge}</Typography>
+            </Box>}
+            {isActive && <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 6px ${color}` }} />}
+          </Box>
+        </Box>
+
+        {/* Main content */}
+        {loading ? (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}><CircularProgress size={20} sx={{ color }} /></Box>
+        ) : subtitle != null ? (
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 600, mb: 0.2, lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {subtitleLabel || 'Top'}
+            </Typography>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color, lineHeight: 1.2, mb: 0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"IBM Plex Mono"', maxWidth: '100%' }}>
+              {subtitle || '—'}
+            </Typography>
+            <Typography sx={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-0.02em' }}>
+              {count != null ? fmtNum(count) : '—'}
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Typography sx={{ fontSize: { xs: 26, sm: 30 }, fontWeight: 900, color, lineHeight: 1, letterSpacing: '-0.03em' }}>
+              {count != null ? fmtNum(count) : '—'}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Footer row: sparkline + accent label */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.25, minHeight: 22 }}>
+          {sparklineData && sparklineData.length > 0 ? (
+            <Box sx={{ opacity: 0.65 }}><Sparkline data={sparklineData} color={color} height={22} /></Box>
+          ) : <Box />}
+          {accentLabel && !loading && (
+            <Typography sx={{ fontSize: 9, color: 'text.disabled', fontWeight: 700, letterSpacing: '0.04em', fontFamily: '"IBM Plex Mono"' }}>{accentLabel}</Typography>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Shared panel card style ───────────────────────────────────────────────────
+const PANEL_HEIGHT = 288
+
+function PanelCard({ accentColor, children, isDark }: { accentColor: string; children: React.ReactNode; isDark: boolean }) {
+  return (
+    <Box sx={{
+      height: PANEL_HEIGHT,
+      borderRadius: '14px',
+      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}`,
+      background: isDark
+        ? `linear-gradient(145deg, rgba(22,18,42,0.92) 0%, rgba(16,14,30,0.85) 100%)`
+        : `linear-gradient(145deg, rgba(255,255,255,0.97) 0%, rgba(248,247,255,0.95) 100%)`,
+      boxShadow: isDark ? '0 2px 16px rgba(0,0,0,0.35)' : '0 2px 12px rgba(0,0,0,0.06)',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+    }}>
+      {/* top accent bar */}
+      <Box sx={{ height: 2.5, background: `linear-gradient(90deg, ${accentColor} 0%, ${accentColor}50 100%)`, flexShrink: 0 }} />
+      {/* decorative glow */}
+      <Box sx={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', background: `radial-gradient(circle, ${accentColor}12 0%, transparent 70%)`, pointerEvents: 'none' }} />
+      {children}
+    </Box>
+  )
+}
+
+function PanelHeader({ accent, title, badge }: { accent: string; title: string; badge?: React.ReactNode }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.75, pt: 1.5, pb: 1, flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        <Box sx={{ width: 3.5, height: 14, borderRadius: 2, bgcolor: accent, flexShrink: 0 }} />
+        <Typography sx={{ fontSize: 12, fontWeight: 800, color: 'text.primary', letterSpacing: '-0.01em' }}>{title}</Typography>
+      </Box>
+      {badge}
+    </Box>
+  )
+}
+
+// ── Threat Distribution Panel ─────────────────────────────────────────────────
+function ThreatDistributionPanel({ stats, onSourceClick }: { stats?: AlertStats; onSourceClick: (label: string) => void }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const data = useMemo(() => {
+    const sources = stats?.by_source || []
+    return sources.slice(0, 6).map(s => ({
+      name: s.name,
+      count: s.count,
+      color: SOURCE_COLOR_MAP[s.name] || BRAND.purple,
+      pct: 0,
+    })).filter(d => d.count > 0)
+  }, [stats])
+
+  const total = data.reduce((sum, d) => sum + d.count, 0)
+  const withPct = data.map(d => ({ ...d, pct: total > 0 ? Math.round((d.count / total) * 100) : 0 }))
+
+  if (!data.length) return (
+    <PanelCard accentColor={BRAND.purple} isDark={isDark}>
+      <PanelHeader accent={BRAND.purple} title="Threat Distribution" />
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </Box>
+    </PanelCard>
+  )
+
+  const totalBadge = (
+    <Box sx={{ px: 1, py: 0.3, borderRadius: '6px', bgcolor: `${BRAND.purple}14`, border: `1px solid ${BRAND.purple}28` }}>
+      <Typography sx={{ fontSize: 10, fontWeight: 800, color: BRAND.purpleLight, fontFamily: '"IBM Plex Mono"', lineHeight: 1 }}>
+        {fmtNum(total)}
+      </Typography>
+    </Box>
+  )
+
+  return (
+    <PanelCard accentColor={BRAND.purple} isDark={isDark}>
+      <PanelHeader accent={BRAND.purple} title="Threat Distribution" badge={totalBadge} />
+
+      {/* Donut centred + legend below */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', px: 1.75, pb: 1.5, gap: 1.25, minHeight: 0 }}>
+        {/* Donut */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Box sx={{ position: 'relative', width: 110, height: 110 }}>
+            <ResponsiveContainer width={110} height={110}>
+              <PieChart>
+                <Pie data={withPct} dataKey="count" cx="50%" cy="50%" innerRadius={30} outerRadius={50}
+                  paddingAngle={2} startAngle={90} endAngle={-270}>
+                  {withPct.map((entry, idx) => <Cell key={idx} fill={entry.color} stroke="none" />)}
+                </Pie>
+                <RechartTip contentStyle={ChartTip} formatter={(v: any, name: any) => [fmtNum(Number(v)), name]} />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center label */}
+            <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: 'text.disabled', lineHeight: 1, mb: 0.2 }}>Total</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 900, color: BRAND.purpleLight, lineHeight: 1, fontFamily: '"IBM Plex Mono"' }}>{fmtNum(total)}</Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Legend rows */}
+        <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          {withPct.map(d => (
+            <Box key={d.name} onClick={() => onSourceClick(d.name)} sx={{
+              display: 'flex', alignItems: 'center', gap: 0.75,
+              cursor: 'pointer', borderRadius: '8px', px: 0.75, py: 0.45,
+              border: '1px solid transparent',
+              transition: 'all 0.15s',
+              '&:hover': { bgcolor: `${d.color}12`, borderColor: `${d.color}30` },
+            }}>
+              {/* color swatch */}
+              <Box sx={{ width: 8, height: 8, borderRadius: '3px', bgcolor: d.color, flexShrink: 0 }} />
+              <Typography sx={{ fontSize: 10, color: 'text.secondary', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                {d.name}
+              </Typography>
+              {/* percent pill */}
+              <Box sx={{ px: 0.6, py: 0.1, borderRadius: '4px', bgcolor: `${d.color}18`, flexShrink: 0 }}>
+                <Typography sx={{ fontSize: 8.5, fontWeight: 800, color: d.color, lineHeight: 1, fontFamily: '"IBM Plex Mono"' }}>{d.pct}%</Typography>
+              </Box>
+              <Typography sx={{ fontSize: 9.5, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', flexShrink: 0, fontWeight: 700, minWidth: 34, textAlign: 'right' }}>
+                {fmtNum(d.count)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </PanelCard>
+  )
+}
+
+// ── Top Rules Panel ───────────────────────────────────────────────────────────
+function TopRulesPanel({ stats, onRuleClick }: { stats?: AlertStats; onRuleClick: (id: string) => void }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const rules = useMemo(() => {
+    const raw = stats?.by_rule || []
+    const maxCount = Math.max(...raw.map((r: any) => r.count || 0), 1)
+    return raw.slice(0, 7).map((r: any, i: number) => ({
+      id: r.name,
+      desc: RULE_DESC[r.name] || `Rule ${r.name}`,
+      count: r.count || 0,
+      pct: Math.round(((r.count || 0) / maxCount) * 100),
+      rank: i + 1,
+    }))
+  }, [stats])
+
+  const RANK_COLOR = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6', '#8B5CF6', '#64748B']
+
+  if (!rules.length) return (
+    <PanelCard accentColor={BRAND.orange} isDark={isDark}>
+      <PanelHeader accent={BRAND.orange} title="Top Rules ที่ต้องตรวจสอบ" />
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </Box>
+    </PanelCard>
+  )
+
+  return (
+    <PanelCard accentColor={BRAND.orange} isDark={isDark}>
+      <PanelHeader accent={BRAND.orange} title="Top Rules ที่ต้องตรวจสอบ" />
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.75, pb: 1.5, display: 'flex', flexDirection: 'column', gap: 0.65 }}>
+        {rules.map((r, i) => (
+          <Box key={r.id} onClick={() => onRuleClick(r.id)} sx={{
+            cursor: 'pointer', borderRadius: '10px', p: '8px 10px',
+            border: '1px solid transparent',
+            transition: 'all 0.15s',
+            '&:hover': { bgcolor: `${BRAND.orange}0D`, borderColor: `${BRAND.orange}30` },
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+              {/* rank badge */}
+              <Box sx={{ width: 18, height: 18, borderRadius: '5px', bgcolor: `${RANK_COLOR[i]}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Typography sx={{ fontSize: 8.5, fontWeight: 900, color: RANK_COLOR[i], lineHeight: 1 }}>{r.rank}</Typography>
+              </Box>
+              {/* rule id */}
+              <Box sx={{ px: 0.6, py: 0.15, borderRadius: '4px', bgcolor: `${BRAND.purple}14`, flexShrink: 0 }}>
+                <Typography sx={{ fontSize: 8.5, fontWeight: 800, color: BRAND.purpleLight, fontFamily: '"IBM Plex Mono"', lineHeight: 1 }}>
+                  #{r.id}
+                </Typography>
+              </Box>
+              {/* description */}
+              <Typography sx={{ fontSize: 10, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, flex: 1, lineHeight: 1.2 }}>
+                {r.desc}
+              </Typography>
+              {/* count */}
+              <Typography sx={{ fontSize: 10, color: 'text.primary', fontFamily: '"IBM Plex Mono"', flexShrink: 0, fontWeight: 800, ml: 0.5 }}>
+                {fmtNum(r.count)}
+              </Typography>
+            </Box>
+            {/* progress bar */}
+            <Box sx={{ height: 3.5, borderRadius: 2, bgcolor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden', ml: '26px' }}>
+              <Box sx={{
+                height: '100%', borderRadius: 2,
+                width: `${r.pct}%`,
+                background: `linear-gradient(90deg, ${BRAND.orange} 0%, #FF9642CC 100%)`,
+                transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)',
+              }} />
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </PanelCard>
+  )
+}
+
+// ── Attack Surface Panel ──────────────────────────────────────────────────────
+function AttackSurfacePanel({ stats, onSrcIpClick, onCountryClick, onAgentClick, navigate }: {
+  stats?: AlertStats;
+  onSrcIpClick: (ip: string) => void;
+  onCountryClick: (country: string) => void;
+  onAgentClick: (agent: string) => void;
+  navigate: (path: string) => void;
+}) {
+  const [tab, setTab] = useState(0)
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const srcips    = stats?.by_srcip?.slice(0, 7) || []
+  const countries = stats?.by_country?.slice(0, 7) || []
+  const agents    = stats?.by_agent?.slice(0, 7) || []
+
+  const TABS = [
+    { label: 'IPs',      icon: '⚠', color: '#EF4444', items: srcips,    onItem: onSrcIpClick,   mono: true,  canInv: true  },
+    { label: 'Countries',icon: '🌐', color: '#38BDF8', items: countries, onItem: onCountryClick, mono: false, canInv: false },
+    { label: 'Agents',   icon: '🖥',  color: '#22C55E', items: agents,   onItem: onAgentClick,   mono: false, canInv: false },
+  ]
+  const active = TABS[tab]
+
+  const hasData = srcips.length || countries.length || agents.length
+  if (!hasData) return (
+    <PanelCard accentColor="#EF4444" isDark={isDark}>
+      <PanelHeader accent="#EF4444" title="Top Attack Surface" />
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+      </Box>
+    </PanelCard>
+  )
+
+  return (
+    <PanelCard accentColor="#EF4444" isDark={isDark}>
+      <PanelHeader accent="#EF4444" title="Top Attack Surface" />
+      <Box sx={{ px: 1.75, pb: 1, flexShrink: 0 }}>
+        {/* Tab switcher */}
+        <Box sx={{ display: 'flex', gap: 0.5, p: 0.4, borderRadius: '10px', bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
+          {TABS.map((t, i) => (
+            <Box key={t.label} onClick={() => setTab(i)} sx={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.4,
+              py: 0.55, borderRadius: '8px', cursor: 'pointer',
+              bgcolor: tab === i ? t.color : 'transparent',
+              boxShadow: tab === i ? `0 2px 8px ${t.color}40` : 'none',
+              transition: 'all 0.18s',
+              '&:hover': { bgcolor: tab === i ? t.color : `${t.color}18` },
+            }}>
+              <Typography sx={{ fontSize: 8.5, lineHeight: 1 }}>{t.icon}</Typography>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: tab === i ? '#fff' : 'text.disabled', letterSpacing: '0.02em', lineHeight: 1 }}>
+                {t.label}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      {/* Items */}
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.75, pb: 1.5, display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+        {active.items.map((item, i) => (
+          <Box key={item.name} onClick={() => active.onItem(item.name)} sx={{
+            display: 'flex', alignItems: 'center', gap: 0.75,
+            cursor: 'pointer', borderRadius: '8px', px: 0.75, py: 0.6,
+            border: '1px solid transparent',
+            transition: 'all 0.15s',
+            '&:hover': {
+              bgcolor: `${active.color}0E`,
+              borderColor: `${active.color}28`,
+              '& .inv-btn': { opacity: 1 },
+            },
+          }}>
+            {/* rank */}
+            <Typography sx={{ fontSize: 9, fontWeight: 700, color: 'text.disabled', width: 14, flexShrink: 0, lineHeight: 1, textAlign: 'center' }}>{i + 1}</Typography>
+            {/* value */}
+            <Typography sx={{
+              fontSize: 10.5, fontFamily: active.mono ? '"IBM Plex Mono"' : 'inherit',
+              fontWeight: 700, color: active.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, lineHeight: 1.2,
+            }}>
+              {tab === 1 ? `${getFlag(item.name)} ${item.name}` : item.name}
+            </Typography>
+            {/* count badge */}
+            <Box sx={{ px: 0.6, py: 0.15, borderRadius: '5px', bgcolor: `${active.color}14`, flexShrink: 0 }}>
+              <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', fontWeight: 800, color: active.color, lineHeight: 1 }}>
+                {fmtNum(item.count)}
+              </Typography>
+            </Box>
+            {/* investigate btn */}
+            {active.canInv && (
+              <Tooltip title="สืบสวน IP นี้">
+                <IconButton className="inv-btn" size="small"
+                  onClick={e => { e.stopPropagation(); navigate(`/investigate?q=${item.name}`) }}
+                  sx={{ opacity: 0, p: 0.3, borderRadius: '6px', transition: 'opacity 0.15s', '&:hover': { bgcolor: `${active.color}20` } }}>
+                  <OpenInNewRoundedIcon sx={{ fontSize: 11, color: active.color }} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        ))}
+        {!active.items.length && (
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+            <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>ไม่มีข้อมูล</Typography>
+          </Box>
+        )}
+      </Box>
+    </PanelCard>
+  )
+}
+
 // ── Dashboard Section ─────────────────────────────────────────────────────────
 interface DashboardSectionProps {
   stats?: AlertStats
@@ -1328,361 +1775,96 @@ interface DashboardSectionProps {
   activeLevel: number
   onLevelClick: (level: number) => void
   onGroupClick: (group: string) => void
+  onRuleClick: (id: string) => void
+  onSrcIpClick: (ip: string) => void
+  onSourceClick: (label: string) => void
+  onCountryClick: (country: string) => void
+  onAgentClick: (agent: string) => void
+  navigate: (path: string) => void
 }
 
-function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupClick }: DashboardSectionProps) {
+function DashboardSection({ stats, loading, activeLevel, onLevelClick, onGroupClick, onRuleClick, onSrcIpClick, onSourceClick, onCountryClick, onAgentClick, navigate }: DashboardSectionProps) {
   const timeline = stats?.timeline || []
-  const total    = stats?.total || 0
+  const critical = stats?.by_severity?.critical || 0
+  const high      = stats?.by_severity?.high || 0
+  const highPlus  = critical + high
+  const topSource   = (stats?.by_source || [])[0]
+  const topAttacker = (stats?.by_srcip || [])[0]
 
-  const groupChartData = useMemo(() => {
-    const raw = (stats as any)?.by_group || []
-    return CHART_GROUPS
-      .map(key => {
-        const meta  = GROUP_META[key]
-        const found = raw.find((b: any) => b.name === key || b.name?.includes(key))
-        const count = found?.count || 0
-        return { name: meta?.label || key, count, color: meta?.color || '#6B7280' }
-      })
-      .filter(d => d.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8)
-  }, [stats])
+  const ICON_CRITICAL  = <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+  const ICON_HIGH      = <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12V11c0 4.52-3.02 8.79-7 10.07C8.02 19.79 5 15.52 5 11V6.3l7-3.12z"/><path d="M11 7h2v6h-2zM11 15h2v2h-2z"/></svg>
+  const ICON_HIGHPLUS  = <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+  const ICON_SOURCE    = <RouterRoundedIcon />
+  const ICON_ATTACKER  = <GppBadRoundedIcon />
 
-  const ruleChartData = useMemo(() => {
-    const raw = (stats as any)?.by_rule || []
-    const maxCount = Math.max(...raw.map((r: any) => r.count || 0), 1)
-    return raw.slice(0, 8).map((r: any) => ({
-      id: r.name,
-      desc: RULE_DESC[r.name] || `Rule ${r.name}`,
-      count: r.count || 0,
-      pct: Math.round(((r.count || 0) / maxCount) * 100),
-    }))
-  }, [stats])
-
-  const SEV_ICON: Record<SeverityName, React.ReactNode> = {
-    critical: <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19H3.5L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>,
-    high:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12V11c0 4.52-3.02 8.79-7 10.07C8.02 19.79 5 15.52 5 11V6.3l7-3.12z"/><path d="M11 7h2v6h-2zM11 15h2v2h-2z"/></svg>,
-    medium:   <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/></svg>,
-    low:      <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-9l-2.5-2.5-1.42 1.42L11 16.84l7.08-7.08-1.42-1.41L11 13z"/></svg>,
-    info:     <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v2h2v4zm0-8h-2V7h2v2z"/></svg>,
-  }
-
-  const isTotalActive = activeLevel === 1;
+  const critSparkline  = timeline.map(t => ({ timestamp: t.timestamp, count: t.severity_breakdown?.critical ?? 0 }))
+  const highSparkline  = timeline.map(t => ({ timestamp: t.timestamp, count: t.severity_breakdown?.high ?? 0 }))
+  const hpSparkline    = timeline.map(t => ({ timestamp: t.timestamp, count: (t.severity_breakdown?.critical ?? 0) + (t.severity_breakdown?.high ?? 0) }))
 
   return (
-    <Box sx={{ mb: 2 }}>
-      {/* ── 5 count cards ── */}
-      <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
-        {/* Total Card */}
-        <Grid item xs={12} sm={4} md={2.4}>
-          <Card
-            onClick={() => onLevelClick(1)}
-            sx={{
-              cursor: 'pointer',
-              position: 'relative',
-              overflow: 'hidden',
-              border: isTotalActive ? `1.5px solid ${BRAND.purple}` : '1px solid',
-              borderColor: isTotalActive ? BRAND.purple : 'divider',
-              background: isTotalActive
-                ? `linear-gradient(135deg, ${BRAND.purple}18 0%, ${BRAND.purple}06 100%)`
-                : undefined,
-              boxShadow: isTotalActive
-                ? `0 0 0 3px ${BRAND.purple}20, 0 8px 24px ${BRAND.purple}22`
-                : '0 2px 8px rgba(0,0,0,0.08)',
-              transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
-              '&:hover': {
-                transform: 'translateY(-3px)',
-                boxShadow: `0 0 0 2px ${BRAND.purple}30, 0 10px 28px ${BRAND.purple}28`,
-                borderColor: BRAND.purple,
-              },
-            }}
-          >
-            <Box sx={{
-              position: 'absolute', bottom: -6, right: -4,
-              color: BRAND.purple, opacity: 0.08, lineHeight: 1,
-              transform: 'scale(2.8)', transformOrigin: 'bottom right',
-              pointerEvents: 'none',
-            }}>
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-            </Box>
-            <CardContent sx={{ p: { xs: '12px 14px !important', sm: '14px 18px !important' }, position: 'relative', zIndex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                <Typography sx={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.09em', color: isTotalActive ? BRAND.purple : 'text.disabled' }}>
-                  Total Alerts
-                </Typography>
-                {isTotalActive && <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: BRAND.purple, boxShadow: `0 0 6px ${BRAND.purple}` }} />}
-              </Box>
-              {loading ? (
-                <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: BRAND.purple }} /></Box>
-              ) : (
-                <Typography sx={{ fontSize: { xs: 26, sm: 30 }, fontWeight: 900, color: BRAND.purple, lineHeight: 1, letterSpacing: '-0.03em', mb: 0.25 }}>
-                  {fmtNum(total)}
-                </Typography>
-              )}
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.5 }}>
-                <Box sx={{ opacity: 0.8 }}>
-                  <Sparkline data={timeline} color={BRAND.purple} height={28} />
-                </Box>
-                <Typography sx={{ fontSize: 9, color: 'text.disabled', lineHeight: 1.2 }}>all levels</Typography>
-              </Box>
-            </CardContent>
-            <Box sx={{ height: 3, background: isTotalActive ? `linear-gradient(90deg, ${BRAND.purple} 0%, ${BRAND.purple}80 100%)` : `${BRAND.purple}40` }} />
-          </Card>
-        </Grid>
+    <Box sx={{ mb: 1.5 }}>
+      {/* ── 5 MetricHero cards — CSS grid เต็ม container ── */}
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: {
+          xs: 'repeat(2, minmax(0, 1fr))',
+          sm: 'repeat(3, minmax(0, 1fr))',
+          lg: 'repeat(5, minmax(0, 1fr))',
+        },
+        gap: '14px',
+        mb: 1.5,
+        width: '100%',
+      }}>
+        <AlertMetricCard
+          title="Critical" count={critical} color="#EF4444" icon={ICON_CRITICAL}
+          sparklineData={critSparkline} isActive={activeLevel === 15} loading={loading}
+          onClick={() => onLevelClick(activeLevel === 15 ? 12 : 15)}
+          badge={critical > 0 ? 'LIVE' : undefined}
+          accentLabel="≥15"
+        />
+        <AlertMetricCard
+          title="High" count={high} color={BRAND.orange} icon={ICON_HIGH}
+          sparklineData={highSparkline} isActive={activeLevel === 12 && highPlus !== critical} loading={loading}
+          onClick={() => onLevelClick(12)}
+          accentLabel="12–14"
+        />
+        <AlertMetricCard
+          title="High+ Total" count={highPlus} color={BRAND.purple} icon={ICON_HIGHPLUS}
+          sparklineData={hpSparkline} isActive={activeLevel === 12} loading={loading}
+          onClick={() => onLevelClick(12)}
+          accentLabel="Crit+High"
+        />
+        <AlertMetricCard
+          title="Top Source" count={topSource?.count} subtitle={topSource?.name}
+          subtitleLabel="แหล่งข้อมูลสูงสุด"
+          color="#3B82F6" icon={ICON_SOURCE} loading={loading}
+          onClick={topSource ? () => onSourceClick(topSource.name) : undefined}
+        />
+        <AlertMetricCard
+          title="Top Attacker" count={topAttacker?.count} subtitle={topAttacker?.name}
+          subtitleLabel="IP โจมตีสูงสุด"
+          color="#EC4899" icon={ICON_ATTACKER} loading={loading}
+          onClick={topAttacker ? () => onSrcIpClick(topAttacker.name) : undefined}
+        />
+      </Box>
 
-        {/* Severity Cards */}
-        {SEV.map(s => {
-          const count    = stats?.by_severity?.[s.key] || 0
-          const pct      = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
-          const isActive = (s.key === 'critical' && activeLevel === 15) ||
-                           (s.key === 'high'     && activeLevel === 12) ||
-                           (s.key === 'medium'   && activeLevel === 7)  ||
-                           (s.key === 'low'      && activeLevel === 1)
-          return (
-            <Grid item xs={6} sm={4} md={2.4} key={s.key}>
-              <Card
-                onClick={() => onLevelClick(s.min)}
-                sx={{
-                  cursor: 'pointer',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  border: isActive ? `1.5px solid ${s.color}` : '1px solid',
-                  borderColor: isActive ? s.color : 'divider',
-                  background: isActive
-                    ? `linear-gradient(135deg, ${s.color}18 0%, ${s.color}06 100%)`
-                    : undefined,
-                  boxShadow: isActive
-                    ? `0 0 0 3px ${s.color}20, 0 8px 24px ${s.color}22`
-                    : '0 2px 8px rgba(0,0,0,0.08)',
-                  transition: 'all 0.22s cubic-bezier(0.4,0,0.2,1)',
-                  '&:hover': {
-                    transform: 'translateY(-3px)',
-                    boxShadow: `0 0 0 2px ${s.color}30, 0 10px 28px ${s.color}28`,
-                    borderColor: s.color,
-                  },
-                }}
-              >
-                <Box sx={{
-                  position: 'absolute', bottom: -6, right: -4,
-                  color: s.color, opacity: 0.08, lineHeight: 1,
-                  transform: 'scale(2.8)', transformOrigin: 'bottom right',
-                  pointerEvents: 'none',
-                }}>
-                  {SEV_ICON[s.key]}
-                </Box>
-
-                <CardContent sx={{ p: { xs: '12px 14px !important', sm: '14px 18px !important' }, position: 'relative', zIndex: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                    <Typography sx={{
-                      fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
-                      letterSpacing: '0.09em',
-                      color: isActive ? s.color : 'text.disabled',
-                    }}>
-                      {s.label}
-                    </Typography>
-                    {isActive && (
-                      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: s.color, boxShadow: `0 0 6px ${s.color}` }} />
-                    )}
-                  </Box>
-                  {loading ? (
-                    <Box sx={{ height: 38, display: 'flex', alignItems: 'center' }}><CircularProgress size={22} sx={{ color: s.color }} /></Box>
-                  ) : (
-                    <Typography sx={{
-                      fontSize: { xs: 26, sm: 30 },
-                      fontWeight: 900, color: s.color, lineHeight: 1,
-                      letterSpacing: '-0.03em', mb: 0.25,
-                    }}>
-                      {fmtNum(count)}
-                    </Typography>
-                  )}
-                  <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', mt: 0.5 }}>
-                    <Box sx={{ opacity: 0.8 }}>
-                      <Sparkline data={timeline.map(t => ({ timestamp: t.timestamp, count: t.severity_breakdown?.[s.key] ?? 0 }))} color={s.color} height={28} />
-                    </Box>
-                    {!loading && (
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 800, color: s.color, lineHeight: 1 }}>{pct}<span style={{ fontSize: 9, fontWeight: 600 }}>%</span></Typography>
-                        <Typography sx={{ fontSize: 9, color: 'text.disabled', lineHeight: 1.2 }}>of total</Typography>
-                      </Box>
-                    )}
-                  </Box>
-                </CardContent>
-                <Box sx={{ height: 3, background: isActive ? `linear-gradient(90deg, ${s.color} 0%, ${s.color}80 100%)` : `${s.color}40` }} />
-              </Card>
-            </Grid>
-          )
-        })}
-      </Grid>
-
-      {/* ── Timeline + Groups + Top Rules row ── */}
-      <Grid container spacing={2}>
-        {/* Timeline chart - 7 cols */}
-        {timeline.length > 1 && (
-          <Grid item xs={12} md={7}>
-            <Card sx={{
-              border: '1px solid', borderColor: 'divider', overflow: 'hidden', height: '100%',
-              background: 'linear-gradient(135deg, rgba(123,91,164,0.04) 0%, transparent 60%)',
-              position: 'relative',
-            }}>
-              {/* Decorative glow */}
-              <Box sx={{ position: 'absolute', top: -20, right: -20, width: 120, height: 120, borderRadius: '50%',
-                background: `radial-gradient(circle, ${BRAND.purple}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
-              <CardContent sx={{ p: '16px 20px !important', position: 'relative' }}>
-                {/* Header row */}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
-                  <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.3 }}>
-                      <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: BRAND.purple }} />
-                      <Typography sx={{ fontSize: 13, fontWeight: 800, color: 'text.primary', letterSpacing: '-0.01em' }}>
-                        Timeline การแจ้งเตือน
-                      </Typography>
-                    </Box>
-                    {total > 0 && (
-                      <Typography sx={{ fontSize: 11, color: 'text.disabled', pl: 1.5 }}>
-                        รวม <Box component="span" sx={{ color: BRAND.purple, fontWeight: 700 }}>{fmtNum(total)}</Box> รายการในช่วงเวลาที่เลือก
-                      </Typography>
-                    )}
-                  </Box>
-                  {/* Legend pills */}
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {[
-                      { label: 'วิกฤต', color: '#EF4444' },
-                      { label: 'สูง',   color: BRAND.orange },
-                      { label: 'กลาง',  color: '#EAB308' },
-                      { label: 'รวม',   color: BRAND.purple },
-                    ].map(l => (
-                      <Box key={l.label} sx={{
-                        display: 'flex', alignItems: 'center', gap: 0.5,
-                        px: 1, py: 0.25, borderRadius: '20px',
-                        bgcolor: `${l.color}12`, border: `1px solid ${l.color}30`,
-                      }}>
-                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: l.color }} />
-                        <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: l.color, letterSpacing: '0.04em' }}>{l.label}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-                <ResponsiveContainer width="100%" height={140}>
-                  <AreaChart data={timeline} margin={{ top: 6, right: 4, left: -28, bottom: 0 }}>
-                    <defs>
-                      {[
-                        { id: 'gt',  color: BRAND.purple, o1: 0.28, o2: 0.02 },
-                        { id: 'gc',  color: '#EF4444',    o1: 0.50, o2: 0.03 },
-                        { id: 'gh',  color: BRAND.orange, o1: 0.40, o2: 0.03 },
-                        { id: 'gm',  color: '#EAB308',    o1: 0.30, o2: 0.02 },
-                      ].map(g => (
-                        <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor={g.color} stopOpacity={g.o1} />
-                          <stop offset="100%" stopColor={g.color} stopOpacity={g.o2} />
-                        </linearGradient>
-                      ))}
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.06)" vertical={false} />
-                    <XAxis dataKey="timestamp" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
-                      tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return t } }}
-                      interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} tickFormatter={fmtNum} width={36} />
-                    <RechartTip
-                      contentStyle={{ ...ChartTip, borderRadius: 10, padding: '8px 12px' }}
-                      formatter={(v: any, n?: any) => [fmtNum(Number(v)), n || '']}
-                      labelFormatter={l => { try { return format(new Date(l), 'dd MMM HH:mm') } catch { return l } }}
-                    />
-                    <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={2.5} fill="url(#gt)" dot={false} name="รวม" />
-                    <Area type="monotone" dataKey="severity_breakdown.critical" stroke="#EF4444" strokeWidth={1.5} fill="url(#gc)" dot={false} name="วิกฤต" />
-                    <Area type="monotone" dataKey="severity_breakdown.high" stroke={BRAND.orange} strokeWidth={1.5} fill="url(#gh)" dot={false} name="สูง" />
-                    <Area type="monotone" dataKey="severity_breakdown.medium" stroke="#EAB308" strokeWidth={1} fill="url(#gm)" dot={false} name="กลาง" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Groups PieChart - 2.5 cols */}
-        {groupChartData.length > 0 && (
-          <Grid item xs={12} sm={6} md={timeline.length > 1 ? 2.5 : 5}>
-            <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
-              <CardContent sx={{ p: '12px 16px !important' }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', mb: 1 }}>
-                  Alert Groups
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ResponsiveContainer width={90} height={90}>
-                    <PieChart>
-                      <Pie data={groupChartData} dataKey="count" nameKey="name" cx="50%" cy="50%"
-                        innerRadius={22} outerRadius={40} paddingAngle={2} startAngle={90} endAngle={-270}>
-                        {groupChartData.map((entry, idx) => (
-                          <Cell key={idx} fill={entry.color} stroke="none" />
-                        ))}
-                      </Pie>
-                      <RechartTip contentStyle={ChartTip} formatter={(v: any) => [fmtNum(Number(v)), '']} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {groupChartData.map(d => (
-                      <Box key={d.name} sx={{
-                        display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.35,
-                        cursor: 'pointer', borderRadius: '4px', px: 0.5, py: 0.2,
-                        transition: 'all 0.15s',
-                        '&:hover': { bgcolor: `${d.color}15` },
-                      }}
-                        onClick={() => onGroupClick(d.name.toLowerCase().replace(' ', '_'))}
-                      >
-                        <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: d.color, flexShrink: 0 }} />
-                        <Typography sx={{ fontSize: 9.5, color: 'text.secondary', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {d.name}
-                        </Typography>
-                        <Typography sx={{ fontSize: 9, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', flexShrink: 0 }}>
-                          {fmtNum(d.count)}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {/* Top Rules - 2.5 cols */}
-        {ruleChartData.length > 0 && (
-          <Grid item xs={12} sm={6} md={timeline.length > 1 ? 2.5 : 7}>
-            <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
-              <CardContent sx={{ p: '12px 16px !important' }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.secondary', mb: 1 }}>
-                  Top Rules
-                </Typography>
-                {ruleChartData.map((r, i) => (
-                  <Box key={r.id} sx={{ mb: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 0.3 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', color: BRAND.purpleLight, flexShrink: 0 }}>
-                          #{r.id}
-                        </Typography>
-                        <Typography sx={{ fontSize: 9.5, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {r.desc}
-                        </Typography>
-                      </Box>
-                      <Typography sx={{ fontSize: 9, color: 'text.disabled', fontFamily: '"IBM Plex Mono"', ml: 0.5, flexShrink: 0 }}>
-                        {fmtNum(r.count)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ height: 4, borderRadius: 2, bgcolor: 'action.hover', overflow: 'hidden' }}>
-                      <Box sx={{
-                        height: '100%', borderRadius: 2,
-                        width: `${r.pct}%`,
-                        background: `linear-gradient(90deg, ${BRAND.purple} 0%, ${BRAND.purpleLight} 100%)`,
-                        opacity: 0.7 + i * 0.04,
-                        transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
-                      }} />
-                    </Box>
-                  </Box>
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-      </Grid>
+      {/* ── Actionable Insight Panel: 3 equal columns CSS grid ── */}
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+        gap: '14px',
+        width: '100%',
+      }}>
+        <ThreatDistributionPanel stats={stats} onSourceClick={onSourceClick} />
+        <TopRulesPanel stats={stats} onRuleClick={onRuleClick} />
+        <AttackSurfacePanel
+          stats={stats}
+          onSrcIpClick={onSrcIpClick}
+          onCountryClick={onCountryClick}
+          onAgentClick={onAgentClick}
+          navigate={navigate}
+        />
+      </Box>
     </Box>
   )
 }
@@ -1694,13 +1876,14 @@ export default function AlertsPage() {
   const qc = useQueryClient()
 
   // Filter state
-  const [level,            setLevel]            = useState<number>(1)
+  const [level,            setLevel]            = useState<number>(12)  // Default: High+
   const [source,           setSource]           = useState<string>('')
   const [timeRange,        setTimeRange]        = useState<string>('24h')
   const [search,           setSearch]           = useState<string>('')
   const [searchInput,      setSearchInput]      = useState<string>('')
   const [agentFilter,      setAgentFilter]      = useState<string>('')
   const [mitreFilter,      setMitreFilter]      = useState<string>('')
+  const [countryFilter,    setCountryFilter]    = useState<string>('')
   const [showFilters,      setShowFilters]      = useState<boolean>(false)
 
   // Advanced Filters
@@ -1722,50 +1905,28 @@ export default function AlertsPage() {
   const [refreshInterval,  setRefreshInterval]  = useState<number>(30000) // 30s default
   const [lastTotal,        setLastTotal]        = useState<number | null>(null)
 
-  // Composed Lucene search query for server-side search composition
-  const composedSearchQuery = useMemo(() => {
-    const parts: string[] = []
-    if (search.trim()) {
-      parts.push(search.trim())
-    }
-    if (groupFilter.trim()) {
-      parts.push(`rule.groups:"${groupFilter.trim()}"`)
-    }
-    if (ruleIdFilter.trim()) {
-      parts.push(`rule.id:"${ruleIdFilter.trim()}"`)
-    }
-    if (srcIpFilter.trim()) {
-      parts.push(`data.srcip:"${srcIpFilter.trim()}"`)
-    }
-    if (dstIpFilter.trim()) {
-      parts.push(`data.dstip:"${dstIpFilter.trim()}"`)
-    }
-    if (decoderFilter.trim()) {
-      parts.push(`decoder.name:"${decoderFilter.trim()}"`)
-    }
-    if (complianceFilter && complianceFilter !== 'all') {
-      if (complianceFilter === 'pci_dss') {
-        parts.push(`_exists_:rule.pci_dss`)
-      } else if (complianceFilter === 'gdpr') {
-        parts.push(`_exists_:rule.gdpr`)
-      } else if (complianceFilter === 'hipaa') {
-        parts.push(`_exists_:rule.hipaa`)
-      } else if (complianceFilter === 'nist_800_53') {
-        parts.push(`_exists_:rule.nist_800_53`)
-      } else if (complianceFilter === 'cis') {
-        parts.push(`_exists_:rule.tsc`)
-      }
-    }
-    return parts.length > 0 ? parts.join(' AND ') : undefined
-  }, [search, ruleIdFilter, srcIpFilter, dstIpFilter, decoderFilter, complianceFilter])
+  // Free-text search query only (other filters sent as explicit params)
+  const searchQuery = useMemo(() => search.trim() || undefined, [search])
 
-  // Alerts query
+  // Alerts query — all filters as explicit safe params
   const { data: rawAlerts = [], isLoading, isError, refetch, dataUpdatedAt } = useQuery<any[]>({
-    queryKey: ['alerts', level, source, timeRange, composedSearchQuery, agentFilter, mitreFilter, groupFilter],
+    queryKey: ['alerts', level, source, timeRange, searchQuery, agentFilter, mitreFilter,
+               groupFilter, ruleIdFilter, srcIpFilter, dstIpFilter, decoderFilter, countryFilter, complianceFilter],
     queryFn: () => alertsApi.list({
-      level, source: source || undefined, time_range: timeRange,
-      q: composedSearchQuery || undefined, agent: agentFilter || undefined,
-      mitre_tactic: mitreFilter || undefined, limit: 500,
+      level,
+      source: source || undefined,
+      time_range: timeRange,
+      q: searchQuery,
+      agent: agentFilter || undefined,
+      mitre_tactic: mitreFilter || undefined,
+      group: groupFilter || undefined,
+      rule_id: ruleIdFilter || undefined,
+      srcip: srcIpFilter || undefined,
+      dstip: dstIpFilter || undefined,
+      decoder: decoderFilter || undefined,
+      country: countryFilter || undefined,
+      compliance: complianceFilter !== 'all' ? complianceFilter : undefined,
+      limit: 500,
     }).then(r => r.data),
     refetchInterval: refreshInterval > 0 ? refreshInterval : false,
     staleTime: 15000,
@@ -1798,12 +1959,14 @@ export default function AlertsPage() {
     groupFilter && { label: `Group: ${groupFilter}`, clear: () => setGroupFilter('') },
     agentFilter && { label: `Agent: ${agentFilter}`, clear: () => setAgentFilter('') },
     mitreFilter && { label: `MITRE: ${mitreFilter}`, clear: () => setMitreFilter('') },
+    countryFilter && { label: `Country: ${countryFilter}`, clear: () => setCountryFilter('') },
     search && { label: `ค้นหา: "${search}"`, clear: () => { setSearch(''); setSearchInput('') } },
     ruleIdFilter && { label: `Rule ID: ${ruleIdFilter}`, clear: () => setRuleIdFilter('') },
     srcIpFilter && { label: `Src IP: ${srcIpFilter}`, clear: () => setSrcIpFilter('') },
     dstIpFilter && { label: `Dst IP: ${dstIpFilter}`, clear: () => setDstIpFilter('') },
     decoderFilter && { label: `Decoder: ${decoderFilter}`, clear: () => setDecoderFilter('') },
     complianceFilter && complianceFilter !== 'all' && { label: `Compliance: ${complianceFilter}`, clear: () => setComplianceFilter('all') },
+    level !== 12 && { label: `Level: ${level}+`, clear: () => setLevel(12) },
   ].filter(Boolean) as { label: string; clear: () => void }[]
 
   const handleClearAll = () => {
@@ -1813,7 +1976,8 @@ export default function AlertsPage() {
     setSearchInput('')
     setAgentFilter('')
     setMitreFilter('')
-    setLevel(1)
+    setCountryFilter('')
+    setLevel(12)   // Reset to High+ default, not all levels
     setRuleIdFilter('')
     setSrcIpFilter('')
     setDstIpFilter('')
@@ -1823,7 +1987,22 @@ export default function AlertsPage() {
 
   const handleExport = async (fmt: 'csv' | 'json') => {
     try {
-      const r = await alertsApi.export({ level, source: source||undefined, time_range: timeRange, q: composedSearchQuery||undefined, fmt })
+      const r = await alertsApi.export({
+        level,
+        source: source || undefined,
+        time_range: timeRange,
+        q: searchQuery,
+        agent: agentFilter || undefined,
+        mitre_tactic: mitreFilter || undefined,
+        group: groupFilter || undefined,
+        rule_id: ruleIdFilter || undefined,
+        srcip: srcIpFilter || undefined,
+        dstip: dstIpFilter || undefined,
+        decoder: decoderFilter || undefined,
+        country: countryFilter || undefined,
+        compliance: complianceFilter !== 'all' ? complianceFilter : undefined,
+        fmt,
+      })
       const url  = URL.createObjectURL(new Blob([r.data]))
       const link = document.createElement('a')
       link.href = url
@@ -1841,53 +2020,50 @@ export default function AlertsPage() {
 
   return (
     <PageShell variant="console">
-      {/* ── Header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2 }}>การแจ้งเตือนภัยคุกคาม</Typography>
-
-            {/* Connection status */}
-            <Box sx={{
-              display: 'flex', alignItems: 'center', gap: 0.6,
-              px: 1.25, py: 0.4, borderRadius: '20px',
-              bgcolor: `${connectionStatus.color}12`,
-              border: `1.5px solid ${connectionStatus.color}30`,
-            }}>
-              <Box sx={{
-                width: 7, height: 7, borderRadius: '50%', bgcolor: connectionStatus.color,
-                animation: connectionStatus.label !== 'Error' ? 'pulseGlow 2s ease-in-out infinite' : 'none',
-              }} />
-              <Typography sx={{ fontSize: 10.5, fontWeight: 800, color: connectionStatus.color, letterSpacing: '0.06em' }}>
+      {/* ── Header ── compact professional single-row ── */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, gap: 1, flexWrap: 'wrap' }}>
+        {/* Left: title + badges */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.3, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 900, lineHeight: 1.15, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+              การแจ้งเตือนภัยคุกคาม
+            </Typography>
+            {/* High+ badge */}
+            <Box sx={{ px: 0.9, py: 0.2, borderRadius: '6px', bgcolor: `${BRAND.orange}15`, border: `1px solid ${BRAND.orange}40` }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: BRAND.orange, letterSpacing: '0.05em', lineHeight: 1 }}>HIGH+</Typography>
+            </Box>
+            {/* Status */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 0.9, py: 0.25, borderRadius: '6px', bgcolor: `${connectionStatus.color}12`, border: `1px solid ${connectionStatus.color}30` }}>
+              <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: connectionStatus.color, animation: connectionStatus.label !== 'Error' ? 'pulseGlow 2s ease-in-out infinite' : 'none' }} />
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: connectionStatus.color, letterSpacing: '0.06em', lineHeight: 1 }}>
                 {connectionStatus.label.toUpperCase()}
               </Typography>
             </Box>
-
             {newCount > 0 && (
-              <Chip
-                label={`+${newCount} ใหม่`}
-                size="small"
-                color="error"
-                onClick={() => { setNewCount(0); refetch() }}
-                sx={{ height: 22, fontSize: 11, fontWeight: 800, animation: 'pulse-critical 2s ease-in-out infinite', cursor: 'pointer' }}
-              />
+              <Box onClick={() => { setNewCount(0); refetch() }} sx={{ display: 'flex', alignItems: 'center', gap: 0.4, px: 0.9, py: 0.25, borderRadius: '6px', bgcolor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', cursor: 'pointer', animation: 'pulse-critical 2s ease-in-out infinite' }}>
+                <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: '#EF4444' }} />
+                <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: '#EF4444', lineHeight: 1 }}>+{newCount} ใหม่</Typography>
+              </Box>
             )}
           </Box>
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.35 }}>
-            Threat Alerts · {alerts.length.toLocaleString()} รายการ · ช่วงเวลา {timeRange}
+          <Typography sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500, lineHeight: 1 }}>
+            Threat Alerts · High+ · {timeRange} · {alerts.length >= 500 ? '500 latest' : `${alerts.length.toLocaleString()} records`}
+            {level !== 1 && (
+              <Box component="span" onClick={() => setLevel(1)} sx={{ ml: 1, color: BRAND.purple, fontWeight: 700, cursor: 'pointer', fontSize: 10.5, '&:hover': { textDecoration: 'underline' } }}>
+                ดูทุกระดับ →
+              </Box>
+            )}
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Auto-refresh selector */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.4, borderRadius: '9px', bgcolor: 'rgba(123,91,164,0.06)', border: '1px solid rgba(123,91,164,0.12)' }}>
-            <FiberManualRecordIcon sx={{ fontSize: 8, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled', animation: refreshInterval > 0 ? 'pulseGlow 2s ease-in-out infinite' : 'none' }} />
-            <Typography sx={{ fontSize: 10, fontWeight: 700, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled' }}>
-              {refreshInterval > 0 ? 'AUTO' : 'MANUAL'}
-            </Typography>
+        {/* Right: action controls */}
+        <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center', flexShrink: 0 }}>
+          {/* Auto-refresh pill */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, px: 0.9, py: 0.35, borderRadius: '8px', bgcolor: 'rgba(123,91,164,0.06)', border: '1px solid rgba(123,91,164,0.14)' }}>
+            <FiberManualRecordIcon sx={{ fontSize: 7, color: refreshInterval > 0 ? '#22C55E' : 'text.disabled' }} />
             <FormControl size="small">
               <Select value={refreshInterval} onChange={e => setRefreshInterval(Number(e.target.value))}
-                sx={{ height: 20, fontSize: 9, color: 'text.secondary', bgcolor: 'transparent', '& .MuiOutlinedInput-notchedOutline': { border: 'none' }, padding: 0 }}>
+                sx={{ height: 22, fontSize: 9.5, color: 'text.secondary', bgcolor: 'transparent', '& .MuiOutlinedInput-notchedOutline': { border: 'none' }, '& .MuiSelect-select': { py: 0, pr: '22px !important' } }}>
                 <MenuItem value={0} sx={{ fontSize: 11 }}>Off</MenuItem>
                 <MenuItem value={15000} sx={{ fontSize: 11 }}>15s</MenuItem>
                 <MenuItem value={30000} sx={{ fontSize: 11 }}>30s</MenuItem>
@@ -1895,14 +2071,15 @@ export default function AlertsPage() {
               </Select>
             </FormControl>
           </Box>
-
-          <Button size="small" startIcon={<RefreshRoundedIcon sx={{ fontSize: 15 }} />}
-            onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ['alert-stats'] }); setNewCount(0) }}
-            variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }} aria-label="รีเฟรชข้อมูล">
-            รีเฟรช
-          </Button>
-          <Button size="small" startIcon={<DownloadRoundedIcon sx={{ fontSize: 15 }} />}
-            onClick={() => handleExport('csv')} variant="outlined" sx={{ borderRadius: '9px', fontSize: 11 }} aria-label="ดาวน์โหลด CSV">
+          <Tooltip title="รีเฟรชข้อมูล">
+            <IconButton size="small" onClick={() => { refetch(); qc.invalidateQueries({ queryKey: ['alert-stats'] }); setNewCount(0) }}
+              sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider', p: 0.75, '&:hover': { borderColor: BRAND.purple, color: BRAND.purple } }}>
+              <RefreshRoundedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          <Button size="small" startIcon={<DownloadRoundedIcon sx={{ fontSize: 13 }} />}
+            onClick={() => handleExport('csv')} variant="outlined"
+            sx={{ borderRadius: '8px', fontSize: 11, py: 0.6, px: 1.25, minWidth: 0, '& .MuiButton-startIcon': { mr: 0.4 } }}>
             CSV
           </Button>
         </Box>
@@ -1913,52 +2090,82 @@ export default function AlertsPage() {
         stats={stats}
         loading={loadingStats}
         activeLevel={level}
-        onLevelClick={lv => setLevel(prev => prev === lv ? 1 : lv)}
+        onLevelClick={lv => setLevel(prev => prev === lv ? 12 : lv)}
         onGroupClick={g => setGroupFilter(prev => prev === g ? '' : g)}
+        onRuleClick={id => { setRuleIdFilter(prev => prev === id ? '' : id); setShowFilters(true) }}
+        onSrcIpClick={ip => { setSrcIpFilter(prev => prev === ip ? '' : ip); setShowFilters(true) }}
+        onSourceClick={label => {
+          const key = SOURCE_LABEL_TO_KEY[label] || label.toLowerCase().replace(/\s+/g, '_')
+          setSource(prev => prev === key ? '' : key)
+        }}
+        onCountryClick={c => { setCountryFilter(prev => prev === c ? '' : c); setShowFilters(true) }}
+        onAgentClick={a => { setAgentFilter(prev => prev === a ? '' : a); setShowFilters(true) }}
+        navigate={navigate}
       />
 
-      {/* ── Group Quick-Filter Chips ── */}
-      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}>
-        <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.disabled', mr: 0.25, letterSpacing: '0.06em' }}>
-          FILTER GROUP:
-        </Typography>
-        {[
-          { key: 'fortigate',    label: 'FortiGate',   color: '#F17422' },
-          { key: 'mikrotik',     label: 'Mikrotik',    color: '#3B82F6' },
-          { key: 'huawei',       label: 'Huawei USG',  color: '#22C55E' },
-          { key: 'infoblox_dns', label: 'Infoblox DNS',color: '#8B5CF6' },
-          { key: 'authentication',label: 'Auth',       color: '#EF4444' },
-          { key: 'compliance',   label: 'Compliance',  color: '#EAB308' },
-          { key: 'suricata',     label: 'Suricata IDS',color: '#EC4899' },
-          { key: 'windows',      label: 'Windows',     color: '#0EA5E9' },
-        ].map(g => {
-          const isActive = groupFilter === g.key
-          return (
-            <Chip
-              key={g.key}
-              label={g.label}
-              size="small"
-              onClick={() => setGroupFilter(prev => prev === g.key ? '' : g.key)}
-              sx={{
-                height: 22, fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
-                color: isActive ? g.color : 'text.secondary',
-                border: `1.5px solid ${isActive ? g.color : 'transparent'}`,
-                bgcolor: isActive ? `${g.color}18` : 'action.hover',
-                transition: 'all 0.18s',
-                '&:hover': { bgcolor: `${g.color}20`, color: g.color, borderColor: `${g.color}60` },
-              }}
-            />
-          )
-        })}
-        {groupFilter && (
-          <Chip label="✕ ล้าง" size="small" onClick={() => setGroupFilter('')}
-            sx={{ height: 22, fontSize: 10, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
-        )}
-      </Box>
+      {/* ── Group Quick-Filter Rail (horizontal scroll, no wrap) ── */}
+      {(() => {
+        const dynamicGroups = (stats?.by_group || [])
+          .filter((g: any) => g.count > 0 && GROUP_META[g.name])
+          .slice(0, 14)
+          .map((g: any) => ({
+            key: g.name,
+            label: GROUP_META[g.name]?.label || g.name.replace(/_/g, ' '),
+            color: GROUP_META[g.name]?.color || '#6B7280',
+            count: g.count,
+          }))
+        if (!dynamicGroups.length) return null
+        return (
+          <Box sx={{ mb: 1, mt: 1.5 }}>
+            <Box sx={{
+              display: 'flex', gap: 0.75, alignItems: 'center',
+              overflowX: 'auto', whiteSpace: 'nowrap',
+              pb: 0.5,
+              '&::-webkit-scrollbar': { height: 3 },
+              '&::-webkit-scrollbar-thumb': { borderRadius: 2, bgcolor: 'rgba(123,91,164,0.2)' },
+            }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: 'text.disabled', letterSpacing: '0.08em', flexShrink: 0, mr: 0.25, textTransform: 'uppercase' }}>
+                GROUP:
+              </Typography>
+              {dynamicGroups.map(g => {
+                const isActive = groupFilter === g.key
+                return (
+                  <Box
+                    key={g.key}
+                    onClick={() => setGroupFilter(prev => prev === g.key ? '' : g.key)}
+                    sx={{
+                      display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                      flexShrink: 0, maxWidth: 150,
+                      px: 1, py: 0.4, borderRadius: '7px', cursor: 'pointer',
+                      border: `1px solid ${isActive ? g.color : 'transparent'}`,
+                      bgcolor: isActive ? `${g.color}18` : 'action.hover',
+                      transition: 'all 0.16s',
+                      '&:hover': { bgcolor: `${g.color}18`, borderColor: `${g.color}55` },
+                    }}
+                  >
+                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: g.color, flexShrink: 0 }} />
+                    <Typography sx={{ fontSize: 10, fontWeight: 700, color: isActive ? g.color : 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                      {g.label}
+                    </Typography>
+                    <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', color: isActive ? g.color : 'text.disabled', fontWeight: 700, flexShrink: 0, lineHeight: 1.2 }}>
+                      {fmtNum(g.count)}
+                    </Typography>
+                  </Box>
+                )
+              })}
+              {groupFilter && (
+                <Box onClick={() => setGroupFilter('')} sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, px: 0.75, py: 0.4, borderRadius: '7px', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', '&:hover': { bgcolor: 'rgba(239,68,68,0.18)' } }}>
+                  <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: '#EF4444', lineHeight: 1 }}>✕ ล้าง</Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        )
+      })()}
 
       {/* ── Filter Bar ── */}
-      <Card sx={{ mb: 2, p: 1.5, border: '1px solid rgba(123,91,164,0.15)' }}>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mb: activeFilters.length ? 1 : 0 }}>
+      <Card sx={{ mb: 1.5, p: 1.25, border: '1px solid rgba(123,91,164,0.14)', boxShadow: 'none' }}>
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mb: activeFilters.length ? 0.75 : 0 }}>
           {/* Search */}
           <TextField size="small" placeholder="ค้นหา IP, Rule, Description..." value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
@@ -1967,16 +2174,16 @@ export default function AlertsPage() {
             sx={{ minWidth: 220, flex: 1 }} />
 
           {/* Level */}
-          <FormControl size="small" sx={{ minWidth: 130 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <Select value={level} onChange={e => setLevel(Number(e.target.value))} displayEmpty sx={{ fontSize: 12 }}>
-              <MenuItem value={1}>ทุกระดับ</MenuItem>
+              <MenuItem value={1} sx={{ fontSize: 12 }}>ทุกระดับ</MenuItem>
               {SEV.map(s => {
-                const th = { critical: 'วิกฤต', high: 'สูง', medium: 'กลาง', low: 'ต่ำ' }[s.key] || s.label
+                const thLabel = ({ critical: 'วิกฤต (15+)', high: 'สูง High+ (12+)', medium: 'กลาง (7+)', low: 'ต่ำ (1+)', info: 'Info' } as Record<string, string>)[s.key] || s.label
                 return (
-                  <MenuItem key={s.key} value={s.min}>
+                  <MenuItem key={s.key} value={s.min} sx={{ fontSize: 12 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                       <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color }} />
-                      {th} ({s.min}+)
+                      {thLabel}
                     </Box>
                   </MenuItem>
                 )
@@ -1984,11 +2191,14 @@ export default function AlertsPage() {
             </Select>
           </FormControl>
 
-          {/* Source */}
-          <FormControl size="small" sx={{ minWidth: 130 }}>
+          {/* Source — dynamic from stats.by_source */}
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <Select value={source} onChange={e => setSource(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
               <MenuItem value="">ทุกแหล่งข้อมูล</MenuItem>
-              {SOURCES.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+              {(stats?.by_source || []).map((s: any) => {
+                const key = SOURCE_LABEL_TO_KEY[s.name] || s.name.toLowerCase().replace(/\s+/g, '_')
+                return <MenuItem key={key} value={key} sx={{ fontSize: 12 }}>{s.name} ({fmtNum(s.count)})</MenuItem>
+              })}
             </Select>
           </FormControl>
 
@@ -2002,26 +2212,27 @@ export default function AlertsPage() {
           {/* More filters toggle */}
           <Tooltip title="ตัวกรองเพิ่มเติม">
             <IconButton size="small" onClick={() => setShowFilters(o => !o)}
-              sx={{ bgcolor: showFilters ? 'rgba(123,91,164,0.15)' : 'transparent', color: showFilters ? BRAND.purpleLight : 'text.secondary' }}>
-              <Badge badgeContent={[agentFilter, mitreFilter].filter(Boolean).length} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 9 } }}>
-                <FilterListRoundedIcon sx={{ fontSize: 18 }} />
+              sx={{ borderRadius: '8px', border: '1px solid', borderColor: showFilters ? BRAND.purple : 'divider', bgcolor: showFilters ? `${BRAND.purple}12` : 'transparent', color: showFilters ? BRAND.purpleLight : 'text.secondary', p: 0.75 }}>
+              <Badge badgeContent={[agentFilter, mitreFilter, countryFilter, decoderFilter, ruleIdFilter, srcIpFilter, dstIpFilter, complianceFilter !== 'all' ? 1 : null].filter(Boolean).length} color="primary" sx={{ '& .MuiBadge-badge': { fontSize: 8, minWidth: 14, height: 14 } }}>
+                <FilterListRoundedIcon sx={{ fontSize: 16 }} />
               </Badge>
             </IconButton>
           </Tooltip>
 
-          <Button size="small" variant="contained" onClick={commitSearch} sx={{ borderRadius: '9px', fontSize: 12, py: 0.8, px: 2, minWidth: 80 }}>
+          <Button size="small" variant="contained" onClick={commitSearch}
+            sx={{ borderRadius: '8px', fontSize: 11.5, py: 0.65, px: 1.75, minWidth: 72, bgcolor: BRAND.purple, '&:hover': { bgcolor: BRAND.purpleDark } }}>
             ค้นหา
           </Button>
         </Box>
 
         {/* Extra filters */}
         <Collapse in={showFilters}>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.75, pt: 0.75, borderTop: '1px solid', borderColor: 'divider' }}>
             {/* Agent filter */}
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select value={agentFilter} onChange={e => setAgentFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก Agent</MenuItem>
-                {(stats?.by_agent || []).map((a: any) => <MenuItem key={a.name} value={a.name}>{a.name} ({a.count.toLocaleString()})</MenuItem>)}
+                {(stats?.by_agent || []).map((a: any) => <MenuItem key={a.name} value={a.name} sx={{ fontSize: 12 }}>{a.name} ({fmtNum(a.count)})</MenuItem>)}
               </Select>
             </FormControl>
 
@@ -2029,7 +2240,23 @@ export default function AlertsPage() {
             <FormControl size="small" sx={{ minWidth: 170 }}>
               <Select value={mitreFilter} onChange={e => setMitreFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
                 <MenuItem value="">ทุก MITRE Tactic</MenuItem>
-                {(stats?.by_mitre || []).map((m: any) => <MenuItem key={m.name} value={m.name}>{m.name} ({m.count.toLocaleString()})</MenuItem>)}
+                {(stats?.by_mitre || []).map((m: any) => <MenuItem key={m.name} value={m.name} sx={{ fontSize: 12 }}>{m.name} ({fmtNum(m.count)})</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            {/* Country filter — dynamic from stats.by_country */}
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <Select value={countryFilter} onChange={e => setCountryFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+                <MenuItem value="">ทุกประเทศ</MenuItem>
+                {(stats?.by_country || []).map((c: any) => <MenuItem key={c.name} value={c.name} sx={{ fontSize: 12 }}>{getFlag(c.name)} {c.name} ({fmtNum(c.count)})</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            {/* Decoder filter — dynamic from stats.by_decoder */}
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <Select value={decoderFilter} onChange={e => setDecoderFilter(e.target.value)} displayEmpty sx={{ fontSize: 12 }}>
+                <MenuItem value="">ทุก Decoder</MenuItem>
+                {(stats?.by_decoder || []).map((d: any) => <MenuItem key={d.name} value={d.name} sx={{ fontSize: 12 }}>{d.name} ({fmtNum(d.count)})</MenuItem>)}
               </Select>
             </FormControl>
 
@@ -2048,11 +2275,6 @@ export default function AlertsPage() {
               onChange={e => setDstIpFilter(e.target.value)}
               sx={{ minWidth: 130, maxWidth: 150, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
-            {/* Decoder */}
-            <TextField size="small" placeholder="Decoder / โปรโตคอล" value={decoderFilter}
-              onChange={e => setDecoderFilter(e.target.value)}
-              sx={{ minWidth: 140, maxWidth: 160, '& .MuiInputBase-input': { fontSize: 12 } }} />
-
             {/* Compliance Framework */}
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <Select value={complianceFilter} onChange={e => setComplianceFilter(e.target.value)} sx={{ fontSize: 12 }}>
@@ -2070,8 +2292,10 @@ export default function AlertsPage() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: 10, color: 'text.disabled', mr: 0.5 }}>IP โจมตีสูงสุด:</Typography>
                 {(stats?.by_srcip || []).slice(0, 5).map((ip: any) => (
-                  <Chip key={ip.name} label={ip.name} size="small" onClick={() => setSearchInput(ip.name)}
-                    sx={{ height: 18, fontSize: 9, fontFamily: '"IBM Plex Mono"', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                  <Chip key={ip.name} label={ip.name} size="small" onClick={() => setSrcIpFilter(prev => prev === ip.name ? '' : ip.name)}
+                    sx={{ height: 18, fontSize: 9, fontFamily: '"IBM Plex Mono"', cursor: 'pointer',
+                      bgcolor: srcIpFilter === ip.name ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)',
+                      color: '#EF4444', border: `1px solid ${srcIpFilter === ip.name ? '#EF4444' : 'transparent'}`,
                       '&:hover': { bgcolor: 'rgba(239,68,68,0.2)' } }} />
                 ))}
               </Box>
@@ -2081,36 +2305,57 @@ export default function AlertsPage() {
 
         {/* Active filter chips */}
         {activeFilters.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography sx={{ fontSize: 10, color: 'text.disabled', alignSelf: 'center' }}>กรองด้วย:</Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.75, pt: 0.75, borderTop: '1px solid', borderColor: 'divider', alignItems: 'center' }}>
+            <Typography sx={{ fontSize: 9.5, color: 'text.disabled', fontWeight: 700, flexShrink: 0 }}>กรองด้วย:</Typography>
             {activeFilters.map((f, i) => (
               <Chip key={i} label={f.label} size="small" onDelete={f.clear}
-                sx={{ height: 20, fontSize: 10, bgcolor: 'rgba(123,91,164,0.12)', color: BRAND.purpleLight, '& .MuiChip-deleteIcon': { fontSize: 14, color: BRAND.purpleLight } }} />
+                sx={{ height: 18, fontSize: 9.5, bgcolor: `${BRAND.purple}12`, color: BRAND.purpleLight, maxWidth: 160, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }, '& .MuiChip-deleteIcon': { fontSize: 12, color: BRAND.purpleLight } }} />
             ))}
             <Chip label="ล้างทั้งหมด" size="small" onClick={handleClearAll}
-              sx={{ height: 20, fontSize: 10, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
+              sx={{ height: 18, fontSize: 9.5, cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', color: '#EF4444' }} />
           </Box>
         )}
       </Card>
 
-      {/* ── Quick source chips ── */}
+      {/* ── Source chips — horizontal scroll rail ── */}
       {stats && !loadingStats && (stats.by_source || []).length > 0 && (
-        <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: 'text.disabled', mr: 0.25, letterSpacing: '0.06em' }}>
-            แหล่งข้อมูล:
+        <Box sx={{
+          display: 'flex', gap: 0.6, alignItems: 'center', mb: 1,
+          overflowX: 'auto', whiteSpace: 'nowrap',
+          '&::-webkit-scrollbar': { height: 3 },
+          '&::-webkit-scrollbar-thumb': { borderRadius: 2, bgcolor: 'rgba(123,91,164,0.2)' },
+        }}>
+          <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: 'text.disabled', letterSpacing: '0.08em', flexShrink: 0, textTransform: 'uppercase' }}>
+            Source:
           </Typography>
-          {(stats.by_source || []).slice(0, 6).map((s: any) => (
-            <Chip key={s.name} label={`${s.name}  ${s.count.toLocaleString()}`} size="small"
-              onClick={() => setSource(prev => prev === s.name ? '' : s.name)}
-              sx={{
-                height: 22, fontSize: 10, cursor: 'pointer',
-                bgcolor: source === s.name ? 'rgba(123,91,164,0.2)' : 'rgba(123,91,164,0.07)',
-                color: source === s.name ? BRAND.purpleLight : 'text.secondary',
-                border: `1px solid ${source === s.name ? BRAND.purple : 'transparent'}`,
-                fontFamily: source === s.name ? 'inherit' : '"IBM Plex Mono"',
-                '&:hover': { bgcolor: 'rgba(123,91,164,0.15)', color: BRAND.purpleLight },
-              }} />
-          ))}
+          {(stats.by_source || []).slice(0, 8).map((s: any) => {
+            const key = SOURCE_LABEL_TO_KEY[s.name] || s.name.toLowerCase().replace(/\s+/g, '_')
+            const sc  = SOURCE_COLOR_MAP[s.name] || BRAND.purple
+            const isActive = source === key
+            return (
+              <Box key={s.name} onClick={() => setSource(prev => prev === key ? '' : key)} sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.4, flexShrink: 0,
+                px: 0.9, py: 0.35, borderRadius: '7px', cursor: 'pointer',
+                bgcolor: isActive ? `${sc}20` : `${sc}0A`,
+                border: `1px solid ${isActive ? sc : 'transparent'}`,
+                transition: 'all 0.16s',
+                '&:hover': { bgcolor: `${sc}18`, borderColor: `${sc}50` },
+              }}>
+                <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: sc, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: isActive ? sc : 'text.secondary', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>
+                  {s.name}
+                </Typography>
+                <Typography sx={{ fontSize: 9, fontFamily: '"IBM Plex Mono"', color: isActive ? sc : 'text.disabled', fontWeight: 700, lineHeight: 1.2, flexShrink: 0 }}>
+                  {fmtNum(s.count)}
+                </Typography>
+              </Box>
+            )
+          })}
+          {source && (
+            <Box onClick={() => setSource('')} sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, px: 0.75, py: 0.35, borderRadius: '7px', cursor: 'pointer', bgcolor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', '&:hover': { bgcolor: 'rgba(239,68,68,0.18)' } }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, color: '#EF4444', lineHeight: 1 }}>✕</Typography>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -2166,16 +2411,36 @@ export default function AlertsPage() {
             <TableBody>
               {!isLoading && alerts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} sx={{ textAlign: 'center', py: 10, border: 'none' }}>
-                    <Box sx={{ opacity: 0.4 }}>
-                      <NotificationsActiveRoundedIcon sx={{ fontSize: 48, color: BRAND.purple, display: 'block', mx: 'auto', mb: 1.5 }} />
+                  <TableCell colSpan={7} sx={{ textAlign: 'center', py: 8, border: 'none' }}>
+                    <Box sx={{ mb: 1.5 }}>
+                      <NotificationsActiveRoundedIcon sx={{ fontSize: 52, color: BRAND.purple, opacity: 0.25, display: 'block', mx: 'auto' }} />
                     </Box>
-                    <Typography sx={{ fontSize: 14, fontWeight: 600, color: 'text.disabled' }}>
-                      ไม่พบรายการแจ้งเตือน
+                    <Typography sx={{ fontSize: 15, fontWeight: 700, color: 'text.secondary', mb: 0.5 }}>
+                      {level >= 12 ? 'ไม่พบ High+ alerts ในช่วงเวลานี้' : 'ไม่พบรายการแจ้งเตือน'}
                     </Typography>
-                    <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.5 }}>
-                      ลองเปลี่ยนเงื่อนไขการค้นหาหรือช่วงเวลา
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled', mb: 2 }}>
+                      {activeFilters.length > 0 ? 'ลองล้างตัวกรองและค้นหาใหม่' : 'ลองขยายช่วงเวลาหรือลดระดับความรุนแรง'}
                     </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      {level !== 1 && (
+                        <Button size="small" variant="outlined" onClick={() => setLevel(1)}
+                          sx={{ borderRadius: '10px', fontSize: 12, borderColor: BRAND.purple, color: BRAND.purple }}>
+                          แสดงทุกระดับ
+                        </Button>
+                      )}
+                      {timeRange !== '7d' && (
+                        <Button size="small" variant="outlined" onClick={() => setTimeRange('7d')}
+                          sx={{ borderRadius: '10px', fontSize: 12 }}>
+                          ขยายเป็น 7 วัน
+                        </Button>
+                      )}
+                      {activeFilters.length > 0 && (
+                        <Button size="small" variant="outlined" color="error" onClick={handleClearAll}
+                          sx={{ borderRadius: '10px', fontSize: 12 }}>
+                          ล้างตัวกรองทั้งหมด
+                        </Button>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ) : (

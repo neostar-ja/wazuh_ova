@@ -58,7 +58,8 @@ export const dashboardApi = {
 export const alertsApi = {
   list:   (params: Record<string, any> = {}): Promise<AxiosResponse<any>> => api.get<any>('/alerts', { params }),
   recent: (limit = 20, level = 7): Promise<AxiosResponse<any>> => api.get<any>('/alerts/recent', { params: { limit, level } }),
-  stats:  (timeRange = '24h', level = 1): Promise<AxiosResponse<AlertStats>> => api.get<AlertStats>('/alerts/stats', { params: { time_range: timeRange, level } }),
+  stats:  (timeRange = '24h', level = 12): Promise<AxiosResponse<AlertStats>> => api.get<AlertStats>('/alerts/stats', { params: { time_range: timeRange, level } }),
+  facets: (timeRange = '24h', level = 12): Promise<AxiosResponse<any>> => api.get<any>('/alerts/facets', { params: { time_range: timeRange, level } }),
   export: (params: Record<string, any> = {}): Promise<AxiosResponse<Blob>> => api.get<Blob>('/alerts/export', { params, responseType: 'blob' }),
 }
 

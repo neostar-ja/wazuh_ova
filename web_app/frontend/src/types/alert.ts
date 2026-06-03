@@ -85,6 +85,21 @@ export interface AlertStats {
   by_mitre?: { name: string; count: number }[];
   by_srcip?: { name: string; count: number }[];
   by_source?: { name: string; count: number }[];
+  by_group?: { name: string; count: number }[];
+  by_rule?: { name: string; count: number }[];
+  by_country?: { name: string; count: number }[];
+  by_decoder?: { name: string; count: number }[];
+}
+
+export interface AlertFacets {
+  sources: { key: string; label: string; count: number }[];
+  groups: { name: string; count: number }[];
+  agents: { name: string; count: number }[];
+  countries: { name: string; count: number }[];
+  decoders: { name: string; count: number }[];
+  mitre: { name: string; count: number }[];
+  srcips: { name: string; count: number }[];
+  rules: { name: string; count: number }[];
 }
 
 export interface WazuhAlertItem {

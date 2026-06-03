@@ -215,14 +215,22 @@ async def threat_stats(
         for r in raw_rules
     ]
 
+    # Enrich IP buckets with country info (from nested aggregation)
+    raw_ips = aggs.get("by_srcip", {}).get("buckets", [])
+    by_srcip = []
+    for b in raw_ips:
+        country_buckets = b.get("top_country", {}).get("buckets", [])
+        country = country_buckets[0]["key"] if country_buckets else ""
+        by_srcip.append({"name": b["key"], "count": b["doc_count"], "country": country})
+
     return {
         "total":      total,
         "critical":   aggs.get("critical_count", {}).get("doc_count", 0),
         "high":       aggs.get("high_count", {}).get("doc_count", 0),
         "timeline":   timeline,
         "by_rule":    by_rule,
-        "by_srcip":   _buckets(aggs, "by_srcip",   10),
-        "by_country": _buckets(aggs, "by_country",  10),
+        "by_srcip":   by_srcip,
+        "by_country": _buckets(aggs, "by_country",  15),
         "by_mitre":   _buckets(aggs, "by_mitre",    10),
         "by_agent":   _buckets(aggs, "by_agent",     8),
         "by_source":  _source_buckets(aggs, "by_source"),

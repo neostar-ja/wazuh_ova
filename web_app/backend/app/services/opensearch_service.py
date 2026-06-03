@@ -26,6 +26,14 @@ async def get_alerts(
     rule_id=None,
     country=None,
     mitre_tactic=None,
+    group=None,
+    srcip=None,
+    dstip=None,
+    decoder=None,
+    program=None,
+    compliance=None,
+    has_srcip=None,
+    has_mitre=None,
 ):
     client = get_client()
     must = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
@@ -65,6 +73,28 @@ async def get_alerts(
         must.append({"term": {"GeoLocation.country_name.keyword": country}})
     if mitre_tactic:
         must.append({"term": {"rule.mitre.tactic.keyword": mitre_tactic}})
+    # Explicit safe filters (no query_string injection)
+    if group:
+        must.append({"term": {"rule.groups": group}})
+    if srcip:
+        must.append({"term": {"data.srcip.keyword": srcip}})
+    if dstip:
+        must.append({"term": {"data.dstip.keyword": dstip}})
+    if decoder:
+        must.append({"term": {"decoder.name.keyword": decoder}})
+    if program:
+        must.append({"term": {"predecoder.program_name.keyword": program}})
+    if compliance:
+        _COMPLIANCE_FIELD = {
+            "pci_dss": "rule.pci_dss", "gdpr": "rule.gdpr",
+            "hipaa": "rule.hipaa", "nist_800_53": "rule.nist_800_53", "cis": "rule.tsc",
+        }
+        if compliance in _COMPLIANCE_FIELD:
+            must.append({"exists": {"field": _COMPLIANCE_FIELD[compliance]}})
+    if has_srcip:
+        must.append({"exists": {"field": "data.srcip"}})
+    if has_mitre:
+        must.append({"exists": {"field": "rule.mitre.tactic"}})
     body = {
         "size": size,
         "sort": [{"@timestamp": {"order": "desc"}}],
@@ -95,6 +125,7 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
         must.append({"range": {"rule.level": {"gte": level_min}}})
     body = {
         "size": 0,
+        "track_total_hits": True,
         "query": {"bool": {"must": must}},
         "aggs": {
             "by_level": {
@@ -130,23 +161,24 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
             },
             "by_source": {
                 "filters": {"filters": {
-                    "FortiGate WUH": {"term": {"rule.groups": "fortigate_wuh"}},
-                    "Huawei AC WiFi": {"term": {"rule.groups": "huawei_ac"}},
-                    "MikroTik Router": {"term": {"rule.groups": "mikrotik"}},
-                    "Infoblox DHCP": {"term": {"rule.groups": "infoblox_dhcp"}},
-                    "Infoblox DNS": {"term": {"rule.groups": "infoblox_dns"}},
-                    "Suricata IDS": {"term": {"rule.groups": "ids"}},
-                    "Linux/SSH": {"term": {"predecoder.program_name": "sshd"}},
-                    "Linux/System": {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
+                    "MikroTik Router":  {"term": {"rule.groups": "mikrotik"}},
+                    "FortiGate WUH":    {"term": {"rule.groups": "fortigate_wuh"}},
+                    "Huawei USG/FW":    {"term": {"rule.groups": "huawei_usg"}},
+                    "Huawei AC WiFi":   {"term": {"rule.groups": "huawei_ac"}},
+                    "Infoblox DNS":     {"term": {"rule.groups": "infoblox_dns"}},
+                    "Infoblox DHCP":    {"term": {"rule.groups": "infoblox_dhcp"}},
+                    "Suricata IDS":     {"term": {"rule.groups": "ids"}},
+                    "Linux/SSH":        {"term": {"predecoder.program_name": "sshd"}},
+                    "Linux/System":     {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
                 }}
             },
             "by_rule":    {"terms": {"field": "rule.id", "size": 15}},
-            "by_agent":   {"terms": {"field": "agent.name.keyword", "size": 10}},
-            "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
-            "by_mitre":   {"terms": {"field": "rule.mitre.tactic.keyword", "size": 10}},
-            "by_srcip":   {"terms": {"field": "data.srcip.keyword", "size": 10}},
+            "by_agent":   {"terms": {"field": "agent.name", "size": 10}},
+            "by_country": {"terms": {"field": "GeoLocation.country_name", "size": 10}},
+            "by_mitre":   {"terms": {"field": "rule.mitre.tactic", "size": 10}},
+            "by_srcip":   {"terms": {"field": "data.srcip", "size": 10}},
             "by_group":   {"terms": {"field": "rule.groups", "size": 15}},
-            "by_decoder": {"terms": {"field": "rule.id", "size": 10}},
+            "by_decoder": {"terms": {"field": "decoder.name.keyword", "size": 10}},
         },
     }
     try:
@@ -189,8 +221,13 @@ async def get_threat_aggs(time_range: str = "24h"):
                 },
             },
             "by_rule":    {"terms": {"field": "rule.id",                       "size": 10}},
-            "by_srcip":   {"terms": {"field": "data.srcip",                    "size": 10}},
-            "by_country": {"terms": {"field": "GeoLocation.country_name",      "size": 10}},
+            "by_srcip":   {
+                "terms": {"field": "data.srcip", "size": 10},
+                "aggs": {
+                    "top_country": {"terms": {"field": "GeoLocation.country_name", "size": 1}},
+                }
+            },
+            "by_country": {"terms": {"field": "GeoLocation.country_name",      "size": 15}},
             "by_mitre":   {"terms": {"field": "rule.mitre.tactic",             "size": 10}},
             "by_agent":   {"terms": {"field": "agent.name",                    "size": 8}},
             "by_source":  {
@@ -241,17 +278,18 @@ async def get_alert_stats(time_range="24h"):
             },
             "by_source": {
                 "filters": {"filters": {
-                    "FortiGate WUH": {"term": {"rule.groups": "fortigate_wuh"}},
-                    "Huawei AC WiFi": {"term": {"rule.groups": "huawei_ac"}},
-                    "MikroTik Router": {"term": {"rule.groups": "mikrotik"}},
-                    "Infoblox DHCP": {"term": {"rule.groups": "infoblox_dhcp"}},
-                    "Infoblox DNS": {"term": {"rule.groups": "infoblox_dns"}},
-                    "Suricata IDS": {"term": {"rule.groups": "ids"}},
-                    "Linux/SSH": {"term": {"predecoder.program_name": "sshd"}},
-                    "Linux/System": {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
+                    "MikroTik Router":  {"term": {"rule.groups": "mikrotik"}},
+                    "FortiGate WUH":    {"term": {"rule.groups": "fortigate_wuh"}},
+                    "Huawei USG/FW":    {"term": {"rule.groups": "huawei_usg"}},
+                    "Huawei AC WiFi":   {"term": {"rule.groups": "huawei_ac"}},
+                    "Infoblox DNS":     {"term": {"rule.groups": "infoblox_dns"}},
+                    "Infoblox DHCP":    {"term": {"rule.groups": "infoblox_dhcp"}},
+                    "Suricata IDS":     {"term": {"rule.groups": "ids"}},
+                    "Linux/SSH":        {"term": {"predecoder.program_name": "sshd"}},
+                    "Linux/System":     {"terms": {"predecoder.program_name": ["systemd", "sudo", "kernel"]}},
                 }}
             },
-            "by_country": {"terms": {"field": "GeoLocation.country_name.keyword", "size": 10}},
+            "by_country": {"terms": {"field": "GeoLocation.country_name", "size": 10}},
             "timeline": {
                 "date_histogram": {
                     "field": "@timestamp",

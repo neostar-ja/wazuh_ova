@@ -47,6 +47,14 @@ async def get_alerts(
     rule_id:      Optional[str] = None,
     country:      Optional[str] = None,
     mitre_tactic: Optional[str] = None,
+    group:        Optional[str] = None,
+    srcip:        Optional[str] = None,
+    dstip:        Optional[str] = None,
+    decoder:      Optional[str] = None,
+    program:      Optional[str] = None,
+    compliance:   Optional[str] = None,
+    has_srcip:    Optional[bool] = None,
+    has_mitre:    Optional[bool] = None,
     limit:        int = Query(200, ge=1, le=1000),
     time_range:   str = Query("24h"),
     q:            Optional[str] = None,
@@ -64,6 +72,14 @@ async def get_alerts(
         rule_id=rule_id or None,
         country=country or None,
         mitre_tactic=mitre_tactic or None,
+        group=group or None,
+        srcip=srcip or None,
+        dstip=dstip or None,
+        decoder=decoder or None,
+        program=program or None,
+        compliance=compliance or None,
+        has_srcip=has_srcip,
+        has_mitre=has_mitre,
     )
     return alerts
 
@@ -147,6 +163,61 @@ async def alert_stats(
     }
 
 
+# ── Facets ─────────────────────────────────────────────────────────────────────
+
+@router.get("/facets")
+async def alert_facets(
+    time_range: str = Query("24h"),
+    level:      int = Query(12),
+    current_user=Depends(get_current_user),
+):
+    """Filter facets: sources (with filter keys), groups, agents, countries, decoders, mitre, srcips."""
+    raw = await opensearch_service.get_alert_aggs(time_range=time_range, level_min=level)
+    if not raw:
+        return {"sources": [], "groups": [], "agents": [], "countries": [], "decoders": [], "mitre": [], "srcips": [], "rules": []}
+
+    aggs = raw.get("aggregations", {})
+
+    _SOURCE_LABEL_TO_KEY = {
+        "MikroTik Router":  "mikrotik",
+        "FortiGate WUH":    "fortigate",
+        "Huawei USG/FW":    "huawei_ac",
+        "Huawei AC WiFi":   "huawei_ac",
+        "Infoblox DNS":     "infoblox_dns",
+        "Infoblox DHCP":    "infoblox_dhcp",
+        "Suricata IDS":     "suricata",
+        "Linux/SSH":        "sshd",
+        "Linux/System":     "systemd",
+    }
+    raw_sources = aggs.get("by_source", {}).get("buckets", {})
+    sources = []
+    for label, bucket in (raw_sources.items() if isinstance(raw_sources, dict) else []):
+        count = bucket.get("doc_count", 0)
+        if count > 0:
+            sources.append({
+                "label": label,
+                "key": _SOURCE_LABEL_TO_KEY.get(label, label.lower().replace(" ", "_")),
+                "count": count,
+            })
+    sources.sort(key=lambda x: x["count"], reverse=True)
+
+    def _buckets(key, n=15):
+        return [{"name": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(key, {}).get("buckets", [])[:n]
+                if b["doc_count"] > 0]
+
+    return {
+        "sources":   sources,
+        "groups":    _buckets("by_group", 15),
+        "agents":    _buckets("by_agent"),
+        "countries": _buckets("by_country"),
+        "decoders":  _buckets("by_decoder"),
+        "mitre":     _buckets("by_mitre"),
+        "srcips":    _buckets("by_srcip"),
+        "rules":     _buckets("by_rule", 15),
+    }
+
+
 # ── Export ─────────────────────────────────────────────────────────────────────
 
 @router.get("/export")
@@ -157,11 +228,22 @@ async def export_alerts(
     time_range: str = Query("24h"),
     q:          Optional[str] = None,
     limit:      int = Query(2000, le=5000),
+    group:      Optional[str] = None,
+    srcip:      Optional[str] = None,
+    dstip:      Optional[str] = None,
+    decoder:    Optional[str] = None,
+    country:    Optional[str] = None,
+    compliance: Optional[str] = None,
+    agent:      Optional[str] = None,
+    mitre_tactic: Optional[str] = None,
     current_user=Depends(get_current_user),
 ):
     sources = [source] if source else None
     alerts = await opensearch_service.get_alerts(
         size=limit, level_min=level, sources=sources, time_range=time_range, query_str=q,
+        group=group or None, srcip=srcip or None, dstip=dstip or None,
+        decoder=decoder or None, country=country or None, compliance=compliance or None,
+        agent_name=agent or None, mitre_tactic=mitre_tactic or None,
     )
 
     if fmt == "json":
