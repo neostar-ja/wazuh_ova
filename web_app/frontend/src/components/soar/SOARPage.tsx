@@ -20,6 +20,7 @@ import OverviewTab from './tabs/OverviewTab'
 import IRISTab    from './tabs/IRISTab'
 import ShuffleTab from './tabs/ShuffleTab'
 import MISPTab    from './tabs/MISPTab'
+import IntegrationHealthPanel from './IntegrationHealthPanel'
 
 // ── Status Pill ────────────────────────────────────────────────────────────────
 
@@ -73,8 +74,8 @@ export default function SOARPage() {
 
   return (
     <PageShell
-      title="SOAR & ตอบสนองต่อเหตุการณ์"
-      subtitle="Shuffle SOAR · DFIR-IRIS · MISP Threat Intelligence"
+      title="SOC Incident Response Workbench"
+      subtitle="Shuffle SOAR · DFIR-IRIS · MISP · Wazuh · Investigate V2"
       breadcrumbs={[{ label: 'ศูนย์ปฏิบัติการ' }, { label: 'SOAR & IR' }]}
       status={iris.connected && shuffle.connected ? 'live' : 'offline'}
       statusLabel={iris.connected && shuffle.connected ? 'CONNECTED' : 'PARTIAL'}
@@ -85,6 +86,11 @@ export default function SOARPage() {
         </Box>
       }
     >
+      {/* Integration Health Panel */}
+      <Box className="mb-4">
+        <IntegrationHealthPanel />
+      </Box>
+
       {/* Metric cards */}
       <Box className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <MetricCard

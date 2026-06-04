@@ -5,11 +5,13 @@ import {
   Chip, Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { useNavigate } from 'react-router-dom'
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
 import EscalatorWarningRoundedIcon from '@mui/icons-material/EscalatorWarningRounded'
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded'
 import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
+import OpenInFullRoundedIcon from '@mui/icons-material/OpenInFullRounded'
 import { IrisCase } from '../../../services/soarApi'
 import { hexRgb, fmtTime } from '../soarUtils'
 import { BRAND, SEV_COLOR } from '../../ui/tokens'
@@ -28,6 +30,7 @@ export default function CasesTable({ cases, loading, irisUrl }: Props) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
   const { enqueueSnackbar } = useSnackbar()
+  const navigate = useNavigate()
 
   const textMuted = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(60,40,100,0.45)'
   const textSec   = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,40,100,0.7)'
@@ -161,9 +164,15 @@ export default function CasesTable({ cases, loading, irisUrl }: Props) {
 
                       <TableCell sx={{ py: 0.75, px: 1.5 }}>
                         <Box className="flex items-center gap-0.5">
-                          <Tooltip title="จัดการเคส (บันทึก/IOC/Timeline)">
-                            <IconButton size="small" onClick={() => setSelectedCase(c)}
+                          <Tooltip title="เปิดหน้า Full Workspace">
+                            <IconButton size="small" onClick={() => navigate(`/soar/cases/${c.case_id}`)}
                               sx={{ color: '#6366F1', '&:hover': { background: 'rgba(99,102,241,0.12)' } }}>
+                              <OpenInFullRoundedIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Quick Drawer (บันทึก/IOC/Timeline)">
+                            <IconButton size="small" onClick={() => setSelectedCase(c)}
+                              sx={{ color: BRAND.purple, '&:hover': { background: `rgba(${hexRgb(BRAND.purple)},0.12)` } }}>
                               <ManageSearchRoundedIcon sx={{ fontSize: 14 }} />
                             </IconButton>
                           </Tooltip>
@@ -178,7 +187,7 @@ export default function CasesTable({ cases, loading, irisUrl }: Props) {
                             <Tooltip title="เปิดใน DFIR-IRIS">
                               <IconButton size="small" component="a"
                                 href={`${irisUrl}/case?cid=${c.case_id}`} target="_blank" rel="noopener"
-                                sx={{ color: BRAND.purple, '&:hover': { background: `rgba(${hexRgb(BRAND.purple)},0.12)` } }}>
+                                sx={{ color: '#64748B', '&:hover': { background: 'rgba(100,116,139,0.12)' } }}>
                                 <OpenInNewRoundedIcon sx={{ fontSize: 14 }} />
                               </IconButton>
                             </Tooltip>

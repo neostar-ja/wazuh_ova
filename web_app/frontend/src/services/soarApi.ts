@@ -101,6 +101,82 @@ export interface MispAttribute {
   Event?: { info: string; threat_level_id: string }
 }
 
+// ── Local extension types ──────────────────────────────────────────────────────
+
+export interface CaseTask {
+  id: number
+  iris_case_id: number
+  title: string
+  description?: string
+  status: 'todo' | 'in_progress' | 'done' | 'blocked'
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  assignee?: string
+  tags?: string
+  template_id?: string
+  created_by?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CaseEvidence {
+  id: number
+  iris_case_id: number
+  title: string
+  description?: string
+  source: string
+  ev_type: string
+  sha256?: string
+  content_preview?: string
+  raw_json?: string
+  linked_task_id?: number
+  created_by?: string
+  created_at?: string
+}
+
+export interface CaseActivityEntry {
+  id: number
+  iris_case_id: number
+  action: string
+  detail?: string
+  username?: string
+  created_at?: string
+}
+
+export interface ShuffleAction {
+  id: number
+  iris_case_id?: number
+  action_type: string
+  payload_summary?: string
+  execution_id?: string
+  response_mode: string
+  response_ok: boolean
+  response_detail?: string
+  created_by?: string
+  created_at?: string
+}
+
+export interface PlaybookTemplate {
+  id: string
+  name: string
+  description: string
+  category: string
+  tasks: { title: string; priority: string; status: string }[]
+}
+
+export interface IntegrationHealth {
+  id: string
+  name: string
+  category: string
+  icon: string
+  configured: boolean
+  connected: boolean
+  status: 'connected' | 'not_configured' | 'error' | 'degraded' | 'simulation_only'
+  label: string
+  simulation_only?: boolean
+  note?: string
+  detail?: Record<string, unknown>
+}
+
 // ── IOC type options (IRIS standard) ──────────────────────────────────────────
 export const IOC_TYPES = [
   { id: 76, name: 'ip-dst' },
@@ -219,4 +295,31 @@ export const soarApi = {
 
   searchMisp: (q: string, type?: string) =>
     api.get('/soar/misp/search', { params: { q, ...(type ? { type } : {}) } }),
+
+  // Health & Integrations
+  getHealth: () => api.get('/soar/health'),
+  getIntegrations: () => api.get('/soar/integrations'),
+
+  // Tasks (local)
+  getCaseTasks: (caseId: number) => api.get(`/soar/cases/${caseId}/tasks`),
+  createCaseTask: (caseId: number, data: Partial<CaseTask>) => api.post(`/soar/cases/${caseId}/tasks`, data),
+  updateCaseTask: (caseId: number, taskId: number, data: Partial<CaseTask>) => api.put(`/soar/cases/${caseId}/tasks/${taskId}`, data),
+  deleteCaseTask: (caseId: number, taskId: number) => api.delete(`/soar/cases/${caseId}/tasks/${taskId}`),
+
+  // Evidence (local)
+  getCaseEvidence: (caseId: number) => api.get(`/soar/cases/${caseId}/evidence`),
+  createCaseEvidence: (caseId: number, data: Partial<CaseEvidence>) => api.post(`/soar/cases/${caseId}/evidence`, data),
+  deleteCaseEvidence: (caseId: number, evId: number) => api.delete(`/soar/cases/${caseId}/evidence/${evId}`),
+
+  // Activity Log (local)
+  getCaseActivity: (caseId: number) => api.get(`/soar/cases/${caseId}/activity`),
+
+  // Shuffle Action History (local)
+  getShuffleActions: (caseId: number) => api.get(`/soar/cases/${caseId}/shuffle-actions`),
+  recordShuffleAction: (caseId: number, data: Partial<ShuffleAction>) => api.post(`/soar/cases/${caseId}/shuffle-actions`, data),
+
+  // Playbook Templates
+  getPlaybookTemplates: () => api.get('/soar/playbook-templates'),
+  applyTemplate: (caseId: number, templateId: string) =>
+    api.post(`/soar/cases/${caseId}/apply-template`, null, { params: { template_id: templateId } }),
 }

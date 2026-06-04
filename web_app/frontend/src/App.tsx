@@ -11,6 +11,7 @@ import AssetsPage from './components/assets/AssetsPage'
 import KPIPage from './components/kpi/KPIPage'
 import AdminPage from './components/admin/AdminPage'
 import SOARPage from './components/soar/SOARPage'
+import CaseWorkspacePage from './components/soar/CaseWorkspacePage'
 import { useAuth } from './hooks/useAuth'
 import { UserRole } from './types/auth'
 
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="assets" element={<AssetsPage />} />
           <Route path="kpi" element={<KPIPage />} />
           <Route path="soar" element={<SOARPage />} />
+          <Route path="soar/cases/:caseId" element={<CaseWorkspacePage />} />
           <Route
             path="admin/*"
             element={

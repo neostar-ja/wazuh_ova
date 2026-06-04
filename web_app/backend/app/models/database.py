@@ -88,6 +88,64 @@ class AlertConfig(Base):
     updated_by = Column(String(50), nullable=True)
 
 
+class CaseTask(Base):
+    __tablename__ = "case_tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    iris_case_id = Column(Integer, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(20), default="todo")        # todo/in_progress/done/blocked
+    priority = Column(String(20), default="medium")    # low/medium/high/critical
+    assignee = Column(String(100), nullable=True)
+    tags = Column(String(500), nullable=True)
+    template_id = Column(String(100), nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CaseEvidence(Base):
+    __tablename__ = "case_evidence"
+    id = Column(Integer, primary_key=True, index=True)
+    iris_case_id = Column(Integer, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    source = Column(String(50), default="manual")  # wazuh/opensearch/investigate/ioc/misp/shuffle/manual
+    ev_type = Column(String(30), default="text")   # json/text/screenshot/file_metadata/report
+    sha256 = Column(String(64), nullable=True)
+    content_preview = Column(Text, nullable=True)
+    raw_json = Column(Text, nullable=True)
+    linked_task_id = Column(Integer, nullable=True)
+    linked_timeline_id = Column(Integer, nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CaseActivityLog(Base):
+    __tablename__ = "case_activity_log"
+    id = Column(Integer, primary_key=True, index=True)
+    iris_case_id = Column(Integer, nullable=False, index=True)
+    action = Column(String(100), nullable=False)
+    detail = Column(Text, nullable=True)
+    user_id = Column(Integer, nullable=True)
+    username = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ShuffleActionHistory(Base):
+    __tablename__ = "shuffle_action_history"
+    id = Column(Integer, primary_key=True, index=True)
+    iris_case_id = Column(Integer, nullable=True, index=True)
+    action_type = Column(String(50), nullable=False)  # block/escalate/triage/notify
+    payload_summary = Column(Text, nullable=True)
+    execution_id = Column(String(200), nullable=True)
+    response_mode = Column(String(20), default="simulation")  # simulation/live
+    response_ok = Column(Boolean, default=True)
+    response_detail = Column(Text, nullable=True)
+    created_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class IOCEnrichmentCache(Base):
     __tablename__ = "ioc_enrichment_cache"
     id = Column(Integer, primary_key=True, index=True)
