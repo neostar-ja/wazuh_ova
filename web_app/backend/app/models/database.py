@@ -88,6 +88,22 @@ class AlertConfig(Base):
     updated_by = Column(String(50), nullable=True)
 
 
+class IOCEnrichmentCache(Base):
+    __tablename__ = "ioc_enrichment_cache"
+    id = Column(Integer, primary_key=True, index=True)
+    ioc_value = Column(String(500), unique=True, nullable=False, index=True)
+    ioc_type = Column(String(20), nullable=False)  # ip|domain|hash|url
+    abuseipdb_score = Column(Integer, nullable=True)
+    otx_pulse_count = Column(Integer, nullable=True)
+    virustotal_detections = Column(Integer, nullable=True)
+    misp_matched = Column(Boolean, default=False)
+    shodan_ports = Column(Text, nullable=True)  # JSON list
+    raw_data = Column(Text, nullable=True)       # JSON blob
+    source_statuses = Column(Text, nullable=True)  # JSON: {source: 'ok'|'error'|'not_configured'}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
     id = Column(Integer, primary_key=True, index=True)

@@ -76,6 +76,7 @@ export interface TimelineEvent {
   description: string
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
   category: string
+  source?: TimelineEventSource
   ruleId?: string
   agentName?: string
   sourceIp?: string
@@ -83,6 +84,16 @@ export interface TimelineEvent {
   mitre?: string[]
   raw?: unknown
 }
+
+export type TimelineEventSource =
+  | 'wazuh'
+  | 'dns'
+  | 'dhcp'
+  | 'nac'
+  | 'firewall'
+  | 'iris'
+  | 'shuffle'
+  | 'ioc'
 
 export interface ThreatIntelResult {
   source: string
@@ -177,4 +188,261 @@ export interface InvestigationResult {
   complianceSummary?: InvestigationComplianceSummary
   relatedEntities?: RelatedEntity[]
   raw?: unknown
+}
+
+// ─── Network Identity Schema ────────────────────────────────────────────────
+
+export interface NetworkIdentity {
+  'dns.question.name'?: string
+  'dns.response_code'?: string
+  'dhcp.lease_ip'?: string
+  'client.ip'?: string
+  'client.mac'?: string
+  'client.hostname'?: string
+  'user.name'?: string
+  'network.vlan.id'?: string
+  'network.device.name'?: string
+  'network.interface.name'?: string
+  'event.dataset'?: string
+  'observer.vendor'?: string
+  'observer.product'?: string
+}
+
+// ─── Data Source Health ─────────────────────────────────────────────────────
+
+export type SourceStatusType = 'online' | 'configured' | 'not_configured' | 'no_data' | 'error'
+
+export interface DataSource {
+  id: string
+  name: string
+  vendor: string
+  icon: string
+  configured: boolean
+  status: SourceStatusType
+  label: string
+  event_count_24h?: number
+  event_count_7d?: number
+}
+
+export interface SourcesHealthResult {
+  sources: DataSource[]
+  total: number
+  configured: number
+  not_configured: number
+  checked_at: string
+}
+
+export interface SourceCoverageItem {
+  has_data: boolean
+  count: number
+  label: string
+  first_seen?: string
+  last_seen?: string
+}
+
+export interface SourceCoverageResult {
+  query: string
+  type: string
+  range: string
+  coverage: {
+    wazuh: SourceCoverageItem
+    infoblox_dns: SourceCoverageItem
+    infoblox_dhcp: SourceCoverageItem
+    huawei_nac: SourceCoverageItem
+  }
+}
+
+// ─── DNS Events ─────────────────────────────────────────────────────────────
+
+export interface DNSEvent {
+  timestamp: string
+  query_name?: string
+  query_type?: string
+  response_code?: string
+  client_ip?: string
+  action?: string
+  policy?: string
+  reason?: string
+  category?: string
+  rule_level?: number
+  full_log?: string
+}
+
+export interface DNSResult {
+  query: string
+  range: string
+  count: number
+  events: unknown[]
+  top_query_names: { name: string; count: number }[]
+  response_codes: { code: string; count: number }[]
+  rpz_blocks: {
+    timestamp: string
+    query_name?: string
+    action: string
+    policy?: string
+    reason?: string
+    rule_level?: number
+  }[]
+  categories: { name: string; count: number }[]
+  has_malicious: boolean
+}
+
+// ─── DHCP Events ─────────────────────────────────────────────────────────────
+
+export interface DHCPLease {
+  timestamp: string
+  action?: string
+  ip?: string
+  mac?: string
+  hostname?: string
+  lease_time?: string
+  server?: string
+  rule_level?: number
+}
+
+export interface DHCPResult {
+  query: string
+  range: string
+  count: number
+  leases: DHCPLease[]
+  actions: { action: string; count: number }[]
+  ip_history: { ip: string; count: number }[]
+  mac_history: { mac: string; count: number }[]
+  hostname_history: { hostname: string; count: number }[]
+}
+
+// ─── NAC / Huawei Events ─────────────────────────────────────────────────────
+
+export interface NACSession {
+  timestamp: string
+  action?: string
+  auth_result?: string
+  auth_type?: string
+  ip?: string
+  mac?: string
+  user?: string
+  vlan?: string
+  switch?: string
+  ap?: string
+  interface?: string
+  policy?: string
+  posture?: string
+  rule_level?: number
+}
+
+export interface NACResult {
+  query: string
+  range: string
+  count: number
+  sessions: NACSession[]
+  auth_results: { result: string; count: number }[]
+  actions: { action: string; count: number }[]
+  vlans: { vlan: string; count: number }[]
+  switches: { switch: string; count: number }[]
+  policies: { policy: string; count: number }[]
+  posture_results: { result: string; count: number }[]
+  auth_types: { type: string; count: number }[]
+  quarantine_events: {
+    timestamp: string
+    action: string
+    ip?: string
+    mac?: string
+    user?: string
+    policy?: string
+    reason?: string
+    rule_level?: number
+  }[]
+  has_posture_fail: boolean
+}
+
+// ─── Risk Scoring ─────────────────────────────────────────────────────────────
+
+export interface RiskFactor {
+  key: string
+  label: string
+  description: string
+  score: number
+  max: number
+  color: string
+}
+
+export interface RiskScoreResult {
+  query: string
+  entity_type: string
+  score: number
+  raw_score: number
+  max_raw: number
+  level: 'critical' | 'high' | 'medium' | 'low'
+  factors: RiskFactor[]
+  computed_at: string
+}
+
+// ─── Entity Graph ─────────────────────────────────────────────────────────────
+
+export type EntityNodeType =
+  | 'entity'  // central node
+  | 'ip'
+  | 'mac'
+  | 'user'
+  | 'agent'
+  | 'vlan'
+  | 'switch'
+  | 'domain'
+  | 'ioc'
+  | 'alert'
+  | 'case'
+
+export interface EntityNode {
+  id: string
+  type: EntityNodeType
+  label: string
+  count?: number
+  severity?: string
+  isCenter?: boolean
+}
+
+export interface EntityEdge {
+  source: string
+  target: string
+  label?: string
+  count?: number
+}
+
+export interface EntityGraph {
+  nodes: EntityNode[]
+  edges: EntityEdge[]
+}
+
+// ─── SOAR Actions ─────────────────────────────────────────────────────────────
+
+export type SOARActionType =
+  | 'create_iris_case'
+  | 'attach_evidence'
+  | 'add_ioc'
+  | 'run_playbook'
+  | 'escalate'
+  | 'block_ip'
+
+export interface SOARAction {
+  type: SOARActionType
+  label: string
+  description: string
+  icon: string
+  requires?: string[]
+  available: boolean
+}
+
+// ─── Enrichment Cache ─────────────────────────────────────────────────────────
+
+export interface EnrichmentCacheEntry {
+  ioc_value: string
+  ioc_type: string
+  abuseipdb_score?: number
+  otx_pulse_count?: number
+  virustotal_detections?: number
+  misp_matched: boolean
+  source_statuses: Record<string, 'ok' | 'error' | 'not_configured'>
+  cached: boolean
+  cached_at: string
+  expires_at: string
 }

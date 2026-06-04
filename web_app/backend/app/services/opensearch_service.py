@@ -1034,3 +1034,190 @@ async def get_compliance_stats(framework: str, time_range: str = "7d"):
         return client.search(index=settings.opensearch_index, body=body)
     except Exception:
         return {}
+
+
+# ─── Infoblox DNS / DHCP / Huawei NAC query helpers ─────────────────────────
+
+_DNS_SOURCE = [
+    "@timestamp", "rule.id", "rule.description", "rule.level",
+    "data.src_ip", "data.client_ip", "data.query_name", "data.query_type",
+    "data.response_code", "data.view_name", "data.category",
+    "data.action", "data.policy", "data.reason",
+    "predecoder.program_name", "decoder.name", "agent.name", "full_log",
+]
+
+_DHCP_SOURCE = [
+    "@timestamp", "rule.id", "rule.description", "rule.level",
+    "data.dhcp_action", "data.dhcp_ip", "data.dhcp_mac", "data.dhcp_hostname",
+    "data.dhcp_lease_time", "data.dhcp_server", "data.relay_ip",
+    "data.src_ip", "data.vendor_class",
+    "predecoder.program_name", "decoder.name", "agent.name", "full_log",
+]
+
+_NAC_SOURCE = [
+    "@timestamp", "rule.id", "rule.description", "rule.level",
+    "data.srcip", "data.mac", "data.dstuser", "data.srcuser",
+    "data.vlan_id", "data.vlan_name", "data.switch_ip", "data.ap_name",
+    "data.interface", "data.auth_type", "data.auth_result",
+    "data.posture_result", "data.policy_name", "data.action",
+    "data.ac_msg_type", "data.nasip",
+    "predecoder.program_name", "decoder.name", "agent.name", "full_log",
+]
+
+
+def _os_search_safe(client, index: str, body: dict) -> list:
+    try:
+        resp = client.search(index=index, body=body)
+        return [h["_source"] for h in resp["hits"]["hits"]]
+    except Exception:
+        return []
+
+
+def _os_count_safe(client, index: str, body: dict) -> int:
+    try:
+        return int(client.count(index=index, body=body).get("count", 0))
+    except Exception:
+        return 0
+
+
+async def query_dns_events(entity: str, time_range: str = "30d", size: int = 200) -> list:
+    """
+    Query DNS logs from Infoblox/named decoded by Wazuh.
+    Matches on client IP, query name, or any DNS-related program.
+    """
+    client = get_client()
+    should = [
+        {"term": {"data.src_ip.keyword": entity}},
+        {"term": {"data.client_ip.keyword": entity}},
+        {"wildcard": {"data.query_name": f"*{entity}*"}},
+    ]
+    must_program = {
+        "bool": {
+            "should": [
+                {"term": {"predecoder.program_name.keyword": "named"}},
+                {"term": {"predecoder.program_name.keyword": "infoblox-dns"}},
+                {"term": {"predecoder.program_name.keyword": "dnsmasq"}},
+                {"match_phrase": {"rule.groups": "dns"}},
+                {"match_phrase": {"decoder.name": "infoblox"}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+    body = {
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "_source": _DNS_SOURCE,
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    must_program,
+                ],
+                "should": should,
+                "minimum_should_match": 1,
+            }
+        },
+    }
+    return _os_search_safe(client, settings.opensearch_index, body)
+
+
+async def query_dhcp_events(entity: str, time_range: str = "30d", size: int = 200) -> list:
+    """
+    Query DHCP lease logs for a given IP, MAC, or hostname.
+    """
+    client = get_client()
+    should = [
+        {"term": {"data.dhcp_ip.keyword": entity}},
+        {"term": {"data.dhcp_mac.keyword": entity}},
+        {"term": {"data.dhcp_hostname.keyword": entity}},
+        {"term": {"data.src_ip.keyword": entity}},
+    ]
+    body = {
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "_source": _DHCP_SOURCE,
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    {"exists": {"field": "data.dhcp_action"}},
+                ],
+                "should": should,
+                "minimum_should_match": 1,
+            }
+        },
+    }
+    return _os_search_safe(client, settings.opensearch_index, body)
+
+
+async def query_nac_events(entity: str, time_range: str = "30d", size: int = 200) -> list:
+    """
+    Query Huawei Agile Controller / NAC authentication and authorization logs.
+    """
+    client = get_client()
+    should = [
+        {"term": {"data.srcip.keyword": entity}},
+        {"term": {"data.mac.keyword": entity}},
+        {"term": {"data.dstuser.keyword": entity}},
+        {"term": {"data.srcuser.keyword": entity}},
+    ]
+    must_program = {
+        "bool": {
+            "should": [
+                {"term": {"predecoder.program_name.keyword": "huawei-nac"}},
+                {"term": {"predecoder.program_name.keyword": "huawei-ac"}},
+                {"term": {"predecoder.program_name.keyword": "agile-controller"}},
+                {"match_phrase": {"rule.groups": "huawei"}},
+                {"exists": {"field": "data.ac_msg_type"}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+    body = {
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "_source": _NAC_SOURCE,
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    must_program,
+                ],
+                "should": should,
+                "minimum_should_match": 1,
+            }
+        },
+    }
+    return _os_search_safe(client, settings.opensearch_index, body)
+
+
+async def count_source_events(source_type: str, time_range: str = "30d") -> int:
+    """Count total events for a given source type in the last time_range."""
+    client = get_client()
+    filter_map = {
+        "infoblox_dns": {"bool": {"should": [
+            {"term": {"predecoder.program_name.keyword": "named"}},
+            {"term": {"predecoder.program_name.keyword": "infoblox-dns"}},
+            {"match_phrase": {"rule.groups": "dns"}},
+        ], "minimum_should_match": 1}},
+        "infoblox_dhcp": {"exists": {"field": "data.dhcp_action"}},
+        "huawei_nac":  {"bool": {"should": [
+            {"term": {"predecoder.program_name.keyword": "huawei-nac"}},
+            {"term": {"predecoder.program_name.keyword": "huawei-ac"}},
+            {"exists": {"field": "data.ac_msg_type"}},
+        ], "minimum_should_match": 1}},
+    }
+    query_filter = filter_map.get(source_type)
+    if not query_filter:
+        return 0
+    body = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+                    query_filter,
+                ]
+            }
+        }
+    }
+    return _os_count_safe(client, settings.opensearch_index, body)

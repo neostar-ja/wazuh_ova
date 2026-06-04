@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     misp_url: str = ""
     misp_api_key: str = ""
 
+    # Infoblox DNS/DHCP
+    infoblox_url: str = ""
+    infoblox_user: str = ""
+    infoblox_pass: str = ""
+
+    # Huawei Agile Controller / NAC
+    huawei_nac_url: str = ""
+    huawei_nac_user: str = ""
+    huawei_nac_pass: str = ""
+
     class Config:
         env_file = "/opt/code/wazuh_ova/web_app/.env"
         case_sensitive = False
