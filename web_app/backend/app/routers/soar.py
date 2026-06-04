@@ -79,6 +79,9 @@ class TriggerBody(BaseModel):
     analyst: Optional[str] = None
     reason: Optional[str] = None
     title: Optional[str] = None
+    simulation: Optional[bool] = False   # True = simulation-only, no real action
+    dry_run: Optional[bool] = False      # Alias for simulation
+    source: Optional[str] = None         # Caller identifier for audit trail
 
 
 # ── Stats ──────────────────────────────────────────────────────────────────────
@@ -248,6 +251,26 @@ async def shuffle_workflows(_=Depends(get_current_user)):
 
 @router.post("/shuffle/trigger")
 async def shuffle_trigger(body: TriggerBody, _=Depends(get_current_user)):
+    is_simulation = bool(body.simulation or body.dry_run)
+
+    # Block IP in simulation mode: NEVER call real firewall or Wazuh Active Response
+    if body.type == "block" and is_simulation:
+        import logging
+        logging.getLogger("soar").info(
+            "SIMULATION block_ip: ip=%s source=%s case_id=%s — no real action taken",
+            body.ip, body.source, body.case_id,
+        )
+        return {
+            "ok": True,
+            "mode": "simulation",
+            "action": "block_ip",
+            "ip": body.ip,
+            "case_id": body.case_id,
+            "source": body.source,
+            "message": "Simulation only. No firewall rule or Wazuh Active Response was executed.",
+            "message_th": "จำลองการ Block IP เท่านั้น — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง",
+        }
+
     url_map = {
         "block": settings.shuffle_block_url,
         "escalate": settings.shuffle_esc_url,
@@ -260,6 +283,8 @@ async def shuffle_trigger(body: TriggerBody, _=Depends(get_current_user)):
         "case_id": body.case_id,
         "analyst": body.analyst,
         "reason": body.reason or body.title,
+        "simulation": is_simulation,
+        "source": body.source,
     }
     return await trigger_shuffle_webhook(url, payload)
 

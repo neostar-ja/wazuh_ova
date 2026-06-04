@@ -7,8 +7,10 @@ import BugReportRoundedIcon from '@mui/icons-material/BugReportRounded'
 import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded'
 import SendRoundedIcon from '@mui/icons-material/SendRounded'
 import BlockRoundedIcon from '@mui/icons-material/BlockRounded'
+import ScienceRoundedIcon from '@mui/icons-material/ScienceRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded'
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
 import api from '../../../services/api'
 
 interface Props {
@@ -26,6 +28,7 @@ interface ActionResult {
   status: ActionStatus
   message?: string
   link?: string
+  mode?: string
 }
 
 function hexRgb(hex: string) {
@@ -42,6 +45,7 @@ function ActionCard({
   onAction,
   children,
   color,
+  warningBadge,
 }: {
   icon: React.ReactNode
   title: string
@@ -52,6 +56,7 @@ function ActionCard({
   onAction: () => void
   children?: React.ReactNode
   color: string
+  warningBadge?: React.ReactNode
 }) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
@@ -80,7 +85,7 @@ function ActionCard({
           {icon}
         </Box>
         <Box className="flex-1 min-w-0">
-          <Box className="flex items-center gap-2 mb-1">
+          <Box className="flex items-center flex-wrap gap-2 mb-1">
             <Typography className="font-semibold text-[12px]"
               sx={{ color: available ? (isDark ? '#EDE9FA' : '#1A1033') : textMuted }}>
               {title}
@@ -89,6 +94,7 @@ function ActionCard({
               <Chip label="ยังไม่ได้ตั้งค่า" size="small"
                 sx={{ height: 16, fontSize: 9, bgcolor: 'rgba(100,116,139,0.12)', color: '#64748B', border: 'none' }} />
             )}
+            {warningBadge}
           </Box>
           <Typography sx={{ fontSize: 11, color: textSec, lineHeight: 1.5, mb: children ? 1.5 : 0 }}>
             {description}
@@ -120,6 +126,10 @@ function ActionCard({
               <Box className="flex items-center gap-1">
                 <CheckCircleRoundedIcon sx={{ fontSize: 13, color: '#22C55E' }} />
                 <Typography sx={{ fontSize: 10, color: '#22C55E' }}>{result.message || 'สำเร็จ'}</Typography>
+                {result.mode === 'simulation' && (
+                  <Chip label="SIMULATION" size="small"
+                    sx={{ height: 14, fontSize: 8, fontWeight: 700, bgcolor: 'rgba(234,179,8,0.15)', color: '#EAB308', border: '1px solid rgba(234,179,8,0.3)', ml: 0.5 }} />
+                )}
                 {result.link && (
                   <Typography
                     component="a" href={result.link} target="_blank" rel="noopener"
@@ -231,6 +241,7 @@ export default function ActionsTab({
         type: 'triage',
         ip: entityType === 'ip' ? query : undefined,
         reason: `Investigation: ${query} (${entityType}) — MITRE: ${(mitre?.tactics ?? []).join(', ')}`,
+        source: 'investigate_v2_actions',
       })
       setResult('run_playbook', { status: 'success', message: 'ส่ง playbook trigger แล้ว' })
     } catch {
@@ -245,6 +256,7 @@ export default function ActionsTab({
         type: 'escalate',
         ip: entityType === 'ip' ? query : undefined,
         reason: `Escalation from Investigation Workbench: ${query} (${entityType})`,
+        source: 'investigate_v2_actions',
       })
       setResult('escalate', { status: 'success', message: 'ส่ง escalation แล้ว' })
     } catch {
@@ -252,16 +264,73 @@ export default function ActionsTab({
     }
   }
 
-  const handleBlockIP = async () => {
-    if (!window.confirm(`ยืนยันการ block IP: ${query} ?`)) return
+  // ── Simulate Block IP ────────────────────────────────────────────────────────
+  // SAFETY: always simulation=true + dry_run=true — ห้าม block จริงใน production
+  const handleSimulateBlockIP = async () => {
+    if (!window.confirm(
+      `ยืนยันการจำลอง Block IP: ${query} ?\n\nระบบจะ SIMULATION เท่านั้น — ไม่มีการ block จริง\nไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response`
+    )) return
+
     setResult('block_ip', { status: 'running' })
     try {
-      await api.post('/soar/shuffle/trigger', { type: 'block', ip: query, reason: `Block request from Investigation Workbench` })
-      setResult('block_ip', { status: 'success', message: `ส่ง block request สำหรับ ${query} แล้ว` })
+      const r = await api.post('/soar/shuffle/trigger', {
+        type: 'block',
+        ip: query,
+        reason: 'Simulation block request from Investigation Workbench',
+        simulation: true,
+        dry_run: true,
+        source: 'investigate_v2_actions',
+        case_id: createdCaseId ?? undefined,
+      })
+
+      // Add IRIS audit trail note if a case was already created
+      if (createdCaseId) {
+        try {
+          const now = new Date().toLocaleString('th-TH')
+          await api.post(`/soar/iris/cases/${createdCaseId}/notes`, {
+            title: `[SIMULATION] Block IP requested — ${query}`,
+            content: [
+              `**Simulation Block IP Requested**`,
+              ``,
+              `- **IP:** ${query}`,
+              `- **Mode:** simulation only`,
+              `- **Time:** ${now}`,
+              `- **Source:** Investigation Workbench (ActionsTab)`,
+              ``,
+              `> ไม่มีการสร้าง firewall rule จริง`,
+              `> ไม่มีการรัน Wazuh Active Response จริง`,
+              `> Backend response mode: ${r.data?.mode ?? 'simulation'}`,
+            ].join('\n'),
+            group_title: 'Simulation Actions',
+          })
+        } catch {
+          // audit trail failure is non-blocking
+        }
+      }
+
+      setResult('block_ip', {
+        status: 'success',
+        message: `Simulation completed — ไม่มีการ block จริง`,
+        mode: r.data?.mode ?? 'simulation',
+      })
     } catch {
-      setResult('block_ip', { status: 'error', message: 'ไม่สามารถส่ง block request ได้' })
+      setResult('block_ip', { status: 'error', message: 'ไม่สามารถส่ง simulation request ได้' })
     }
   }
+
+  const SimOnlyBadge = () => (
+    <Chip
+      icon={<ScienceRoundedIcon sx={{ fontSize: 10, color: '#EAB308 !important' }} />}
+      label="SIMULATION ONLY"
+      size="small"
+      sx={{
+        height: 18, fontSize: 9, fontWeight: 700,
+        bgcolor: 'rgba(234,179,8,0.1)',
+        color: '#EAB308',
+        border: '1px solid rgba(234,179,8,0.3)',
+      }}
+    />
+  )
 
   return (
     <Stack spacing={2.5} className="animate-fade-in">
@@ -354,14 +423,25 @@ export default function ActionsTab({
           {entityType === 'ip' && (
             <ActionCard
               icon={<BlockRoundedIcon sx={{ fontSize: 18 }} />}
-              title="Block IP"
-              description={`ส่ง block request สำหรับ ${query} ผ่าน Shuffle → Firewall`}
+              title="Simulate Block IP"
+              description={`จำลองคำขอ Block IP สำหรับ ${query} ผ่าน Shuffle — ไม่มีการ block จริง ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response`}
               available={shuffleConfigured}
-              actionLabel="Block IP"
+              actionLabel="จำลอง Block IP"
               result={getResult('block_ip')}
-              onAction={handleBlockIP}
-              color="#EF4444"
-            />
+              onAction={handleSimulateBlockIP}
+              color="#F97316"
+              warningBadge={<SimOnlyBadge />}
+            >
+              {/* Warning banner inside the card */}
+              <Box className="flex items-start gap-2 px-2.5 py-2 rounded-lg mt-1"
+                sx={{ background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.2)' }}>
+                <WarningAmberRoundedIcon sx={{ fontSize: 13, color: '#EAB308', mt: 0.1, shrink: 0 }} />
+                <Typography sx={{ fontSize: 10, color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(60,40,100,0.65)', lineHeight: 1.5 }}>
+                  ยังไม่ดำเนินการ block จริง — ระบบจะส่ง simulation payload ไปยัง Shuffle
+                  {createdCaseId ? ` และบันทึก audit trail ใน IRIS Case #${createdCaseId}` : ''}
+                </Typography>
+              </Box>
+            </ActionCard>
           )}
         </Stack>
       </Box>
