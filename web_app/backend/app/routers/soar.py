@@ -383,6 +383,38 @@ async def iris_case_detail(case_id: int, _=Depends(get_current_user)):
     return await get_iris_case(case_id)
 
 
+@router.get("/iris/cases/{case_id}/full")
+async def iris_case_full(case_id: int, _=Depends(get_current_user)):
+    """Load case summary + related counts in a single call for the workspace page."""
+    summary, iocs_resp, timeline_resp, notes_resp = await asyncio.gather(
+        get_iris_case(case_id),
+        get_case_iocs(case_id),
+        get_case_timeline(case_id),
+        get_case_note_groups(case_id),
+        return_exceptions=True,
+    )
+    def _safe(r, fallback):
+        return fallback if isinstance(r, Exception) else r
+
+    iocs_data    = _safe(iocs_resp,    {}).get("data", []) or []
+    timeline_data= _safe(timeline_resp,{}).get("data", {})
+    notes_data   = _safe(notes_resp,   {}).get("data", []) or []
+    timeline_events = timeline_data.get("timeline", []) if isinstance(timeline_data, dict) else []
+    note_count = sum(len(g.get("notes") or []) for g in notes_data)
+
+    summary_safe = _safe(summary, {})
+    case_info = summary_safe.get("data", {}) or {}
+
+    return {
+        "case": case_info,
+        "counts": {
+            "iocs": len(iocs_data),
+            "timeline_events": len(timeline_events),
+            "notes": note_count,
+        },
+    }
+
+
 @router.post("/iris/cases")
 async def iris_create_case(body: CreateCaseBody, _=Depends(get_current_user)):
     return await create_iris_case(

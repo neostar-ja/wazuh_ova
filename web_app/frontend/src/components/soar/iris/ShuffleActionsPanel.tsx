@@ -77,6 +77,15 @@ export default function ShuffleActionsPanel({ caseId, caseName, irisConfigured, 
   const [runningAction, setRunningAction] = useState<ActionKey | null>(null)
   const [actionResults, setActionResults] = useState<Record<ActionKey, { ok?: boolean; mode?: string; message?: string }>>({} as Record<ActionKey, { ok?: boolean; mode?: string; message?: string }>)
 
+  // Load real Shuffle workflows
+  const { data: wfData } = useQuery({
+    queryKey: ['shuffle-workflows'],
+    queryFn: () => soarApi.getShuffleWorkflows().then(r => r.data),
+    enabled: shuffleConfigured,
+    staleTime: 5 * 60 * 1000,
+  })
+  const workflows = (Array.isArray(wfData) ? wfData : wfData?.workflows ?? []) as { id: string; name: string; description: string; status: string }[]
+
   const { data: histData, isLoading: histLoading } = useQuery({
     queryKey: ['shuffle-actions', caseId],
     queryFn: () => soarApi.getShuffleActions(caseId).then(r => r.data),
@@ -235,6 +244,44 @@ export default function ShuffleActionsPanel({ caseId, caseName, irisConfigured, 
           )
         })}
       </Stack>
+
+      {/* Live Shuffle Workflows */}
+      {shuffleConfigured && workflows.length > 0 && (
+        <Box>
+          <Typography className="text-[9px] font-bold tracking-widest mb-2" sx={{ color: textMuted }}>
+            SHUFFLE WORKFLOWS ({workflows.length})
+          </Typography>
+          <Box className="rounded-xl overflow-hidden"
+            sx={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(99,102,241,0.1)'}` }}>
+            {workflows.slice(0, 8).map((wf, i) => (
+              <Box key={wf.id}
+                className="flex items-center gap-3 px-3 py-2"
+                sx={{
+                  background: i % 2 === 0 ? (isDark ? 'rgba(255,255,255,0.02)' : 'rgba(248,246,255,0.7)') : 'transparent',
+                  borderBottom: i < workflows.length - 1 ? `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.07)'}` : 'none',
+                }}>
+                <Box className="flex-1 min-w-0">
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: isDark ? '#EDE9FA' : '#1A1033' }}>
+                    {wf.name}
+                  </Typography>
+                  {wf.description && (
+                    <Typography className="truncate" sx={{ fontSize: 9.5, color: textMuted }}>{wf.description}</Typography>
+                  )}
+                </Box>
+                <Box className="flex items-center gap-1.5 shrink-0">
+                  <Box className="px-2 py-0.5 rounded text-[9px] font-semibold"
+                    sx={{
+                      background: wf.status === 'running' ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.1)',
+                      color: wf.status === 'running' ? '#22C55E' : '#64748B',
+                    }}>
+                    {wf.status ?? 'idle'}
+                  </Box>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
 
       {/* Action history */}
       {history.length > 0 && (

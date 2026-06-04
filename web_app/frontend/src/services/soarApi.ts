@@ -300,6 +300,9 @@ export const soarApi = {
   getHealth: () => api.get('/soar/health'),
   getIntegrations: () => api.get('/soar/integrations'),
 
+  // Case full detail (single-call summary+counts)
+  getIrisCaseFull: (caseId: number) => api.get(`/soar/iris/cases/${caseId}/full`),
+
   // Tasks (local)
   getCaseTasks: (caseId: number) => api.get(`/soar/cases/${caseId}/tasks`),
   createCaseTask: (caseId: number, data: Partial<CaseTask>) => api.post(`/soar/cases/${caseId}/tasks`, data),
