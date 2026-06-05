@@ -33,7 +33,7 @@ import BusinessRoundedIcon       from '@mui/icons-material/BusinessRounded'
 import ErrorOutlineRoundedIcon   from '@mui/icons-material/ErrorOutlineRounded'
 import { useSnackbar } from 'notistack'
 import { PageShell }     from '../ui/layout'
-import { soarApi }       from '../../services/soarApi'
+import { soarApi, extractCaseIocs } from '../../services/soarApi'
 import { hexRgb, fmtTime } from './soarUtils'
 import CaseOverviewPanel from './iris/CaseOverviewPanel'
 import TimelinePanel     from './iris/TimelinePanel'
@@ -369,7 +369,7 @@ export default function CaseWorkspacePage() {
 
   const tabBadge = (key: string) => {
     if (key === 'tasks')    return (tasksData?.tasks?.length ?? 0) || undefined
-    if (key === 'iocs')     return ((iocsData?.data as unknown[])?.length ?? 0) || undefined
+    if (key === 'iocs')     return extractCaseIocs(iocsData).length || undefined
     if (key === 'evidence') return (evData?.evidence?.length ?? 0) || undefined
     return undefined
   }

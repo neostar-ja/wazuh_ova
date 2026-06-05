@@ -14,7 +14,7 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded'
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
 import { useSnackbar } from 'notistack'
-import { soarApi, CaseIoc } from '../../../services/soarApi'
+import { soarApi, CaseIoc, extractCaseIocs } from '../../../services/soarApi'
 import { hexRgb, TLP_LABELS } from '../soarUtils'
 import { SEV_COLOR } from '../../ui/tokens'
 
@@ -81,7 +81,7 @@ export default function IocPanel({ caseId }: { caseId: number }) {
     }
   }
 
-  const iocs: CaseIoc[] = data?.data ?? []
+  const iocs: CaseIoc[] = extractCaseIocs(data)
   const networkIocs = iocs.filter(i => ['ip-src','ip-dst','domain','hostname','url','mac-address'].includes(i.ioc_type?.type_name ?? ''))
   const hashIocs    = iocs.filter(i => ['md5','sha1','sha256'].includes(i.ioc_type?.type_name ?? ''))
 

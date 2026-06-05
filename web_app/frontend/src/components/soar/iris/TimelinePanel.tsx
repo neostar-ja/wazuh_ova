@@ -10,7 +10,7 @@ import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded'
 import { format } from 'date-fns'
 import { useSnackbar } from 'notistack'
 import { soarApi, CaseTimelineEvent } from '../../../services/soarApi'
-import { fmtTimeTh } from '../soarUtils'
+import { browserTimezoneOffset, fmtIrisTimeToBangkok } from '../soarUtils'
 
 const EVENT_COLORS = [
   { label: 'Teal (ทั่วไป)',        value: '#1bfac3' },
@@ -53,6 +53,7 @@ export default function TimelinePanel({ caseId }: { caseId: number }) {
     mutationFn: () => soarApi.addCaseTimelineEvent(caseId, {
       ...form,
       event_date: form.event_date + ':00',
+      event_tz: browserTimezoneOffset(),
     }),
     onSuccess: () => {
       enqueueSnackbar('เพิ่มเหตุการณ์ใน Timeline เรียบร้อยแล้ว', { variant: 'success' })
@@ -206,7 +207,7 @@ export default function TimelinePanel({ caseId }: { caseId: number }) {
                         </Box>
                       </Box>
                       <Typography className="font-mono text-[9px] shrink-0 mt-0.5" sx={{ color: textMuted }}>
-                        {fmtTimeTh(ev.event_date)}
+                        {fmtIrisTimeToBangkok(ev.event_date_wtz || ev.event_date, ev.event_tz || '+00:00')}
                       </Typography>
                     </Box>
                     {ev.event_content && (

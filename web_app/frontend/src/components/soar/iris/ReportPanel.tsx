@@ -6,8 +6,8 @@ import {
 import { useTheme } from '@mui/material/styles'
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded'
 import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded'
-import { soarApi, IrisCase, CaseTask, CaseEvidence, CaseActivityEntry, ShuffleAction } from '../../../services/soarApi'
-import { fmtTime } from '../soarUtils'
+import { soarApi, IrisCase, CaseTask, CaseEvidence, CaseActivityEntry, ShuffleAction, extractCaseIocs } from '../../../services/soarApi'
+import { fmtIrisTimeToBangkok, fmtTime } from '../soarUtils'
 
 interface Props {
   caseId: number
@@ -65,14 +65,19 @@ function buildMarkdown(
     ``,
     `## Timeline (${(timeline as Record<string, unknown>[]).length} เหตุการณ์)`,
     ``,
-    ...(timeline as Record<string, unknown>[]).slice(0, 20).map(ev => `- **${fmtTime(ev.event_date as string)}** — ${ev.event_title}`),
+    ...(timeline as Record<string, unknown>[]).slice(0, 20).map(ev => `- **${fmtIrisTimeToBangkok((ev.event_date_wtz as string) || (ev.event_date as string), (ev.event_tz as string) || '+00:00')}** — ${ev.event_title}`),
     timeline.length === 0 ? '_ไม่มีเหตุการณ์_' : '',
     ``,
     `---`,
     ``,
     `## Evidence (${evidence.length} รายการ)`,
     ``,
-    ...evidence.map(ev => `- **${ev.title}** [${ev.source}/${ev.ev_type}]${ev.sha256 ? `\n  SHA256: \`${ev.sha256}\`` : ''}`),
+    ...evidence.map(ev => [
+      `- **${ev.title}** [${ev.source}/${ev.ev_type}]`,
+      ev.source_ref ? `  Source Ref: \`${ev.source_ref}\`` : '',
+      ev.ioc_value ? `  IOC: \`${ev.ioc_value}\`${ev.ioc_type ? ` (${ev.ioc_type})` : ''}` : '',
+      ev.sha256 ? `  SHA256: \`${ev.sha256}\`` : '',
+    ].filter(Boolean).join('\n')),
     evidence.length === 0 ? '_ไม่มี evidence_' : '',
     ``,
     `---`,
@@ -131,7 +136,7 @@ export default function ReportPanel({ caseId, caseData }: Props) {
     const md = buildMarkdown(
       caseData,
       tasksData?.tasks ?? [],
-      iocsData?.data ?? [],
+      extractCaseIocs(iocsData),
       timelineData?.data?.timeline ?? [],
       evData?.evidence ?? [],
       actData?.activity ?? [],
@@ -158,7 +163,7 @@ export default function ReportPanel({ caseId, caseData }: Props) {
     const payload = {
       case: caseData,
       tasks: tasksData?.tasks ?? [],
-      iocs: iocsData?.data ?? [],
+      iocs: extractCaseIocs(iocsData),
       timeline: timelineData?.data?.timeline ?? [],
       evidence: evData?.evidence ?? [],
       activity: actData?.activity ?? [],

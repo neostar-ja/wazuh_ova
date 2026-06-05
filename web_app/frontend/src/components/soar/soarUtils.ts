@@ -72,6 +72,93 @@ export function fmtDateInputNow(): string {
   return format(new Date(), "yyyy-MM-dd'T'HH:mm:ss")
 }
 
+function parseOffsetToMinutes(offset: string): number {
+  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset)
+  if (!match) return 0
+  const sign = match[1] === '-' ? -1 : 1
+  const hours = Number.parseInt(match[2], 10)
+  const minutes = Number.parseInt(match[3], 10)
+  return sign * (hours * 60 + minutes)
+}
+
+function parseIrisDateAtOffset(value: string, sourceOffset = '+00:00'): Date | null {
+  const normalized = value.trim()
+  if (!normalized) return null
+
+  // If the source already includes a timezone, let the runtime parse it directly.
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(normalized)) {
+    const direct = new Date(normalized)
+    return Number.isNaN(direct.getTime()) ? null : direct
+  }
+
+  const parts = normalized.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?)?$/,
+  )
+  if (!parts) return null
+
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second = '0',
+    fractional = '0',
+  ] = parts
+
+  const milliseconds = Number.parseInt((fractional + '000').slice(0, 3), 10)
+  const utcMs = Date.UTC(
+    Number.parseInt(year, 10),
+    Number.parseInt(month, 10) - 1,
+    Number.parseInt(day, 10),
+    Number.parseInt(hour, 10),
+    Number.parseInt(minute, 10),
+    Number.parseInt(second, 10),
+    milliseconds,
+  )
+
+  return new Date(utcMs - parseOffsetToMinutes(sourceOffset) * 60_000)
+}
+
+function formatInBangkok(date: Date, locale: string): string {
+  const parts = new Intl.DateTimeFormat(locale, {
+    timeZone: 'Asia/Bangkok',
+    day: '2-digit',
+    month: 'short',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date)
+
+  const lookup = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(part => part.type === type)?.value ?? ''
+
+  return `${lookup('day')} ${lookup('month')} ${lookup('year')} ${lookup('hour')}:${lookup('minute')}`
+}
+
+export function fmtIrisUtcToBangkok(s: string | null | undefined): string {
+  if (!s) return '—'
+  const parsed = parseIrisDateAtOffset(s, '+00:00')
+  return parsed ? formatInBangkok(parsed, 'en-GB') : s
+}
+
+export function fmtIrisTimeToBangkok(s: string | null | undefined, sourceOffset = '+00:00'): string {
+  if (!s) return '—'
+  const parsed = parseIrisDateAtOffset(s, sourceOffset)
+  return parsed ? formatInBangkok(parsed, 'th-TH') : s
+}
+
+export function browserTimezoneOffset(): string {
+  const minutes = -new Date().getTimezoneOffset()
+  const sign = minutes >= 0 ? '+' : '-'
+  const abs = Math.abs(minutes)
+  const hours = String(Math.floor(abs / 60)).padStart(2, '0')
+  const mins = String(abs % 60).padStart(2, '0')
+  return `${sign}${hours}:${mins}`
+}
+
 // ── TLP labels ─────────────────────────────────────────────────────────────────
 
 export const TLP_LABELS: Record<number, { label: string; color: string }> = {

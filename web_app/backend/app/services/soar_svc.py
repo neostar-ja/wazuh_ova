@@ -1,6 +1,7 @@
 """SOAR Integration Service — Shuffle SOAR, DFIR-IRIS, MISP"""
 import asyncio
 import logging
+import re
 from typing import Optional, List
 
 import httpx
@@ -11,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 _SSL = False  # all SOAR services use self-signed certs
 _TIMEOUT = 15
+
+_IRIS_DATETIME_MINUTE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
+_IRIS_DATETIME_SECOND_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
 
 
 def _iris_headers() -> dict:
@@ -184,18 +188,25 @@ async def reopen_iris_case(case_id: int) -> dict:
 # ── Case Notes ─────────────────────────────────────────────────────────────────
 
 async def get_case_note_groups(case_id: int) -> dict:
-    return await _iris_get(f"/case/notes/groups/list?cid={case_id}")
+    return await _iris_get(f"/case/notes/directories/filter?cid={case_id}")
 
 
 async def add_case_note_group(case_id: int, title: str) -> dict:
-    return await _iris_post(f"/case/notes/groups/add?cid={case_id}", {"group_title": title})
+    return await _iris_post(f"/case/notes/directories/add?cid={case_id}", {
+        "name": title,
+        "parent_id": None,
+    })
+
+
+async def get_case_note(case_id: int, note_id: int) -> dict:
+    return await _iris_get(f"/case/notes/{note_id}?cid={case_id}")
 
 
 async def add_case_note(case_id: int, title: str, content: str, group_id: int) -> dict:
     return await _iris_post(f"/case/notes/add?cid={case_id}", {
         "note_title": title,
         "note_content": content,
-        "group_id": group_id,
+        "directory_id": group_id,
     })
 
 
@@ -231,13 +242,25 @@ async def add_case_timeline_event(
     title: str,
     content: str,
     event_date: str,
+    event_tz: str = "+07:00",
+    event_color: str = "#1bfac3",
 ) -> dict:
+    normalized_event_date = event_date.strip()
+    if _IRIS_DATETIME_MINUTE_RE.match(normalized_event_date):
+        normalized_event_date = f"{normalized_event_date}:00.000"
+    elif _IRIS_DATETIME_SECOND_RE.match(normalized_event_date):
+        normalized_event_date = f"{normalized_event_date}.000"
+
     return await _iris_post(f"/case/timeline/events/add?cid={case_id}", {
         "event_title": title,
         "event_content": content,
-        "event_date": event_date,
+        "event_date": normalized_event_date,
+        "event_tz": event_tz,
+        "event_category_id": 1,
+        "event_assets": [],
+        "event_iocs": [],
         "event_in_summary": False,
-        "event_color": "#1bfac3",
+        "event_color": event_color,
     })
 
 

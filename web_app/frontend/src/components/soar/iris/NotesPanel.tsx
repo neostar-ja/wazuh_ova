@@ -6,7 +6,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded'
 import NotesRoundedIcon from '@mui/icons-material/NotesRounded'
 import { useSnackbar } from 'notistack'
 import { soarApi, CaseNoteGroup } from '../../../services/soarApi'
-import { hexRgb, fmtTime } from '../soarUtils'
+import { hexRgb, fmtIrisUtcToBangkok } from '../soarUtils'
 
 const CASE_COLOR = '#6366F1'
 
@@ -86,7 +86,7 @@ export default function NotesPanel({ caseId }: { caseId: number }) {
                 {note.note_title}
               </Typography>
               <Typography sx={{ fontSize: 9, color: textMuted, whiteSpace: 'nowrap' }}>
-                {fmtTime(note.note_lastupdate || note.note_creationdate)}
+                {fmtIrisUtcToBangkok(note.note_lastupdate || note.note_creationdate)}
               </Typography>
             </Box>
             {note.group_title && (

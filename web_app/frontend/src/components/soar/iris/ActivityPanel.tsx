@@ -44,7 +44,7 @@ export default function ActivityPanel({ caseId }: Props) {
       <Box className="py-12 flex flex-col items-center gap-2">
         <Typography sx={{ fontSize: 32 }}>📋</Typography>
         <Typography sx={{ fontSize: 12, color: textMuted }}>ยังไม่มี activity log ในเคสนี้</Typography>
-        <Typography sx={{ fontSize: 10, color: textMuted }}>Activity จะถูกบันทึกเมื่อมีการเพิ่ม task, evidence หรือ Shuffle action</Typography>
+        <Typography sx={{ fontSize: 10, color: textMuted }}>Activity จะถูกบันทึกเมื่อมีการเพิ่ม task, note, IOC หรือ Shuffle action</Typography>
       </Box>
     )
   }

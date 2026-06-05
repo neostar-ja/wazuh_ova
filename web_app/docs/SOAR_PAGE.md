@@ -61,8 +61,25 @@ src/components/soar/
 - **บันทึก (Notes):** เพิ่ม/ดูบันทึกในเคส พร้อม group จัดหมวดหมู่
 - **IOC:** เพิ่ม/ดู indicators of compromise (IP, domain, hash, URL, email, filename)
 - **Timeline:** เพิ่ม/ดูเหตุการณ์ใน timeline พร้อม datetime
+- **Evidence:** ดึงหลักฐานแบบสดจาก Wazuh/OpenSearch และ MISP โดยอิง IOC ใน IRIS case
 - **ปิด/เปิดเคส:** ปิดหรือเปิดเคสใหม่ได้ทันที
 - **Escalate via Shuffle:** ส่ง case ไปยัง Shuffle SOAR workflow
+
+### 2.1 Live Evidence Aggregation (อัปเดต 2026-06-05)
+
+แท็บ `Evidence` ไม่ใช้ local SQLite metadata แล้ว แต่ aggregate หลักฐานแบบสดจากระบบที่เชื่อมต่อจริงแทน:
+
+1. ใช้ IOC ใน IRIS case เป็น seed
+2. query `Wazuh alert history` จาก OpenSearch
+3. query `OpenSearch raw logs` เพิ่มเติม เช่น raw event / DNS / DHCP / NAC ตามชนิด IOC
+4. query `MISP` เพื่อหา threat-intel match ของ IOC เดียวกัน
+5. รวมผลเป็น evidence กลางพร้อม `summary`, `sources`, `raw preview`, `source_ref`
+
+พฤติกรรมสำคัญ:
+- read-only: ไม่รองรับเพิ่ม/ลบ evidence แบบ local อีกแล้ว
+- ถ้าเรียก `POST/DELETE /soar/cases/{id}/evidence` ระบบจะตอบ `410 Gone`
+- จำกัด IOC ที่ query ต่อรอบไว้ 5 IOC แรกของเคส เพื่อคุมเวลา response
+- หลักฐานแต่ละรายการมี `source`, `ev_type`, `severity`, `ioc_value`, `source_ref`, `raw_json`
 
 ### 3. Shuffle SOAR
 - แสดง workflows ทั้งหมดในรูปแบบการ์ด
@@ -107,6 +124,9 @@ src/components/soar/
 | POST | `/soar/iris/cases/{id}/iocs` | เพิ่ม IOC |
 | GET | `/soar/iris/cases/{id}/timeline` | ดู timeline |
 | POST | `/soar/iris/cases/{id}/timeline` | เพิ่ม event |
+| GET | `/soar/cases/{id}/evidence` | ดึง live evidence จาก Wazuh/OpenSearch/MISP |
+| POST | `/soar/cases/{id}/evidence` | deprecated, ตอบ 410 |
+| DELETE | `/soar/cases/{id}/evidence/{ev_id}` | deprecated, ตอบ 410 |
 
 ### IRIS API Paths (DFIR-IRIS 2.4.x)
 
@@ -133,11 +153,13 @@ PUT  /alerts/update/{id}        — อัปเดต alert
 
 ### Backend
 - `backend/app/services/soar_svc.py` — เพิ่มฟังก์ชัน case management 15+ ฟังก์ชัน
-- `backend/app/routers/soar.py` — เพิ่ม 14 endpoints ใหม่
+- `backend/app/routers/soar.py` — เพิ่ม 14 endpoints ใหม่ และ live evidence aggregation
+- `backend/app/services/opensearch_service.py` — ใช้ query helpers สำหรับ raw evidence / DNS / DHCP / NAC
 
 ### Frontend
-- `services/soarApi.ts` — เพิ่ม types (CaseNoteGroup, CaseNote, CaseIoc, CaseTimelineEvent) และ API calls ใหม่
+- `services/soarApi.ts` — เพิ่ม types (CaseNoteGroup, CaseNote, CaseIoc, CaseTimelineEvent, CaseEvidenceResponse) และ API calls ใหม่
 - `components/soar/SOARPage.tsx` — Rewrite เป็น simplified 180 บรรทัด
+- `components/soar/iris/EvidencePanel.tsx` — เปลี่ยนจาก local CRUD เป็น live evidence viewer พร้อม source status
 - ไฟล์ใหม่ 10 ไฟล์ (ดูโครงสร้าง component ด้านบน)
 
 ---
@@ -170,8 +192,27 @@ PUT  /alerts/update/{id}        — อัปเดต alert
 - [ ] แท็บ บันทึก: เพิ่มบันทึกใหม่สำเร็จ
 - [ ] แท็บ IOC: เพิ่ม IOC ใหม่สำเร็จ
 - [ ] แท็บ Timeline: เพิ่มเหตุการณ์สำเร็จ
+- [ ] แท็บ Evidence: แสดง `summary` และ `source status` จาก Wazuh/OpenSearch/MISP
+- [ ] แท็บ Evidence: download JSON ของ evidence item ได้
+- [ ] API `POST /soar/cases/{id}/evidence` ตอบ 410 เพื่อยืนยันว่า manual local evidence ถูกปิดแล้ว
 - [ ] ปุ่มปิด/เปิดเคสทำงาน
 - [ ] ปุ่ม Escalate via Shuffle ส่งไป Shuffle
+
+### ผลทดสอบ Live Evidence ที่ยืนยันแล้ว
+
+เคส `2`:
+- IOC จาก IRIS: `71.6.199.23`
+- `GET /soar/cases/2/evidence` ตอบ `200`
+- summary:
+  - `total: 20`
+  - `by_source.wazuh: 10`
+  - `by_source.opensearch: 10`
+  - `by_source.misp: 0`
+- source status:
+  - `Wazuh Alerts = connected`
+  - `OpenSearch Raw Logs = connected`
+  - `MISP Threat Intel = no_data`
+- `POST /soar/cases/2/evidence` ตอบ `410 Gone` ตาม design ใหม่
 
 **ทดสอบ Shuffle:**
 - [ ] เห็น workflow cards พร้อมสี/ไอคอน

@@ -5,13 +5,14 @@ import {
   Stack, TextField, Typography,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { format } from 'date-fns'
 import LockRoundedIcon from '@mui/icons-material/LockRounded'
 import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded'
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import { useSnackbar } from 'notistack'
 import { soarApi, IrisCase, CaseTask } from '../../../services/soarApi'
-import { hexRgb } from '../soarUtils'
+import { browserTimezoneOffset, hexRgb } from '../soarUtils'
 
 interface ChecklistItem {
   key: string
@@ -82,7 +83,8 @@ export default function ClosurePanel({ caseId, caseData, onClosed }: Props) {
       await soarApi.addCaseTimelineEvent(caseId, {
         title: 'Case Closed',
         content: `Case ปิดโดย SOC Analyst\nOutcome: ${outcome}\n${finalNote || ''}`,
-        event_date: new Date().toISOString(),
+        event_date: format(new Date(), "yyyy-MM-dd'T'HH:mm:ss"),
+        event_tz: browserTimezoneOffset(),
       })
       return soarApi.closeIrisCase(caseId)
     },

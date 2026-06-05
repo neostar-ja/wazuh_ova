@@ -1,33 +1,92 @@
+import asyncio
+import base64
+import json
+import time
+
 import httpx
 from ..core.config import settings
 
 BASE = f"https://{settings.wazuh_api_host}:{settings.wazuh_api_port}"
+VERIFY_SSL = settings.wazuh_verify_ssl
+_TOKEN_CACHE: str | None = None
+_TOKEN_EXPIRES_AT = 0.0
+_TOKEN_LOCK = asyncio.Lock()
 
 
-async def get_token() -> str:
-    async with httpx.AsyncClient(verify=False, timeout=10) as c:
+def _decode_token_expiry(token: str) -> float:
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+        return float(data.get("exp", 0))
+    except Exception:
+        return 0.0
+
+
+def _client(timeout_seconds: float) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        verify=VERIFY_SSL,
+        timeout=httpx.Timeout(timeout_seconds, connect=min(timeout_seconds, 5.0)),
+    )
+
+
+async def _request_token() -> str:
+    async with _client(10) as c:
         r = await c.post(
             f"{BASE}/security/user/authenticate",
             auth=(settings.wazuh_api_user, settings.wazuh_api_pass),
         )
-        return r.json()["data"]["token"]
+        r.raise_for_status()
+        token = r.json().get("data", {}).get("token")
+        if not token:
+            raise RuntimeError("Wazuh authentication succeeded but no token was returned")
+        return token
+
+
+async def get_token(force_refresh: bool = False) -> str:
+    global _TOKEN_CACHE, _TOKEN_EXPIRES_AT
+    now = time.time()
+    if not force_refresh and _TOKEN_CACHE and now < (_TOKEN_EXPIRES_AT - 30):
+        return _TOKEN_CACHE
+
+    async with _TOKEN_LOCK:
+        now = time.time()
+        if not force_refresh and _TOKEN_CACHE and now < (_TOKEN_EXPIRES_AT - 30):
+            return _TOKEN_CACHE
+
+        token = await _request_token()
+        _TOKEN_CACHE = token
+        _TOKEN_EXPIRES_AT = _decode_token_expiry(token) or (now + 300)
+        return token
 
 
 async def wazuh_get(path: str) -> dict:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.get(f"{BASE}{path}", headers={"Authorization": f"Bearer {token}"})
+        if r.status_code == 401:
+            token = await get_token(force_refresh=True)
+            r = await c.get(f"{BASE}{path}", headers={"Authorization": f"Bearer {token}"})
+        r.raise_for_status()
         return r.json()
 
 
 async def wazuh_put(path: str, data: str) -> dict:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.put(
             f"{BASE}{path}",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/xml"},
             content=data.encode(),
         )
+        if r.status_code == 401:
+            token = await get_token(force_refresh=True)
+            r = await c.put(
+                f"{BASE}{path}",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/xml"},
+                content=data.encode(),
+            )
+        r.raise_for_status()
         return r.json()
 
 
@@ -41,7 +100,7 @@ async def get_rules_files():
 
 async def get_rule_file(filename: str) -> str:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.get(
             f"{BASE}/rules/files/{filename}?raw=true",
             headers={"Authorization": f"Bearer {token}"},
@@ -63,11 +122,12 @@ async def put_rule_file(filename: str, content: str) -> dict:
 
 async def restart_manager() -> dict:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=60) as c:
+    async with _client(60) as c:
         r = await c.put(
             f"{BASE}/manager/restart",
             headers={"Authorization": f"Bearer {token}"},
         )
+        r.raise_for_status()
         return r.json()
 
 
@@ -94,7 +154,7 @@ async def get_vulnerabilities(agent_id: str = "000"):
             "query": {"term": {"agent.id": agent_id}},
             "_source": ["agent", "package", "vulnerability", "host"],
         }
-        resp = client.search(index="wazuh-states-vulnerabilities-wazuh", body=body)
+        resp = await asyncio.to_thread(client.search, index="wazuh-states-vulnerabilities-wazuh", body=body)
         items = []
         for hit in resp.get("hits", {}).get("hits", []):
             src = hit["_source"]
@@ -124,7 +184,7 @@ async def get_decoders_files():
 
 async def get_decoder_file(filename: str) -> str:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.get(
             f"{BASE}/decoders/files/{filename}?raw=true",
             headers={"Authorization": f"Bearer {token}"},
@@ -150,7 +210,7 @@ async def get_lists_files():
 
 async def get_list_file(filename: str) -> str:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.get(
             f"{BASE}/lists/files/{filename}?raw=true",
             headers={"Authorization": f"Bearer {token}"},
@@ -160,12 +220,13 @@ async def get_list_file(filename: str) -> str:
 
 async def put_list_file(filename: str, content: str) -> dict:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.put(
             f"{BASE}/lists/files/{filename}?overwrite=true",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"},
             content=content.encode(),
         )
+        r.raise_for_status()
         data = r.json()
         if data.get("error"):
             failed = data.get("data", {}).get("failed_items", [])
@@ -180,7 +241,7 @@ async def put_list_file(filename: str, content: str) -> dict:
 
 async def get_manager_config_raw() -> str:
     token = await get_token()
-    async with httpx.AsyncClient(verify=False, timeout=30) as c:
+    async with _client(30) as c:
         r = await c.get(
             f"{BASE}/manager/configuration?raw=true",
             headers={"Authorization": f"Bearer {token}"},

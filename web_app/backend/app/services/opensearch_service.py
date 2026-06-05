@@ -1,6 +1,8 @@
-from opensearchpy import OpenSearch
+import asyncio
+
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from opensearchpy import OpenSearch
 from ..core.config import settings
 
 
@@ -13,6 +15,12 @@ def get_client():
         ssl_show_warn=False,
         timeout=30,
     )
+
+
+async def _search(body: dict, *, index: str | None = None) -> dict:
+    client = get_client()
+    target_index = index or settings.opensearch_index
+    return await asyncio.to_thread(client.search, index=target_index, body=body)
 
 
 async def get_alerts(
@@ -35,7 +43,6 @@ async def get_alerts(
     has_srcip=None,
     has_mitre=None,
 ):
-    client = get_client()
     must = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
     if level_min > 1:
         level_range = {"gte": level_min}
@@ -111,7 +118,7 @@ async def get_alerts(
         ],
     }
     try:
-        resp = client.search(index=settings.opensearch_index, body=body)
+        resp = await _search(body)
         return [h["_source"] for h in resp["hits"]["hits"]]
     except Exception:
         return []
@@ -119,7 +126,6 @@ async def get_alerts(
 
 async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
     """Aggregations for alerts stats page: timeline, top rules, top agents, top countries, top sources, MITRE."""
-    client = get_client()
     must = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
     if level_min > 1:
         must.append({"range": {"rule.level": {"gte": level_min}}})
@@ -182,7 +188,7 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
         },
     }
     try:
-        return client.search(index=settings.opensearch_index, body=body)
+        return await _search(body)
     except Exception:
         return {}
 
@@ -192,7 +198,6 @@ async def get_threat_aggs(time_range: str = "24h"):
     Returns srcip, country, mitre, rule, agent, timeline data that is
     meaningful for security analysis (not dominated by network traffic noise).
     """
-    client = get_client()
     body = {
         "size": 0,
         "track_total_hits": True,
@@ -249,7 +254,7 @@ async def get_threat_aggs(time_range: str = "24h"):
         },
     }
     try:
-        return client.search(index=settings.opensearch_index, body=body)
+        return await _search(body)
     except Exception:
         return {}
 

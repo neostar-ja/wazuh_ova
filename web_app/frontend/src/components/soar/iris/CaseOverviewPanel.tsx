@@ -22,7 +22,7 @@ import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded'
 import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded'
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded'
-import { soarApi, IrisCase, CaseTask } from '../../../services/soarApi'
+import { soarApi, IrisCase, CaseTask, extractCaseIocs } from '../../../services/soarApi'
 import { hexRgb, fmtTime } from '../soarUtils'
 import { CHART_TIP_STYLE } from '../../ui/tokens'
 
@@ -167,7 +167,7 @@ export default function CaseOverviewPanel({ caseId, caseData, irisUrl, onTabChan
   const { data: shaData }      = useQuery({ queryKey: ['shuffle-actions', caseId], queryFn: () => soarApi.getShuffleActions(caseId).then(r => r.data), enabled: !!caseId })
 
   const tasks: CaseTask[] = tasksData?.tasks ?? []
-  const iocs   = (iocsData?.data ?? []) as unknown[]
+  const iocs = extractCaseIocs(iocsData)
   const notes  = (notesData?.data ?? []).flatMap((g: { notes?: unknown[] }) => g.notes ?? [])
   const tlEvents = (timelineData?.data?.timeline ?? []) as unknown[]
   const evidence = evData?.evidence ?? []

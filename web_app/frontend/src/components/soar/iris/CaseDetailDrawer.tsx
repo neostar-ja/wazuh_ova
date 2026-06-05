@@ -21,7 +21,7 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded'
 import TravelExploreRoundedIcon from '@mui/icons-material/TravelExploreRounded'
 import OpenInFullRoundedIcon from '@mui/icons-material/OpenInFullRounded'
 import { useSnackbar } from 'notistack'
-import { soarApi, IrisCase } from '../../../services/soarApi'
+import { soarApi, IrisCase, extractCaseIocs } from '../../../services/soarApi'
 import { hexRgb, fmtTime } from '../soarUtils'
 import NotesPanel from './NotesPanel'
 import IocPanel from './IocPanel'
@@ -109,7 +109,7 @@ export default function CaseDetailDrawer({
   const { data: notesData }  = useQuery({ queryKey: ['case-notes', caseId],    queryFn: () => soarApi.getCaseNotes(caseId!).then(r => r.data),    enabled: open && !!caseId })
 
   const taskCount  = tasksData?.tasks?.length ?? 0
-  const iocCount   = (iocsData?.data ?? []).length
+  const iocCount   = extractCaseIocs(iocsData).length
   const evCount    = evData?.evidence?.length ?? 0
   const noteCount  = (notesData?.data ?? []).flatMap((g: { notes?: unknown[] }) => g.notes ?? []).length
 

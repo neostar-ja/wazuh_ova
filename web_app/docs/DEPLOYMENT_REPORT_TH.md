@@ -86,6 +86,9 @@ Internet / LAN ──→ HTTPS :3348
 |------|------|------|--------|
 | Wazuh Master API | 10.251.151.11 | 55000 | ดึงข้อมูล agents, rules, cluster health |
 | OpenSearch | 10.251.151.13 | 9200 | ค้นหา security alerts |
+| DFIR-IRIS | 10.251.151.15 | 443 | จัดการเคส, notes, IOC, timeline |
+| MISP | 10.251.151.15 | 4430 | Threat intelligence search / IOC context |
+| Shuffle SOAR | 10.251.151.15 | 3001 | Automation workflows / webhook execution |
 | Grafana | network.hospital.wu.ac.th | 443 | Embed dashboards |
 | AbuseIPDB | api.abuseipdb.com | 443 | Threat intelligence |
 | OTX AlienVault | otx.alienvault.com | 443 | IOC lookup |
@@ -222,6 +225,22 @@ openssl s_client -connect 10.251.150.222:3348 -showcerts </dev/null 2>/dev/null 
 | Dark/Light mode toggle | ✅ localStorage sync + Tailwind class |
 | Responsive บนมือถือ | ✅ MUI breakpoints + drawer mobile |
 | WebSocket live alerts | ✅ route `/api/ws/alerts` registered |
+
+### ผลทดสอบ SOAR Evidence (อัปเดต 5 มิถุนายน 2569)
+
+- แท็บ `Evidence` ของ SOAR case workspace เปลี่ยนจาก local SQLite metadata เป็น `live evidence aggregation`
+- แหล่งข้อมูลจริงที่ใช้:
+  - `IRIS IOC` เป็น query seed
+  - `Wazuh/OpenSearch` สำหรับ alert history และ raw logs
+  - `MISP` สำหรับ threat-intel match
+- ทดสอบกับเคส `2`:
+  - `GET /wazuh/api/soar/cases/2/evidence` ตอบ `200`
+  - ได้ live evidence จริง `20` รายการ
+  - summary:
+    - `Wazuh Alerts = 10`
+    - `OpenSearch Raw Logs = 10`
+    - `MISP Threat Intel = 0 (no_data)`
+  - `POST /wazuh/api/soar/cases/2/evidence` ตอบ `410 Gone` เพื่อยืนยันว่า manual local evidence ถูกยกเลิกแล้ว
 
 ---
 

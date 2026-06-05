@@ -76,6 +76,8 @@ export interface CaseTimelineEvent {
   event_title: string
   event_content: string
   event_date: string
+  event_date_wtz?: string
+  event_tz?: string
   event_color: string
   event_in_summary: boolean
   event_tags?: string
@@ -119,18 +121,54 @@ export interface CaseTask {
 }
 
 export interface CaseEvidence {
-  id: number
+  id: string
   iris_case_id: number
   title: string
   description?: string
   source: string
   ev_type: string
+  severity?: number | null
   sha256?: string
   content_preview?: string
-  raw_json?: string
+  raw_json?: unknown
   linked_task_id?: number
   created_by?: string
   created_at?: string
+  ioc_value?: string
+  ioc_type?: string
+  source_ref?: string
+  source_url?: string
+  tags?: string[]
+  metadata?: Record<string, unknown>
+  live?: boolean
+}
+
+export interface CaseEvidenceSource {
+  id: string
+  label: string
+  status: 'connected' | 'not_configured' | 'error' | 'no_data'
+  count: number
+  note?: string
+  error?: string
+}
+
+export interface CaseEvidenceSummary {
+  live: boolean
+  generated_at: string
+  time_range: string
+  total: number
+  by_source: Record<string, number>
+  by_type: Record<string, number>
+  ioc_total: number
+  ioc_queried: number
+  ioc_limit_applied: boolean
+  ioc_values: string[]
+}
+
+export interface CaseEvidenceResponse {
+  evidence: CaseEvidence[]
+  summary: CaseEvidenceSummary
+  sources: CaseEvidenceSource[]
 }
 
 export interface CaseActivityEntry {
@@ -175,6 +213,28 @@ export interface IntegrationHealth {
   simulation_only?: boolean
   note?: string
   detail?: Record<string, unknown>
+}
+
+type UnknownRecord = Record<string, unknown>
+
+function asRecord(value: unknown): UnknownRecord {
+  return value !== null && typeof value === 'object' ? value as UnknownRecord : {}
+}
+
+function asArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : []
+}
+
+export function extractCaseIocs(payload: unknown): CaseIoc[] {
+  const root = asRecord(payload)
+  const data = root.data
+
+  if (Array.isArray(data)) {
+    return data as CaseIoc[]
+  }
+
+  const dataRecord = asRecord(data)
+  return asArray<CaseIoc>(dataRecord.ioc)
 }
 
 // ── IOC type options (IRIS standard) ──────────────────────────────────────────
@@ -276,6 +336,8 @@ export const soarApi = {
     title: string
     content: string
     event_date: string
+    event_tz?: string
+    color?: string
   }) => api.post(`/soar/iris/cases/${caseId}/timeline`, data),
 
   // Shuffle
@@ -309,10 +371,8 @@ export const soarApi = {
   updateCaseTask: (caseId: number, taskId: number, data: Partial<CaseTask>) => api.put(`/soar/cases/${caseId}/tasks/${taskId}`, data),
   deleteCaseTask: (caseId: number, taskId: number) => api.delete(`/soar/cases/${caseId}/tasks/${taskId}`),
 
-  // Evidence (local)
-  getCaseEvidence: (caseId: number) => api.get(`/soar/cases/${caseId}/evidence`),
-  createCaseEvidence: (caseId: number, data: Partial<CaseEvidence>) => api.post(`/soar/cases/${caseId}/evidence`, data),
-  deleteCaseEvidence: (caseId: number, evId: number) => api.delete(`/soar/cases/${caseId}/evidence/${evId}`),
+  // Evidence (live aggregation)
+  getCaseEvidence: (caseId: number) => api.get<CaseEvidenceResponse>(`/soar/cases/${caseId}/evidence`),
 
   // Activity Log (local)
   getCaseActivity: (caseId: number) => api.get(`/soar/cases/${caseId}/activity`),

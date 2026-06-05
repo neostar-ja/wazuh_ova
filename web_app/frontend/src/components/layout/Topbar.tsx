@@ -87,6 +87,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const theme    = useTheme()
   const isDark   = theme.palette.mode === 'dark'
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const pushFeatureEnabled = import.meta.env.VITE_ENABLE_PUSH_SW === 'true'
   const { mode, toggleTheme } = useThemeMode()
   const { user, logout }  = useAuth()
   const navigate  = useNavigate()
@@ -100,6 +101,10 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const [pushEnabled, setPushEnabled] = useState(() => localStorage.getItem('soc-push-enabled') === '1')
 
   const handleTogglePush = async () => {
+    if (!pushFeatureEnabled) {
+      alert('Browser Push Notification ถูกปิดไว้สำหรับ deployment นี้')
+      return
+    }
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('Browser ของคุณไม่รองรับ Push Notification')
       return
@@ -548,30 +553,33 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           </>
         )}
 
-        {/* Push notification toggle */}
-        <MenuItem
-          onClick={() => { setAnchorEl(null); handleTogglePush() }}
-          sx={{
-            gap: 1.5, py: 1.1, mx: 1, my: 0.4, borderRadius: '10px',
-            fontSize: 13, fontWeight: 500,
-            transition: 'all 0.18s',
-            '&:hover': {
-              bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
-              color: '#7B5BA4',
-              transform: 'translateX(3px)',
-            },
-          }}
-        >
-          {pushEnabled
-            ? <NotificationsOffRoundedIcon sx={{ fontSize: 17, color: 'text.secondary' }} />
-            : <NotificationsActiveRoundedIcon sx={{ fontSize: 17, color: '#22C55E' }} />
-          }
-          <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-            {pushEnabled ? 'ปิดการแจ้งเตือน Browser' : 'เปิดการแจ้งเตือน Browser'}
-          </Typography>
-        </MenuItem>
+        {pushFeatureEnabled && (
+          <>
+            <MenuItem
+              onClick={() => { setAnchorEl(null); handleTogglePush() }}
+              sx={{
+                gap: 1.5, py: 1.1, mx: 1, my: 0.4, borderRadius: '10px',
+                fontSize: 13, fontWeight: 500,
+                transition: 'all 0.18s',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)',
+                  color: '#7B5BA4',
+                  transform: 'translateX(3px)',
+                },
+              }}
+            >
+              {pushEnabled
+                ? <NotificationsOffRoundedIcon sx={{ fontSize: 17, color: 'text.secondary' }} />
+                : <NotificationsActiveRoundedIcon sx={{ fontSize: 17, color: '#22C55E' }} />
+              }
+              <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
+                {pushEnabled ? 'ปิดการแจ้งเตือน Browser' : 'เปิดการแจ้งเตือน Browser'}
+              </Typography>
+            </MenuItem>
 
-        <Divider sx={{ mx: 1 }} />
+            <Divider sx={{ mx: 1 }} />
+          </>
+        )}
 
         <MenuItem
           onClick={handleLogout}
