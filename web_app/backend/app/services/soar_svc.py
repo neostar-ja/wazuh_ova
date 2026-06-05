@@ -304,7 +304,11 @@ async def trigger_shuffle_webhook(url: str, payload: dict) -> dict:
         return {"ok": False, "error": "Webhook URL not configured", "error_th": "ยังไม่ได้ตั้งค่า Shuffle Webhook URL"}
     try:
         async with httpx.AsyncClient(verify=_SSL, timeout=_TIMEOUT) as c:
-            r = await c.post(url, json={"execution_argument": payload, "start": ""})
+            r = await c.post(
+                url,
+                json={"execution_argument": payload, "start": ""},
+                headers=_shuffle_headers(),
+            )
 
         # Shuffle returns {"success": true/false} in body; use that to determine ok
         body_text = r.text[:400]
