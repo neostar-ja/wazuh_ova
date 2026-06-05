@@ -165,12 +165,63 @@ async def create_iris_case(
     description: str,
     customer_id: int = 1,
 ) -> dict:
-    return await _iris_post("/manage/cases/add", {
+    import time as _time
+    soc_id = f"SOC-{int(_time.time())}"
+
+    # Primary path: direct case creation
+    result = await _iris_post("/manage/cases/add", {
         "case_name": name,
         "case_description": description,
         "case_customer_id": customer_id,
-        "case_soc_id": 0,
+        "case_soc_id": soc_id,
     })
+
+    # If direct creation succeeds, return it
+    if isinstance(result, dict) and result.get("status") == "success":
+        return result
+    if isinstance(result, dict) and isinstance(result.get("data"), dict) and result["data"].get("case_id"):
+        return result
+
+    # Fallback: create alert then escalate → creates case via IRIS internal path
+    logger.warning("create_iris_case direct path failed (%s), trying alert→escalation fallback", result.get("error", result))
+    try:
+        alert_resp = await _iris_post("/alerts/add", {
+            "alert_title": name,
+            "alert_description": description,
+            "alert_source": "SOC Center",
+            "alert_source_ref": soc_id,
+            "alert_source_event_time": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
+            "alert_severity_id": 5,
+            "alert_status_id": 2,
+            "alert_customer_id": customer_id,
+            "alert_tags": "soc-center,auto-case",
+        })
+        alert_id = None
+        if isinstance(alert_resp, dict):
+            alert_id = alert_resp.get("data", {}).get("alert_id") if isinstance(alert_resp.get("data"), dict) else None
+
+        if alert_id:
+            esc_resp = await _iris_post("/alerts/escalate", {
+                "alert_ids": [alert_id],
+                "case_title": name,
+                "case_customer_id": customer_id,
+                "iocs_import_mode": "as_event",
+                "assets_import_mode": "as_event",
+                "note": description,
+            })
+            if isinstance(esc_resp, dict) and esc_resp.get("status") == "success":
+                return esc_resp
+            # Return alert_id as a pseudo-case reference if escalation also fails
+            return {
+                "status": "partial",
+                "message": "Case creation failed; IRIS alert created as substitute",
+                "data": {"alert_id": alert_id, "case_id": None},
+                "error_detail": str(result.get("error", "")),
+            }
+    except Exception as e:
+        logger.error("create_iris_case fallback path failed: %s", e)
+
+    return result
 
 
 async def update_iris_case(case_id: int, data: dict) -> dict:

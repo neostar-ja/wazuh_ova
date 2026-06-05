@@ -933,11 +933,31 @@ async def iris_case_full(case_id: int, _=Depends(get_current_user)):
 
 @router.post("/iris/cases")
 async def iris_create_case(body: CreateCaseBody, _=Depends(get_current_user)):
-    return await create_iris_case(
+    result = await create_iris_case(
         name=body.case_name,
         description=body.case_description,
         customer_id=body.customer_id,
     )
+    # Normalise: extract case_id from various IRIS response shapes
+    case_id = None
+    alert_id = None
+    if isinstance(result, dict):
+        data = result.get("data") or {}
+        if isinstance(data, dict):
+            case_id = data.get("case_id") or data.get("case", {}).get("case_id") if isinstance(data.get("case"), dict) else data.get("case_id")
+            alert_id = data.get("alert_id")
+        # partial status = fallback alert was created
+        if result.get("status") == "partial":
+            result["_soc_fallback"] = True
+            result["_soc_message_th"] = (
+                "IRIS ไม่สามารถสร้าง Case โดยตรงได้ ระบบสร้าง IRIS Alert แทน "
+                "กรุณาเปิด IRIS และ escalate alert เป็น Case ด้วยตนเอง"
+            )
+    if case_id:
+        result["case_id"] = case_id
+    if alert_id:
+        result["alert_id"] = alert_id
+    return result
 
 
 @router.put("/iris/cases/{case_id}")
