@@ -1,8 +1,10 @@
 """
 IOC Router — Indicator of Compromise endpoints
-Supports: search, enrich, history, custom IOC CRUD, stats
+Supports: search, enrich, history, custom IOC CRUD, stats, Wazuh CDB sync
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
+import asyncio
+import logging
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
@@ -11,6 +13,9 @@ from datetime import datetime
 from ..routers.auth import get_current_user
 from ..models.database import get_db, CustomIOC
 from ..services import enrichment_service, opensearch_service
+from ..services.wazuh_cdb_service import sync_cdb, get_cdb_status
+
+logger = logging.getLogger("ioc")
 
 router = APIRouter(prefix="/ioc", tags=["ioc"])
 
@@ -163,10 +168,10 @@ async def list_custom(
 @router.post("/custom", status_code=201)
 async def add_custom(
     ioc: IOCCreate,
+    background_tasks: BackgroundTasks,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Auto-detect type if not specified correctly
     if not ioc.ioc_type:
         ioc.ioc_type = enrichment_service.detect_ioc_type(ioc.value)
     new_ioc = CustomIOC(
@@ -180,12 +185,15 @@ async def add_custom(
     db.add(new_ioc)
     db.commit()
     db.refresh(new_ioc)
+    # Sync to Wazuh CDB in background (non-blocking)
+    background_tasks.add_task(_bg_sync_cdb, db)
     return {"id": new_ioc.id, "value": new_ioc.value, "ioc_type": new_ioc.ioc_type}
 
 
 @router.delete("/custom/{ioc_id}")
 async def delete_custom(
     ioc_id: int,
+    background_tasks: BackgroundTasks,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -194,7 +202,42 @@ async def delete_custom(
         raise HTTPException(status_code=404, detail="IOC not found")
     ioc.is_active = False
     db.commit()
+    # Sync to Wazuh CDB in background
+    background_tasks.add_task(_bg_sync_cdb, db)
     return {"message": "IOC deactivated", "id": ioc_id}
+
+
+async def _bg_sync_cdb(db: Session) -> None:
+    """Background task: sync custom IOCs to Wazuh CDB."""
+    try:
+        result = await sync_cdb(db, reload=True)
+        if result.get("ok"):
+            logger.info("CDB auto-sync OK: %d IOCs synced", result.get("total_iocs", 0))
+        else:
+            logger.warning("CDB auto-sync partial: %s", result.get("results", {}))
+    except Exception as e:
+        logger.error("CDB auto-sync error: %s", e)
+
+
+# ── Wazuh CDB Sync endpoints ───────────────────────────────────────────────────
+
+@router.post("/cdb-sync")
+async def manual_cdb_sync(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Manual: sync all custom IOCs to Wazuh CDB lists and reload Wazuh."""
+    result = await sync_cdb(db, reload=True)
+    return result
+
+
+@router.get("/cdb-status")
+async def cdb_status(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check Wazuh CDB lists status (without syncing)."""
+    return await get_cdb_status(db)
 
 
 # ── Statistics ─────────────────────────────────────────────────────────────────

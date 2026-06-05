@@ -70,13 +70,23 @@ export const investigateApi = {
 }
 
 export const iocApi = {
-  search:      (q: string): Promise<AxiosResponse<any>>          => api.get<any>(`/ioc/search?q=${encodeURIComponent(q)}`),
-  history:     (q: string, timeRange = '30d', limit = 100): Promise<AxiosResponse<any>> =>
+  search:       (q: string): Promise<AxiosResponse<any>> =>
+    api.get<any>(`/ioc/search?q=${encodeURIComponent(q)}`),
+  history:      (q: string, timeRange = '30d', limit = 100): Promise<AxiosResponse<any>> =>
     api.get<any>(`/ioc/history?q=${encodeURIComponent(q)}&time_range=${timeRange}&limit=${limit}`),
-  listCustom:  (params: Record<string, any> = {}): Promise<AxiosResponse<any>> => api.get<any>('/ioc/custom', { params }),
-  addCustom:   (data: any): Promise<AxiosResponse<any>>        => api.post<any>('/ioc/custom', data),
-  deleteCustom:(id: string | number): Promise<AxiosResponse<any>>          => api.delete<any>(`/ioc/custom/${id}`),
-  stats:       (): Promise<AxiosResponse<any>>          => api.get<any>('/ioc/stats'),
+  listCustom:   (params: Record<string, any> = {}): Promise<AxiosResponse<any>> =>
+    api.get<any>('/ioc/custom', { params }),
+  addCustom:    (data: any): Promise<AxiosResponse<any>> =>
+    api.post<any>('/ioc/custom', data),
+  deleteCustom: (id: string | number): Promise<AxiosResponse<any>> =>
+    api.delete<any>(`/ioc/custom/${id}`),
+  stats:        (): Promise<AxiosResponse<any>> =>
+    api.get<any>('/ioc/stats'),
+  // Wazuh CDB sync
+  cdbSync:      (): Promise<AxiosResponse<any>> =>
+    api.post<any>('/ioc/cdb-sync'),
+  cdbStatus:    (): Promise<AxiosResponse<any>> =>
+    api.get<any>('/ioc/cdb-status'),
 }
 
 function normalizeComplianceParams(input: any = {}): Record<string, any> {

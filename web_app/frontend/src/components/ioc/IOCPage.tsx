@@ -696,6 +696,13 @@ function CustomIOCPanel() {
     staleTime: 60000,
   })
 
+  const { data: cdbStatus, refetch: refetchCdb } = useQuery<any>({
+    queryKey: ['cdb-status'],
+    queryFn: () => iocApi.cdbStatus().then(r => r.data),
+    staleTime: 30000,
+    refetchInterval: 60000,
+  })
+
   const addMut = useMutation({
     mutationFn: (data: any) => iocApi.addCustom(data),
     onSuccess: () => {
@@ -703,7 +710,8 @@ function CustomIOCPanel() {
       qc.invalidateQueries({ queryKey: ['ioc-stats'] })
       setAddOpen(false)
       setForm({ ioc_type: 'ip', value: '', description: '', severity: 'high', expires_at: '' })
-      enqueueSnackbar('เพิ่ม IOC สำเร็จ', { variant: 'success' })
+      enqueueSnackbar('เพิ่ม IOC สำเร็จ — กำลัง sync ไปยัง Wazuh CDB…', { variant: 'success' })
+      setTimeout(() => refetchCdb(), 4000)
     },
     onError: () => enqueueSnackbar('เกิดข้อผิดพลาด', { variant: 'error' }),
   })
@@ -713,8 +721,27 @@ function CustomIOCPanel() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['custom-iocs'] })
       qc.invalidateQueries({ queryKey: ['ioc-stats'] })
-      enqueueSnackbar('ลบ IOC แล้ว', { variant: 'info' })
+      enqueueSnackbar('ลบ IOC แล้ว — กำลัง sync ไปยัง Wazuh CDB…', { variant: 'info' })
+      setTimeout(() => refetchCdb(), 4000)
     },
+  })
+
+  const syncMut = useMutation({
+    mutationFn: () => iocApi.cdbSync(),
+    onSuccess: (r) => {
+      const d = r.data
+      refetchCdb()
+      qc.invalidateQueries({ queryKey: ['cdb-status'] })
+      if (d.ok) {
+        enqueueSnackbar(
+          `Sync สำเร็จ — IP: ${d.by_type?.ip ?? 0}, Domain: ${d.by_type?.domain ?? 0}, Hash: ${d.by_type?.hash ?? 0} IOCs → Wazuh CDB`,
+          { variant: 'success' }
+        )
+      } else {
+        enqueueSnackbar('Sync มีบางส่วนล้มเหลว ตรวจสอบ backend log', { variant: 'warning' })
+      }
+    },
+    onError: () => enqueueSnackbar('Sync CDB ล้มเหลว', { variant: 'error' }),
   })
 
   const filtered = iocs.filter(i =>
@@ -723,8 +750,64 @@ function CustomIOCPanel() {
 
   const sevColor = (s: string) => SEV_COLORS[s] || BRAND.purple
 
+  const allListsReady = cdbStatus?.all_lists_created
+  const wazuhReachable = cdbStatus?.wazuh_reachable
+
   return (
     <Box>
+      {/* Wazuh CDB Sync Status Banner */}
+      <Card sx={{
+        mb: 2,
+        border: `1px solid ${wazuhReachable === false ? 'rgba(239,68,68,0.25)' : allListsReady ? 'rgba(34,197,94,0.25)' : 'rgba(234,179,8,0.25)'}`,
+        background: wazuhReachable === false ? 'rgba(239,68,68,0.06)' : allListsReady ? 'rgba(34,197,94,0.05)' : 'rgba(234,179,8,0.07)',
+      }}>
+        <CardContent sx={{ p: '12px 16px !important' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <RouterRoundedIcon sx={{ fontSize: 18, color: wazuhReachable === false ? '#EF4444' : allListsReady ? '#22C55E' : '#EAB308' }} />
+              <Box>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: wazuhReachable === false ? '#EF4444' : allListsReady ? '#22C55E' : '#EAB308' }}>
+                  Wazuh CDB Sync — {wazuhReachable === false ? 'ไม่สามารถเชื่อมต่อ Wazuh' : allListsReady ? 'พร้อมใช้งาน' : 'รอ Sync ครั้งแรก'}
+                </Typography>
+                <Typography sx={{ fontSize: 10, color: 'text.disabled' }}>
+                  {allListsReady
+                    ? `CDB lists: soc-custom-ioc-ip, soc-custom-ioc-domain, soc-custom-ioc-hash | IOC ใน local: ${cdbStatus?.local_ioc_count ?? 0}`
+                    : 'กด "Sync → Wazuh" เพื่อสร้าง CDB lists และ reload Wazuh rules'}
+                </Typography>
+              </Box>
+            </Box>
+            <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {/* Per-list status chips */}
+              {cdbStatus?.cdb_lists && Object.entries(cdbStatus.cdb_lists as Record<string, boolean>).map(([name, ok]) => (
+                <Chip key={name}
+                  label={name.replace('soc-custom-ioc-', '')}
+                  size="small"
+                  sx={{
+                    height: 20, fontSize: 9, fontWeight: 700,
+                    bgcolor: ok ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.1)',
+                    color: ok ? '#22C55E' : '#EF4444',
+                    border: `1px solid ${ok ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  }}
+                />
+              ))}
+              <Button
+                size="small" variant="outlined"
+                disabled={syncMut.isPending}
+                startIcon={syncMut.isPending ? <CircularProgress size={12} /> : <ShieldRoundedIcon sx={{ fontSize: 14 }} />}
+                onClick={() => syncMut.mutate()}
+                sx={{
+                  fontSize: 11, borderRadius: '8px', whiteSpace: 'nowrap',
+                  borderColor: 'rgba(123,91,164,0.4)', color: BRAND.purple,
+                  '&:hover': { borderColor: BRAND.purple, bgcolor: 'rgba(123,91,164,0.06)' },
+                }}
+              >
+                {syncMut.isPending ? 'กำลัง Sync…' : 'Sync → Wazuh'}
+              </Button>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
       {/* Stats bar */}
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         {[
