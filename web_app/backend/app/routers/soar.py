@@ -1218,16 +1218,20 @@ async def shuffle_trigger(
             "evidence": settings.shuffle_webhook_url,
         }
         url = url_map.get(wf_type) or settings.shuffle_webhook_url
+        # Build payload compatible with both:
+        # 1) Wazuh-alert-shaped Shuffle workflows (data.srcip, rule.level, agent.name)
+        # 2) Generic SOC Center workflows (ip, target_value, type)
         shuffle_payload = {
+            # SOC Center fields
             "type": wf_type,
             "workflow_type": wf_type,
             "workflow_id": body.workflow_id,
             "ip": effective_ip,
             "target_ip": body.target_ip or body.ip,
+            "target_value": body.target_value or effective_ip,
+            "target_type": body.target_type,
             "port": body.port,
             "protocol": body.protocol,
-            "target_value": body.target_value,
-            "target_type": body.target_type,
             "case_id": body.case_id,
             "analyst": body.analyst,
             "reason": body.reason or body.title,
@@ -1235,6 +1239,27 @@ async def shuffle_trigger(
             "simulation": is_simulation,
             "dry_run": is_simulation,
             "source": body.source,
+            # Wazuh-alert compatibility shim (used by existing Shuffle workflows)
+            # Enables $exec.execution_argument.data.srcip in Shuffle expressions
+            "data": {
+                "srcip": effective_ip or "",
+                "dstip": "",
+                "target": body.target_value or effective_ip or "",
+            },
+            "rule": {
+                "level": int(body.severity.replace("critical", "15").replace("high", "12")
+                             .replace("medium", "8").replace("low", "5"))
+                         if body.severity and body.severity.lower() in ("critical","high","medium","low")
+                         else 10,
+                "description": body.reason or f"SOC Investigation: {effective_ip or body.target_value}",
+                "id": "soc_investigate",
+            },
+            "agent": {
+                "name": body.source or "SOC Center",
+                "id": "0",
+                "ip": effective_ip or "",
+            },
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+0700"),
         }
         webhook_result = await trigger_shuffle_webhook(url, shuffle_payload)
         ok = webhook_result.get("ok", False) or (
