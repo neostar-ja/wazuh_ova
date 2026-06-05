@@ -1189,12 +1189,15 @@ async def shuffle_trigger(
             }
     else:
         url_map = {
-            "block_ip": settings.shuffle_block_url,
-            "block_port": settings.shuffle_block_url,
-            "escalate": settings.shuffle_esc_url,
+            "block_ip": settings.shuffle_block_url or settings.shuffle_webhook_url,
+            "block_port": settings.shuffle_block_url or settings.shuffle_webhook_url,
+            "escalate": settings.shuffle_esc_url or settings.shuffle_webhook_url,
             "triage": settings.shuffle_webhook_url,
+            "notify": settings.shuffle_webhook_url,
+            "enrichment": settings.shuffle_webhook_url,
+            "evidence": settings.shuffle_webhook_url,
         }
-        url = url_map.get(wf_type, settings.shuffle_webhook_url)
+        url = url_map.get(wf_type) or settings.shuffle_webhook_url
         shuffle_payload = {
             "type": wf_type,
             "workflow_type": wf_type,

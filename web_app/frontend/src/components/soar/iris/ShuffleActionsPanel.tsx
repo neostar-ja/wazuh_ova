@@ -13,8 +13,8 @@ import ScienceRoundedIcon from '@mui/icons-material/ScienceRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded'
 import { useSnackbar } from 'notistack'
-import { soarApi, ShuffleAction } from '../../../services/soarApi'
-import { hexRgb, fmtTime } from '../soarUtils'
+import { soarApi, ShuffleAction, TriggerResult } from '../../../services/soarApi'
+import { hexRgb, fmtIrisUtcToBangkok } from '../soarUtils'
 
 const CASE_COLOR = '#6366F1'
 
@@ -75,7 +75,7 @@ export default function ShuffleActionsPanel({ caseId, caseName, irisConfigured, 
   const [blockIp, setBlockIp] = useState('')
   const [reason, setReason] = useState('')
   const [runningAction, setRunningAction] = useState<ActionKey | null>(null)
-  const [actionResults, setActionResults] = useState<Record<ActionKey, { ok?: boolean; mode?: string; message?: string }>>({} as Record<ActionKey, { ok?: boolean; mode?: string; message?: string }>)
+  const [actionResults, setActionResults] = useState<Record<ActionKey, { ok?: boolean; mode?: string; message?: string; detail?: string }>>({} as Record<ActionKey, { ok?: boolean; mode?: string; message?: string; detail?: string }>)
 
   // Load real Shuffle workflows
   const { data: wfData } = useQuery({
@@ -94,53 +94,52 @@ export default function ShuffleActionsPanel({ caseId, caseName, irisConfigured, 
 
   const triggerMut = useMutation({
     mutationFn: async ({ actionType, payload }: { actionType: ActionKey; payload: Record<string, unknown> }) => {
-      const r = await soarApi.triggerTriage({
-        ...payload,
-        type: actionType,
+      const r = await soarApi.triggerWorkflow({
+        type: actionType === 'block' ? 'block' : actionType,
+        workflow_type: actionType,
         case_id: caseId,
-        ...(actionType === 'block' ? { simulation: true, dry_run: true, source: 'case_workspace_shuffle_panel' } : {}),
+        analyst: undefined,
+        source: 'case_workspace_shuffle_panel',
+        ...(actionType === 'block' ? {
+          ip: payload.ip as string | undefined,
+          simulation: true,
+          dry_run: true,
+        } : {}),
+        reason: payload.reason as string | undefined,
+        title: caseName,
       })
-      return { response: r.data, actionType }
+      return { response: r.data as TriggerResult, actionType }
     },
-    onSuccess: async ({ response, actionType }) => {
-      const mode = response?.mode ?? (actionType === 'block' ? 'simulation' : 'live')
-      const ok = response?.ok !== false
-      setActionResults(prev => ({ ...prev, [actionType]: { ok, mode, message: response?.message_th ?? response?.message } }))
+    onSuccess: ({ response, actionType }) => {
+      const mode = response?.mode ?? (actionType === 'block' ? 'simulation' : 'production')
+      const ok = response?.ok === true
 
-      // Record in local history
-      await soarApi.recordShuffleAction(caseId, {
-        iris_case_id: caseId,
-        action_type: actionType,
-        payload_summary: JSON.stringify({ case_id: caseId, case_name: caseName }),
-        response_mode: mode,
-        response_ok: ok,
-        response_detail: response?.message ?? '',
-      })
-
-      // Add IRIS note if IRIS is configured
-      if (irisConfigured) {
-        try {
-          const note = actionType === 'block'
-            ? `[SIMULATION] Block IP requested\nIP: ${blockIp}\nMode: simulation only\nไม่มีการ block จริง`
-            : `Shuffle action: ${actionType}\nCase: ${caseName}\nMode: ${mode}`
-          await soarApi.addCaseNote(caseId, {
-            title: `Shuffle ${ACTIONS[actionType].label}`,
-            content: note,
-            group_title: 'Shuffle Actions',
-          })
-        } catch { /* non-blocking */ }
+      // Parse a human-friendly detail message
+      let detail = response?.message_th ?? response?.message ?? ''
+      if (!ok && !detail) {
+        detail = 'ไม่สามารถ trigger workflow ได้ — ตรวจสอบ Shuffle Webhook URL ใน .env'
+      }
+      if (ok && mode === 'simulation') {
+        detail = 'จำลองเรียบร้อย — ไม่มีการ Block จริง'
+      }
+      if (ok && mode !== 'simulation') {
+        detail = 'ส่ง trigger ไปยัง Shuffle เรียบร้อยแล้ว'
       }
 
+      setActionResults(prev => ({ ...prev, [actionType]: { ok, mode, message: detail } }))
+
       queryClient.invalidateQueries({ queryKey: ['shuffle-actions', caseId] })
+      queryClient.invalidateQueries({ queryKey: ['shuffle-action-history'] })
       queryClient.invalidateQueries({ queryKey: ['case-activity', caseId] })
-      const msg = mode === 'simulation'
-        ? `Simulation completed — ไม่มีการดำเนินการจริง`
-        : `ส่ง ${ACTIONS[actionType].labelTh} สำเร็จ`
-      enqueueSnackbar(msg, { variant: 'success' })
+
+      const snackMsg = ok
+        ? (mode === 'simulation' ? 'Simulation เรียบร้อย — ไม่มีการดำเนินการจริง' : `ส่ง ${ACTIONS[actionType].labelTh} ไปยัง Shuffle แล้ว`)
+        : `Shuffle ตอบกลับ: workflow อาจยังไม่ active — ตรวจสอบ Shuffle`
+      enqueueSnackbar(snackMsg, { variant: ok ? 'success' : 'warning' })
       setRunningAction(null)
     },
     onError: () => {
-      enqueueSnackbar('Shuffle action ล้มเหลว', { variant: 'error' })
+      enqueueSnackbar('ไม่สามารถเชื่อมต่อ Backend ได้', { variant: 'error' })
       setRunningAction(null)
     },
   })
@@ -290,27 +289,45 @@ export default function ShuffleActionsPanel({ caseId, caseName, irisConfigured, 
             HISTORY ({history.length})
           </Typography>
           <Stack spacing={0.75}>
-            {history.slice(0, 10).map(h => (
-              <Box key={h.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
-                sx={{ background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(248,246,255,0.7)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.08)'}` }}>
-                <Box className="w-1.5 h-1.5 rounded-full shrink-0"
-                  sx={{ background: h.response_ok ? '#22C55E' : '#EF4444' }} />
-                <Box className="flex-1 min-w-0">
-                  <Box className="flex items-center gap-2">
-                    <Typography className="font-mono text-[10px]" sx={{ color: textSec }}>{h.action_type}</Typography>
-                    {h.response_mode === 'simulation' && (
-                      <Chip label="SIM" size="small" sx={{ height: 13, fontSize: 8, fontWeight: 700, bgcolor: 'rgba(234,179,8,0.1)', color: '#EAB308', border: 'none' }} />
+            {history.slice(0, 10).map(h => {
+              // Parse detail — skip raw Shuffle JSON like {"success":false}
+              let detail = h.response_detail || ''
+              try {
+                const parsed = JSON.parse(detail)
+                if (typeof parsed === 'object') {
+                  if (parsed.success === false) detail = 'Shuffle: workflow ยังไม่ active หรือ webhook URL ไม่ถูกต้อง'
+                  else if (parsed.success === true) detail = 'ส่ง trigger สำเร็จ'
+                  else detail = ''
+                }
+              } catch { /* not JSON, show as-is */ }
+
+              const statusColor = h.response_ok ? '#22C55E' : '#F59E0B'
+              const statusLabel = h.response_ok
+                ? (h.response_mode === 'simulation' ? 'SIM' : 'OK')
+                : 'WARN'
+
+              return (
+                <Box key={h.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                  sx={{ background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(248,246,255,0.7)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.08)'}` }}>
+                  <Box className="w-1.5 h-1.5 rounded-full shrink-0"
+                    sx={{ background: statusColor }} />
+                  <Box className="flex-1 min-w-0">
+                    <Box className="flex items-center gap-1.5">
+                      <Typography className="font-mono text-[10px]" sx={{ color: textSec }}>{h.action_type}</Typography>
+                      <Chip label={statusLabel} size="small" sx={{ height: 13, fontSize: 8, fontWeight: 700,
+                        bgcolor: h.response_ok ? (h.response_mode === 'simulation' ? 'rgba(234,179,8,0.1)' : 'rgba(34,197,94,0.1)') : 'rgba(245,158,11,0.1)',
+                        color: statusColor, border: 'none' }} />
+                    </Box>
+                    {detail && (
+                      <Typography className="text-[9px] truncate" sx={{ color: textMuted }}>{detail}</Typography>
                     )}
                   </Box>
-                  {h.response_detail && (
-                    <Typography className="text-[9px] truncate" sx={{ color: textMuted }}>{h.response_detail}</Typography>
-                  )}
+                  <Typography className="font-mono text-[9px] shrink-0" sx={{ color: textMuted }}>
+                    {fmtIrisUtcToBangkok(h.created_at)}
+                  </Typography>
                 </Box>
-                <Typography className="font-mono text-[9px] shrink-0" sx={{ color: textMuted }}>
-                  {fmtTime(h.created_at)}
-                </Typography>
-              </Box>
-            ))}
+              )
+            })}
           </Stack>
         </Box>
       )}

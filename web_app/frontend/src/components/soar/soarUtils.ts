@@ -56,16 +56,18 @@ export const STATUS_OPTIONS = [
 
 // ── Date format helpers ────────────────────────────────────────────────────────
 
+// fmtTime: แปลง UTC string จาก backend → Bangkok time (UTC+7)
+// Backend เก็บด้วย datetime.utcnow() ไม่มี 'Z' suffix → ต้อง parse ว่าเป็น UTC ก่อน
 export function fmtTime(s: string | null | undefined): string {
   if (!s) return '—'
-  try { return format(new Date(s), 'dd MMM yy HH:mm') }
-  catch { return s }
+  const parsed = parseIrisDateAtOffset(s, '+00:00')
+  return parsed ? formatInBangkok(parsed, 'en-GB') : s
 }
 
 export function fmtTimeTh(s: string | null | undefined): string {
   if (!s) return '—'
-  try { return format(new Date(s), 'dd MMM yy HH:mm', { locale: th }) }
-  catch { return s }
+  const parsed = parseIrisDateAtOffset(s, '+00:00')
+  return parsed ? formatInBangkok(parsed, 'th-TH') : s
 }
 
 export function fmtDateInputNow(): string {

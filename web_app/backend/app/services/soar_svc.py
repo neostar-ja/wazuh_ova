@@ -301,13 +301,37 @@ async def get_shuffle_stats() -> dict:
 
 async def trigger_shuffle_webhook(url: str, payload: dict) -> dict:
     if not url:
-        return {"error": "Webhook URL not configured"}
+        return {"ok": False, "error": "Webhook URL not configured", "error_th": "ยังไม่ได้ตั้งค่า Shuffle Webhook URL"}
     try:
         async with httpx.AsyncClient(verify=_SSL, timeout=_TIMEOUT) as c:
             r = await c.post(url, json={"execution_argument": payload, "start": ""})
-            return {"status": r.status_code, "ok": r.status_code < 400, "body": r.text[:200]}
+
+        # Shuffle returns {"success": true/false} in body; use that to determine ok
+        body_text = r.text[:400]
+        execution_id: Optional[str] = None
+        shuffle_success: Optional[bool] = None
+        try:
+            body_json = r.json()
+            if isinstance(body_json, dict):
+                if "success" in body_json:
+                    shuffle_success = bool(body_json["success"])
+                execution_id = body_json.get("execution_id") or body_json.get("id")
+        except Exception:
+            body_json = {}
+
+        http_ok = r.status_code < 400
+        # If Shuffle explicitly says success=false with HTTP 200, treat as failure
+        ok = http_ok if shuffle_success is None else (http_ok and shuffle_success)
+
+        result: dict = {"status": r.status_code, "ok": ok, "body": body_text}
+        if execution_id:
+            result["execution_id"] = str(execution_id)
+        if shuffle_success is False:
+            result["shuffle_message"] = "Shuffle workflow execution failed (success=false)"
+        return result
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("Shuffle webhook %s: %s", url, e)
+        return {"ok": False, "error": str(e)}
 
 
 # ── MISP ───────────────────────────────────────────────────────────────────────
