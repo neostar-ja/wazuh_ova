@@ -579,15 +579,28 @@ class AddTimelineEventBody(BaseModel):
 
 
 class TriggerBody(BaseModel):
-    type: str  # "block" | "escalate" | "triage"
+    type: str  # "block" | "block_ip" | "block_port" | "escalate" | "triage" | "enrichment" | ...
+    # Target fields
     ip: Optional[str] = None
+    target_ip: Optional[str] = None
+    port: Optional[int] = None
+    protocol: Optional[str] = None
+    target_value: Optional[str] = None
+    target_type: Optional[str] = None    # ip/domain/hash/port/case/alert
+    # Workflow metadata
+    workflow_id: Optional[str] = None
+    workflow_name: Optional[str] = None
+    workflow_type: Optional[str] = None
+    # Context fields
     case_id: Optional[int] = None
     analyst: Optional[str] = None
     reason: Optional[str] = None
     title: Optional[str] = None
+    severity: Optional[str] = None
+    source: Optional[str] = None         # Caller identifier for audit trail
+    # Safety flags
     simulation: Optional[bool] = False   # True = simulation-only, no real action
     dry_run: Optional[bool] = False      # Alias for simulation
-    source: Optional[str] = None         # Caller identifier for audit trail
 
 
 # ── Local extension models ──────────────────────────────────────────────────────
@@ -1022,44 +1035,228 @@ async def shuffle_workflows(_=Depends(get_current_user)):
     return await get_shuffle_workflows()
 
 
+_BLOCK_TYPES = {"block", "block_ip", "block_port"}
+_soar_log = __import__("logging").getLogger("soar")
+
+
+async def _add_shuffle_iris_note(body: TriggerBody, wf_type: str, effective_target: Optional[str]) -> bool:
+    """Add a note to the IRIS case after a Shuffle trigger. Returns True if added."""
+    if not body.case_id:
+        return False
+    try:
+        mode_label = "Simulation" if (body.simulation or body.dry_run) else "Production"
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        if wf_type in ("block_ip", "block"):
+            content = (
+                f"## {mode_label} Block IP Request — {ts}\n\n"
+                f"**Target:** {effective_target or 'N/A'}\n"
+                f"**Mode:** Simulation only — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง\n\n"
+                f"> No firewall rule was created.\n"
+                f"> No Wazuh Active Response was executed.\n\n"
+                f"**Analyst:** {body.analyst or 'N/A'}\n"
+                f"**Reason:** {body.reason or 'N/A'}\n"
+                f"**Source:** {body.source or 'soar_shuffle_tab'}\n"
+            )
+        elif wf_type == "block_port":
+            content = (
+                f"## {mode_label} Block Port Request — {ts}\n\n"
+                f"**Target IP:** {effective_target or 'N/A'}\n"
+                f"**Port:** {body.port or 'N/A'}\n"
+                f"**Protocol:** {body.protocol or 'N/A'}\n"
+                f"**Mode:** Simulation only — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง\n\n"
+                f"> No firewall rule was created.\n"
+                f"> No Wazuh Active Response was executed.\n\n"
+                f"**Analyst:** {body.analyst or 'N/A'}\n"
+                f"**Reason:** {body.reason or 'N/A'}\n"
+            )
+        else:
+            content = (
+                f"## Shuffle Action: {wf_type} — {ts}\n\n"
+                f"**Workflow:** {body.workflow_name or wf_type}\n"
+                f"**Target:** {effective_target or 'N/A'}\n"
+                f"**Mode:** {mode_label}\n"
+                f"**Analyst:** {body.analyst or 'N/A'}\n"
+                f"**Reason:** {body.reason or 'N/A'}\n"
+                f"**Result:** {'Simulation completed' if (body.simulation or body.dry_run) else 'Trigger sent to Shuffle'}\n"
+            )
+
+        from ..services.soar_svc import add_case_note, get_case_note_groups, add_case_note_group
+
+        existing = await get_case_note_groups(body.case_id)
+        group_id: Optional[int] = None
+        if isinstance(existing, dict):
+            for directory in existing.get("data") or []:
+                if not isinstance(directory, dict):
+                    continue
+                title = directory.get("group_title", directory.get("name"))
+                if title == "Shuffle Actions":
+                    identifier = directory.get("group_id", directory.get("id"))
+                    if isinstance(identifier, int):
+                        group_id = identifier
+                        break
+        if group_id is None:
+            grp = await add_case_note_group(body.case_id, "Shuffle Actions")
+            group_id = _extract_note_directory_id(grp) or 1
+
+        note_title = f"[{mode_label}] {wf_type} @ {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+        await add_case_note(case_id=body.case_id, title=note_title, content=content, group_id=group_id)
+        return True
+    except Exception as e:
+        _soar_log.error("Failed to add IRIS case note for shuffle action: %s", e)
+        return False
+
+
 @router.post("/shuffle/trigger")
-async def shuffle_trigger(body: TriggerBody, _=Depends(get_current_user)):
+async def shuffle_trigger(
+    body: TriggerBody,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Normalise type
+    wf_type = body.type
+    if wf_type == "block":
+        wf_type = "block_ip"
+
+    is_block = wf_type in _BLOCK_TYPES
+
+    # ── SAFETY GUARD: block types are ALWAYS simulation ──────────────────────
+    if is_block:
+        if body.simulation is False and not body.dry_run:
+            _soar_log.warning(
+                "SAFETY OVERRIDE: simulation=false received for block type=%s — forcing simulation",
+                wf_type,
+            )
+        body.simulation = True
+        body.dry_run = True
+
     is_simulation = bool(body.simulation or body.dry_run)
 
-    # Block IP in simulation mode: NEVER call real firewall or Wazuh Active Response
-    if body.type == "block" and is_simulation:
-        import logging
-        logging.getLogger("soar").info(
-            "SIMULATION block_ip: ip=%s source=%s case_id=%s — no real action taken",
-            body.ip, body.source, body.case_id,
-        )
-        return {
-            "ok": True,
-            "mode": "simulation",
-            "action": "block_ip",
-            "ip": body.ip,
-            "case_id": body.case_id,
-            "source": body.source,
-            "message": "Simulation only. No firewall rule or Wazuh Active Response was executed.",
-            "message_th": "จำลองการ Block IP เท่านั้น — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง",
-        }
+    effective_ip = body.ip or body.target_ip or body.target_value
+    effective_target = effective_ip
 
-    url_map = {
-        "block": settings.shuffle_block_url,
-        "escalate": settings.shuffle_esc_url,
-        "triage": settings.shuffle_webhook_url,
-    }
-    url = url_map.get(body.type, settings.shuffle_webhook_url)
-    payload = {
-        "type": body.type,
-        "ip": body.ip,
+    # Build payload summary (no credentials)
+    import json as _json
+    payload_summary = _json.dumps({
+        "workflow_type": wf_type,
+        "workflow_name": body.workflow_name or wf_type,
+        "workflow_id": body.workflow_id,
+        "target": effective_target,
+        "target_type": body.target_type,
+        "port": body.port,
+        "protocol": body.protocol,
         "case_id": body.case_id,
         "analyst": body.analyst,
-        "reason": body.reason or body.title,
+        "reason": body.reason,
+        "severity": body.severity,
         "simulation": is_simulation,
-        "source": body.source,
-    }
-    return await trigger_shuffle_webhook(url, payload)
+    }, ensure_ascii=False)
+
+    # ── Execute action ────────────────────────────────────────────────────────
+    result: dict = {}
+
+    if is_block and is_simulation:
+        _soar_log.info(
+            "SIMULATION %s: target=%s port=%s source=%s case_id=%s analyst=%s — no real action",
+            wf_type, effective_target, body.port, body.source, body.case_id, body.analyst,
+        )
+        if wf_type == "block_port":
+            result = {
+                "ok": True,
+                "mode": "simulation",
+                "action": "block_port",
+                "target": effective_target,
+                "ip": effective_ip,
+                "port": body.port,
+                "protocol": body.protocol,
+                "case_id": body.case_id,
+                "source": body.source,
+                "message": "Simulation only. No firewall rule or Wazuh Active Response was executed.",
+                "message_th": "จำลองการ Block Port เท่านั้น — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง",
+                "execution_id": None,
+            }
+        else:
+            result = {
+                "ok": True,
+                "mode": "simulation",
+                "action": "block_ip",
+                "target": effective_target,
+                "ip": effective_ip,
+                "case_id": body.case_id,
+                "source": body.source,
+                "message": "Simulation only. No firewall rule or Wazuh Active Response was executed.",
+                "message_th": "จำลองการ Block IP เท่านั้น — ไม่มีการเปลี่ยนแปลง firewall หรือ Wazuh Active Response จริง",
+                "execution_id": None,
+            }
+    else:
+        url_map = {
+            "block_ip": settings.shuffle_block_url,
+            "block_port": settings.shuffle_block_url,
+            "escalate": settings.shuffle_esc_url,
+            "triage": settings.shuffle_webhook_url,
+        }
+        url = url_map.get(wf_type, settings.shuffle_webhook_url)
+        shuffle_payload = {
+            "type": wf_type,
+            "workflow_type": wf_type,
+            "workflow_id": body.workflow_id,
+            "ip": effective_ip,
+            "target_ip": body.target_ip or body.ip,
+            "port": body.port,
+            "protocol": body.protocol,
+            "target_value": body.target_value,
+            "target_type": body.target_type,
+            "case_id": body.case_id,
+            "analyst": body.analyst,
+            "reason": body.reason or body.title,
+            "severity": body.severity,
+            "simulation": is_simulation,
+            "dry_run": is_simulation,
+            "source": body.source,
+        }
+        webhook_result = await trigger_shuffle_webhook(url, shuffle_payload)
+        ok = webhook_result.get("ok", False) or (
+            isinstance(webhook_result.get("status"), int) and webhook_result["status"] < 400
+        )
+        result = {
+            "ok": ok,
+            "mode": "simulation" if is_simulation else "production",
+            "action": wf_type,
+            "target": effective_target,
+            "case_id": body.case_id,
+            "message": webhook_result.get("body", "Trigger sent to Shuffle"),
+            "execution_id": webhook_result.get("execution_id"),
+            **{k: v for k, v in webhook_result.items() if k not in ("ok",)},
+        }
+
+    # ── Auto-save action history ──────────────────────────────────────────────
+    try:
+        analyst_name = body.analyst or (
+            current_user.username if hasattr(current_user, "username") else "soc"
+        )
+        history_row = ShuffleActionHistory(
+            iris_case_id=body.case_id,
+            action_type=wf_type,
+            payload_summary=payload_summary,
+            execution_id=result.get("execution_id"),
+            response_mode="simulation" if is_simulation else "production",
+            response_ok=bool(result.get("ok", True)),
+            response_detail=_trim_text(result.get("message", ""), 400),
+            created_by=current_user.username if hasattr(current_user, "username") else analyst_name,
+            created_at=datetime.utcnow(),
+        )
+        db.add(history_row)
+        db.commit()
+        db.refresh(history_row)
+        result["action_id"] = history_row.id
+    except Exception as e:
+        _soar_log.error("Failed to save shuffle action history: %s", e)
+
+    # ── Add IRIS case note (non-blocking) ─────────────────────────────────────
+    if body.case_id:
+        iris_note_added = await _add_shuffle_iris_note(body, wf_type, effective_target)
+        result["iris_note_added"] = iris_note_added
+
+    return result
 
 
 # ── MISP ───────────────────────────────────────────────────────────────────────
@@ -1249,6 +1446,47 @@ def _sha_dict(r: ShuffleActionHistory) -> dict:
         "created_by": r.created_by,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
+
+
+def _sha_dict_extended(r: ShuffleActionHistory) -> dict:
+    """Extended dict that parses payload_summary JSON for workflow metadata."""
+    import json as _json
+    base = _sha_dict(r)
+    if r.payload_summary:
+        try:
+            summary = _json.loads(r.payload_summary)
+            base["workflow_type"] = summary.get("workflow_type", r.action_type)
+            base["workflow_name"] = summary.get("workflow_name", r.action_type)
+            base["target"] = summary.get("target")
+            base["port"] = summary.get("port")
+            base["protocol"] = summary.get("protocol")
+            base["analyst"] = summary.get("analyst")
+            base["reason"] = summary.get("reason")
+            base["severity"] = summary.get("severity")
+            base["target_type"] = summary.get("target_type")
+        except Exception:
+            pass
+    if "workflow_type" not in base:
+        base["workflow_type"] = r.action_type
+    if "workflow_name" not in base:
+        base["workflow_name"] = r.action_type
+    return base
+
+
+# ── Shuffle Action History — standalone (all actions, not per-case) ───────────
+
+@router.get("/shuffle/actions")
+async def get_all_shuffle_actions(
+    limit: int = Query(100, ge=1, le=500),
+    case_id: Optional[int] = None,
+    _=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(ShuffleActionHistory)
+    if case_id is not None:
+        q = q.filter(ShuffleActionHistory.iris_case_id == case_id)
+    rows = q.order_by(ShuffleActionHistory.created_at.desc()).limit(limit).all()
+    return {"actions": [_sha_dict_extended(r) for r in rows]}
 
 
 # ── Playbook Templates ─────────────────────────────────────────────────────────

@@ -83,6 +83,11 @@ export interface CaseTimelineEvent {
   event_tags?: string
 }
 
+export type ShuffleWorkflowType =
+  | 'triage' | 'escalate' | 'block_ip' | 'block_port'
+  | 'enrichment' | 'evidence' | 'notify' | 'misp_push'
+  | 'timeline' | 'investigate' | 'manual' | 'unknown'
+
 export interface ShuffleWorkflow {
   id: string
   name: string
@@ -90,6 +95,79 @@ export interface ShuffleWorkflow {
   tags: string[]
   status: string
   execution_count?: number
+  updated_at?: string
+}
+
+export interface TriggerPayload {
+  type: string
+  workflow_id?: string
+  workflow_name?: string
+  workflow_type?: string
+  ip?: string
+  target_ip?: string
+  port?: number
+  protocol?: string
+  target_value?: string
+  target_type?: string
+  case_id?: number
+  analyst?: string
+  reason?: string
+  title?: string
+  severity?: string
+  source: string
+  simulation?: boolean
+  dry_run?: boolean
+}
+
+export interface TriggerResult {
+  ok: boolean
+  mode: string
+  action: string
+  target?: string
+  ip?: string
+  port?: number
+  protocol?: string
+  case_id?: number
+  message?: string
+  message_th?: string
+  execution_id?: string
+  action_id?: number
+  iris_note_added?: boolean
+}
+
+export interface ShuffleActionHistoryItem {
+  id: number
+  iris_case_id?: number
+  action_type: string
+  workflow_type?: string
+  workflow_name?: string
+  target?: string
+  port?: number
+  protocol?: string
+  analyst?: string
+  reason?: string
+  payload_summary?: string
+  execution_id?: string
+  response_mode: string
+  response_ok: boolean
+  response_detail?: string
+  created_by?: string
+  created_at?: string
+}
+
+export interface ApprovalRequest {
+  request_id?: number
+  case_id?: number
+  action_type: string
+  target?: string
+  reason?: string
+  requested_by?: string
+  requested_at?: string
+  approver?: string
+  approval_status: 'pending' | 'approved' | 'rejected'
+  approved_at?: string
+  rollback_plan?: string
+  business_impact?: string
 }
 
 export interface MispAttribute {
@@ -343,14 +421,23 @@ export const soarApi = {
   // Shuffle
   getShuffleWorkflows: () => api.get('/soar/shuffle/workflows'),
 
+  triggerWorkflow: (payload: TriggerPayload) =>
+    api.post<TriggerResult>('/soar/shuffle/trigger', payload),
+
   triggerBlock: (ip: string, caseId?: number, analyst?: string) =>
-    api.post('/soar/shuffle/trigger', { type: 'block', ip, case_id: caseId, analyst }),
+    api.post('/soar/shuffle/trigger', {
+      type: 'block', ip, case_id: caseId, analyst, simulation: true, dry_run: true,
+    }),
 
   triggerEscalate: (caseId: number, analyst?: string, title?: string) =>
     api.post('/soar/shuffle/trigger', { type: 'escalate', case_id: caseId, analyst, reason: title }),
 
   triggerTriage: (payload: object) =>
     api.post('/soar/shuffle/trigger', { type: 'triage', ...payload }),
+
+  // Shuffle Action History — standalone (all actions, not per-case)
+  getAllShuffleActions: (params?: { limit?: number; case_id?: number }) =>
+    api.get<{ actions: ShuffleActionHistoryItem[] }>('/soar/shuffle/actions', { params }),
 
   // MISP
   getMispStats: () => api.get('/soar/misp/stats'),
