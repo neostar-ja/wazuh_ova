@@ -1,0 +1,1421 @@
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Collapse,
+  Divider,
+  IconButton,
+  InputAdornment,
+  MenuItem,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded'
+import TravelExploreRoundedIcon from '@mui/icons-material/TravelExploreRounded'
+import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded'
+import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded'
+import HubRoundedIcon from '@mui/icons-material/HubRounded'
+import LanRoundedIcon from '@mui/icons-material/LanRounded'
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded'
+import DnsRoundedIcon from '@mui/icons-material/DnsRounded'
+import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded'
+import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
+import RouterRoundedIcon from '@mui/icons-material/RouterRounded'
+import PublicRoundedIcon from '@mui/icons-material/PublicRounded'
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
+import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded'
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded'
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RechartTooltip, XAxis, YAxis } from 'recharts'
+
+import { PageShell } from '../ui/layout'
+import { BRAND, fmtN } from '../ui/tokens'
+import { searchApi } from '../../services/api'
+import { fmtIrisUtcToBangkok } from '../soar/soarUtils'
+
+type Direction = 'both' | 'src' | 'dst'
+type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
+
+type SearchFormState = {
+  query: string
+  timeRange: TimeRange
+  port: string
+  srcport: string
+  dstport: string
+  srcip: string
+  dstip: string
+  proto: string
+  direction: Direction
+  action: string
+  agent: string
+  source_family: string
+  group: string
+  size: string
+}
+
+type Bucket = { key: string; count: number }
+
+const TIME_RANGES: TimeRange[] = ['1h', '6h', '24h', '7d', '30d', '90d']
+const CHART_TIP = {
+  background: 'rgba(12,20,36,0.96)',
+  border: '1px solid rgba(15,196,255,0.2)',
+  borderRadius: 12,
+  fontSize: 11,
+  color: '#E6F5FF',
+}
+
+const DEFAULT_SEARCH_FORM: SearchFormState = {
+  query: '',
+  timeRange: '24h',
+  port: '',
+  srcport: '',
+  dstport: '',
+  srcip: '',
+  dstip: '',
+  proto: '',
+  direction: 'both',
+  action: '',
+  agent: '',
+  source_family: '',
+  group: '',
+  size: '200',
+}
+
+const QUICK_FILTERS = [
+  { label: 'SSH Inbound', patch: { query: 'dstport:22', proto: 'tcp', direction: 'dst' as Direction } },
+  { label: 'SSH All', patch: { query: 'port 22', proto: 'tcp' } },
+  { label: 'RDP', patch: { query: 'port 3389', proto: 'tcp' } },
+  { label: 'SMB', patch: { query: 'port 445', proto: 'tcp' } },
+  { label: 'DNS', patch: { query: 'port 53' } },
+  { label: 'Denied Traffic', patch: { query: '', action: 'deny' } },
+  { label: 'Firewall Logs', patch: { query: '', source_family: 'firewall' } },
+  { label: 'IDS / Suricata', patch: { query: '', source_family: 'ids' } },
+]
+
+const SOURCE_FAMILY_OPTIONS = [
+  { value: '', label: 'ทุก source family' },
+  { value: 'firewall', label: 'Firewall' },
+  { value: 'ids', label: 'IDS / Suricata' },
+  { value: 'ssh', label: 'SSH' },
+  { value: 'dns', label: 'DNS' },
+  { value: 'dhcp', label: 'DHCP' },
+  { value: 'nac', label: 'NAC / RADIUS' },
+  { value: 'windows', label: 'Windows / Sysmon' },
+  { value: 'linux', label: 'Linux / Syslog' },
+  { value: 'web', label: 'Web / Reverse Proxy' },
+]
+
+const PROTOCOL_OPTIONS = ['', 'tcp', 'udp', 'icmp']
+const ACTION_OPTIONS = ['', 'allow', 'accept', 'deny', 'drop', 'block']
+const DIRECTION_OPTIONS = [
+  { value: 'both', label: 'ทั้งสองทิศทาง' },
+  { value: 'dst', label: 'Inbound / ไปยังปลายทาง' },
+  { value: 'src', label: 'Outbound / ออกจากต้นทาง' },
+]
+
+const SOURCE_FAMILY_META: Record<string, { label: string; color: string; icon: typeof LanRoundedIcon }> = {
+  firewall: { label: 'Firewall', color: '#F97316', icon: ShieldRoundedIcon },
+  ids: { label: 'IDS / Suricata', color: '#EF4444', icon: RouterRoundedIcon },
+  ssh: { label: 'SSH', color: '#06B6D4', icon: LanRoundedIcon },
+  dns: { label: 'DNS', color: '#8B5CF6', icon: DnsRoundedIcon },
+  dhcp: { label: 'DHCP', color: '#0EA5E9', icon: PublicRoundedIcon },
+  nac: { label: 'NAC / RADIUS', color: '#22C55E', icon: HubRoundedIcon },
+  windows: { label: 'Windows / Sysmon', color: '#EAB308', icon: StorageRoundedIcon },
+  linux: { label: 'Linux / Syslog', color: '#14B8A6', icon: Inventory2RoundedIcon },
+  web: { label: 'Web / Proxy', color: '#EC4899', icon: TravelExploreRoundedIcon },
+}
+
+function safeNumber(value?: string | null) {
+  if (!value) return undefined
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return undefined
+  return n
+}
+
+function readFormFromParams(searchParams: URLSearchParams): SearchFormState {
+  return {
+    query: searchParams.get('q') ?? '',
+    timeRange: (searchParams.get('range') as TimeRange) || '24h',
+    port: searchParams.get('port') ?? '',
+    srcport: searchParams.get('srcport') ?? '',
+    dstport: searchParams.get('dstport') ?? '',
+    srcip: searchParams.get('srcip') ?? '',
+    dstip: searchParams.get('dstip') ?? '',
+    proto: searchParams.get('proto') ?? '',
+    direction: (searchParams.get('direction') as Direction) || 'both',
+    action: searchParams.get('action') ?? '',
+    agent: searchParams.get('agent') ?? '',
+    source_family: searchParams.get('source_family') ?? '',
+    group: searchParams.get('group') ?? '',
+    size: searchParams.get('size') ?? '200',
+  }
+}
+
+function hasSearchCriteria(form: SearchFormState) {
+  return Boolean(
+    form.query.trim() ||
+    form.port ||
+    form.srcport ||
+    form.dstport ||
+    form.srcip ||
+    form.dstip ||
+    form.proto ||
+    form.action ||
+    form.agent ||
+    form.source_family ||
+    form.group
+  )
+}
+
+function buildRequestParams(form: SearchFormState) {
+  return {
+    q: form.query.trim() || undefined,
+    port: safeNumber(form.port),
+    srcport: safeNumber(form.srcport),
+    dstport: safeNumber(form.dstport),
+    srcip: form.srcip.trim() || undefined,
+    dstip: form.dstip.trim() || undefined,
+    proto: form.proto || undefined,
+    direction: form.direction,
+    action: form.action || undefined,
+    agent: form.agent.trim() || undefined,
+    source_family: form.source_family || undefined,
+    group: form.group.trim() || undefined,
+    time_range: form.timeRange,
+    size: safeNumber(form.size) ?? 200,
+  }
+}
+
+function serializeParams(form: SearchFormState) {
+  const next = new URLSearchParams()
+  if (form.query.trim()) next.set('q', form.query.trim())
+  if (form.timeRange) next.set('range', form.timeRange)
+  if (form.port) next.set('port', form.port)
+  if (form.srcport) next.set('srcport', form.srcport)
+  if (form.dstport) next.set('dstport', form.dstport)
+  if (form.srcip.trim()) next.set('srcip', form.srcip.trim())
+  if (form.dstip.trim()) next.set('dstip', form.dstip.trim())
+  if (form.proto) next.set('proto', form.proto)
+  if (form.direction !== 'both') next.set('direction', form.direction)
+  if (form.action) next.set('action', form.action)
+  if (form.agent.trim()) next.set('agent', form.agent.trim())
+  if (form.source_family) next.set('source_family', form.source_family)
+  if (form.group.trim()) next.set('group', form.group.trim())
+  if (form.size && form.size !== '200') next.set('size', form.size)
+  return next
+}
+
+function getBucketMax(items: Bucket[]) {
+  return items[0]?.count ?? 1
+}
+
+function familyLabel(family: string) {
+  return SOURCE_FAMILY_META[family]?.label ?? family
+}
+
+function familyColor(family: string) {
+  return SOURCE_FAMILY_META[family]?.color ?? '#64748B'
+}
+
+function normalizeGroups(groups: unknown) {
+  if (Array.isArray(groups)) return groups.map(String)
+  if (typeof groups === 'string') return [groups]
+  return []
+}
+
+function deriveSourceFamily(event: any) {
+  const groups = normalizeGroups(event?.rule?.groups)
+  const decoder = String(event?.decoder?.name ?? '').toLowerCase()
+  const program = String(event?.predecoder?.program_name ?? '').toLowerCase()
+  const joined = `${groups.join(' ')} ${decoder} ${program}`.toLowerCase()
+
+  if (joined.includes('firewall') || joined.includes('forti') || joined.includes('pfsense') || joined.includes('iptables')) return 'firewall'
+  if (joined.includes('suricata') || joined.includes('snort') || joined.includes(' ids')) return 'ids'
+  if (joined.includes('ssh')) return 'ssh'
+  if (joined.includes('dns') || joined.includes('named') || joined.includes('bind')) return 'dns'
+  if (joined.includes('dhcp')) return 'dhcp'
+  if (joined.includes('nac') || joined.includes('radius')) return 'nac'
+  if (joined.includes('sysmon') || joined.includes('windows')) return 'windows'
+  if (joined.includes('linux') || joined.includes('syslog')) return 'linux'
+  if (joined.includes('apache') || joined.includes('nginx') || joined.includes('web')) return 'web'
+  return 'unknown'
+}
+
+function deriveDirection(event: any, matchedPort?: number | null) {
+  const data = event?.data ?? {}
+  const srcPort = String(data.srcport ?? '')
+  const dstPort = String(data.dstport ?? '')
+  const rawDirection = String(data.direction ?? '').toLowerCase()
+  if (matchedPort != null) {
+    if (dstPort === String(matchedPort)) return 'inbound'
+    if (srcPort === String(matchedPort)) return 'outbound'
+  }
+  if (rawDirection.includes('in')) return 'inbound'
+  if (rawDirection.includes('out')) return 'outbound'
+  return 'lateral'
+}
+
+function makeActiveChips(form: SearchFormState) {
+  const chips: Array<{ key: keyof SearchFormState; label: string }> = []
+  if (form.query.trim()) chips.push({ key: 'query', label: `Query: ${form.query.trim()}` })
+  if (form.port) chips.push({ key: 'port', label: `Port = ${form.port}` })
+  if (form.srcport) chips.push({ key: 'srcport', label: `Src Port = ${form.srcport}` })
+  if (form.dstport) chips.push({ key: 'dstport', label: `Dst Port = ${form.dstport}` })
+  if (form.srcip.trim()) chips.push({ key: 'srcip', label: `Src IP = ${form.srcip.trim()}` })
+  if (form.dstip.trim()) chips.push({ key: 'dstip', label: `Dst IP = ${form.dstip.trim()}` })
+  if (form.proto) chips.push({ key: 'proto', label: `Proto = ${form.proto.toUpperCase()}` })
+  if (form.direction !== 'both') chips.push({ key: 'direction', label: `Direction = ${form.direction}` })
+  if (form.action) chips.push({ key: 'action', label: `Action = ${form.action.toUpperCase()}` })
+  if (form.agent.trim()) chips.push({ key: 'agent', label: `Agent = ${form.agent.trim()}` })
+  if (form.source_family) chips.push({ key: 'source_family', label: `Source = ${familyLabel(form.source_family)}` })
+  if (form.group.trim()) chips.push({ key: 'group', label: `Group = ${form.group.trim()}` })
+  return chips
+}
+
+function MetricCard({ label, value, accent, helper }: { label: string; value: string; accent: string; helper?: string }) {
+  return (
+    <Box
+      sx={{
+        borderRadius: 4,
+        p: 2.2,
+        background: `linear-gradient(180deg, ${accent}18 0%, rgba(7,14,24,0) 100%)`,
+        border: `1px solid ${accent}35`,
+        minHeight: 102,
+      }}
+    >
+      <Typography sx={{ fontSize: 25, fontWeight: 800, color: accent, lineHeight: 1.05 }}>
+        {value}
+      </Typography>
+      <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.primary', mt: 0.75 }}>
+        {label}
+      </Typography>
+      {helper && (
+        <Typography sx={{ fontSize: 10, color: 'text.secondary', mt: 0.5 }}>
+          {helper}
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
+function CoverageCard({ family, count }: { family: string; count: number }) {
+  const meta = SOURCE_FAMILY_META[family]
+  const Icon = meta?.icon ?? HubRoundedIcon
+  const accent = meta?.color ?? '#64748B'
+  return (
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 2,
+        background: `${accent}12`,
+        border: `1px solid ${accent}28`,
+      }}
+    >
+      <Stack direction="row" spacing={1.25} alignItems="center">
+        <Box
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: 2.5,
+            display: 'grid',
+            placeItems: 'center',
+            bgcolor: `${accent}18`,
+            color: accent,
+          }}
+        >
+          <Icon sx={{ fontSize: 18 }} />
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
+            {familyLabel(family)}
+          </Typography>
+          <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+            {fmtN(count)} events matched
+          </Typography>
+        </Box>
+      </Stack>
+    </Box>
+  )
+}
+
+function TopList({
+  title,
+  items,
+  accent,
+  onSelect,
+}: {
+  title: string
+  items: Bucket[]
+  accent: string
+  onSelect?: (value: string) => void
+}) {
+  if (!items.length) return null
+  const maxCount = getBucketMax(items)
+  return (
+    <Box
+      sx={{
+        borderRadius: 4,
+        p: 2.25,
+        border: '1px solid rgba(15,196,255,0.12)',
+        background: 'rgba(7,18,31,0.48)',
+      }}
+    >
+      <Typography sx={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary', mb: 1.25 }}>
+        {title}
+      </Typography>
+      <Stack spacing={1}>
+        {items.slice(0, 7).map((item) => {
+          const pct = maxCount ? Math.max((item.count / maxCount) * 100, 4) : 0
+          return (
+            <Box key={item.key}>
+              <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
+                <Button
+                  variant="text"
+                  onClick={() => onSelect?.(item.key)}
+                  sx={{
+                    minWidth: 0,
+                    px: 0,
+                    justifyContent: 'flex-start',
+                    textTransform: 'none',
+                    color: 'text.primary',
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    '&:hover': { bgcolor: 'transparent', color: accent },
+                  }}
+                >
+                  {item.key}
+                </Button>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: accent }}>
+                  {fmtN(item.count)}
+                </Typography>
+              </Stack>
+              <Box sx={{ mt: 0.5, height: 4, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.06)' }}>
+                <Box sx={{ width: `${pct}%`, height: 4, borderRadius: 99, bgcolor: accent }} />
+              </Box>
+            </Box>
+          )
+        })}
+      </Stack>
+    </Box>
+  )
+}
+
+function DirectionPill({ direction }: { direction: string }) {
+  const color = direction === 'inbound' ? '#EF4444' : direction === 'outbound' ? '#22C55E' : '#EAB308'
+  const icon = direction === 'inbound'
+    ? <SouthWestRoundedIcon sx={{ fontSize: 12 }} />
+    : direction === 'outbound'
+      ? <NorthEastRoundedIcon sx={{ fontSize: 12 }} />
+      : <SwapHorizRoundedIcon sx={{ fontSize: 12 }} />
+  const label = direction === 'inbound' ? 'Inbound' : direction === 'outbound' ? 'Outbound' : 'Lateral'
+  return (
+    <Chip
+      icon={icon}
+      label={label}
+      size="small"
+      sx={{
+        height: 20,
+        fontSize: 10,
+        fontWeight: 700,
+        bgcolor: `${color}16`,
+        color,
+        border: 'none',
+      }}
+    />
+  )
+}
+
+export default function LogSearchPage() {
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialForm = readFormFromParams(searchParams)
+
+  const [form, setForm] = useState<SearchFormState>(initialForm)
+  const [submitted, setSubmitted] = useState<SearchFormState>(initialForm)
+  const [showAdvanced, setShowAdvanced] = useState(Boolean(
+    initialForm.port || initialForm.srcport || initialForm.dstport ||
+    initialForm.srcip || initialForm.dstip || initialForm.proto ||
+    initialForm.action || initialForm.agent || initialForm.source_family || initialForm.group
+  ))
+  const [showListeners, setShowListeners] = useState(true)
+  const [showEvents, setShowEvents] = useState(true)
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setSearchParams(serializeParams(submitted), { replace: true })
+  }, [submitted, setSearchParams])
+
+  useEffect(() => {
+    if (!form.query.trim() || form.query.trim() === submitted.query.trim()) {
+      setSuggestions([])
+      return
+    }
+    const timer = setTimeout(() => {
+      searchApi.suggest(form.query.trim())
+        .then((resp) => setSuggestions(resp.data.suggestions ?? []))
+        .catch(() => setSuggestions([]))
+    }, 180)
+    return () => clearTimeout(timer)
+  }, [form.query, submitted.query])
+
+  const canSearch = hasSearchCriteria(form)
+  const requestParams = buildRequestParams(submitted)
+
+  const flowQ = useQuery({
+    queryKey: ['log-search-workbench', requestParams],
+    queryFn: () => searchApi.flow(requestParams).then((resp) => resp.data),
+    enabled: hasSearchCriteria(submitted),
+    staleTime: 30_000,
+  })
+
+  const matchedPort = flowQ.data?.matched_port
+    ?? flowQ.data?.parsed_query?.port
+    ?? flowQ.data?.parsed_query?.dstport
+    ?? flowQ.data?.parsed_query?.srcport
+
+  const listenersQ = useQuery({
+    queryKey: ['log-search-listeners', matchedPort, submitted.proto],
+    queryFn: () => searchApi.portListeners({ port: matchedPort, proto: submitted.proto || undefined }).then((resp) => resp.data),
+    enabled: hasSearchCriteria(submitted) && matchedPort != null,
+    staleTime: 60_000,
+  })
+
+  const total = flowQ.data?.total ?? 0
+  const events = flowQ.data?.events ?? []
+  const sourceFamilies = (flowQ.data?.source_families ?? []).filter((item: Bucket) => item.count > 0)
+  const topLogSources = flowQ.data?.by_log_source ?? []
+  const topActions = flowQ.data?.by_action ?? []
+  const topProtocols = flowQ.data?.top_proto ?? []
+  const topCountries = flowQ.data?.top_country ?? []
+  const topSrcIp = flowQ.data?.top_srcip ?? []
+  const topDstIp = flowQ.data?.top_dstip ?? []
+  const topAgents = flowQ.data?.top_agent ?? []
+  const timeline = flowQ.data?.timeline ?? []
+  const activeChips = makeActiveChips(submitted)
+
+  function commitSearch(next: SearchFormState) {
+    setSubmitted({
+      ...next,
+      query: next.query.trim(),
+      srcip: next.srcip.trim(),
+      dstip: next.dstip.trim(),
+      agent: next.agent.trim(),
+      group: next.group.trim(),
+    })
+    setSuggestions([])
+  }
+
+  function handleFieldChange<K extends keyof SearchFormState>(key: K, value: SearchFormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function clearField(key: keyof SearchFormState) {
+    const next = { ...submitted, [key]: DEFAULT_SEARCH_FORM[key] } as SearchFormState
+    setForm(next)
+    commitSearch(next)
+  }
+
+  function resetSearch() {
+    setForm(DEFAULT_SEARCH_FORM)
+    setSubmitted(DEFAULT_SEARCH_FORM)
+    setSuggestions([])
+    setShowAdvanced(false)
+    inputRef.current?.focus()
+  }
+
+  function applyPatch(patch: Partial<SearchFormState>, autoCommit = true) {
+    const next = {
+      ...DEFAULT_SEARCH_FORM,
+      timeRange: form.timeRange,
+      size: form.size,
+      ...form,
+      ...patch,
+    }
+    setForm(next)
+    if (autoCommit) commitSearch(next)
+  }
+
+  function downloadResults() {
+    const blob = new Blob([
+      JSON.stringify({
+        generated_at: new Date().toISOString(),
+        filters: submitted,
+        flow: flowQ.data ?? null,
+        listeners: listenersQ.data ?? null,
+      }, null, 2),
+    ], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `search-results-${Date.now()}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function openInvestigate(value: string) {
+    navigate(`/investigate?q=${encodeURIComponent(value)}&range=${encodeURIComponent(submitted.timeRange)}`)
+  }
+
+  const actions = (
+    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<RestartAltRoundedIcon />}
+        onClick={resetSearch}
+      >
+        ล้างตัวกรอง
+      </Button>
+      <Button
+        variant="contained"
+        size="small"
+        startIcon={<DownloadRoundedIcon />}
+        disabled={!hasSearchCriteria(submitted)}
+        onClick={downloadResults}
+        sx={{
+          bgcolor: '#0F172A',
+          '&:hover': { bgcolor: '#111827' },
+        }}
+      >
+        Export JSON
+      </Button>
+    </Stack>
+  )
+
+  return (
+    <PageShell
+      title="Search & Hunt Console"
+      subtitle="ค้นหา traffic และ network evidence ข้ามทุก log source ที่ ingest เข้า OpenSearch พร้อม inventory listener และ pivot ไป investigate"
+      variant="workbench"
+      maxWidth="wide"
+      actions={actions}
+    >
+      <Box
+        sx={{
+          borderRadius: 6,
+          overflow: 'hidden',
+          border: '1px solid rgba(15,196,255,0.18)',
+          background: theme.palette.mode === 'dark'
+            ? 'linear-gradient(135deg, rgba(4,16,30,0.98) 0%, rgba(9,35,64,0.94) 45%, rgba(28,13,52,0.92) 100%)'
+            : 'linear-gradient(135deg, rgba(235,249,255,0.98) 0%, rgba(233,245,255,0.98) 48%, rgba(245,237,255,0.98) 100%)',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', xl: '1.9fr 0.9fr' },
+            gap: 3,
+            p: { xs: 2, md: 3.5 },
+          }}
+        >
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <Chip
+                label="Unified network hunt"
+                size="small"
+                sx={{ bgcolor: 'rgba(15,196,255,0.14)', color: '#0FC4FF', fontWeight: 700 }}
+              />
+              <Chip
+                label="Wazuh / Firewall / IDS / DNS / DHCP / NAC"
+                size="small"
+                sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10B981', fontWeight: 700 }}
+              />
+            </Stack>
+            <Typography sx={{ fontSize: { xs: 24, md: 34 }, fontWeight: 900, lineHeight: 1.04, maxWidth: 760 }}>
+              ค้นหาแบบ free-text หรือใช้ตัวกรองแบบ structured เพื่อหาว่าเครื่องใดคุยกับ port ใด จาก source ไหน และเกิดขึ้นเมื่อไร
+            </Typography>
+            <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 1.5, maxWidth: 760 }}>
+              ตัวอย่าง: <code>port 22</code>, <code>dstport:22</code>, <code>src:10.0.0.1</code>,
+              {' '}<code>action:deny</code>, <code>source:firewall</code>, <code>tcp:3389</code>
+            </Typography>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} sx={{ mt: 2.5 }}>
+              <Box sx={{ flex: 1, position: 'relative' }}>
+                <TextField
+                  inputRef={inputRef}
+                  fullWidth
+                  size="medium"
+                  placeholder="ค้นหา: port 22, dstport:3389, src:192.168.1.10, action:deny, source:firewall ..."
+                  value={form.query}
+                  onChange={(event) => handleFieldChange('query', event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canSearch) commitSearch(form)
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchRoundedIcon sx={{ color: '#0FC4FF' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: form.query && (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => handleFieldChange('query', '')}>
+                          <CloseRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      borderRadius: 3,
+                      bgcolor: theme.palette.mode === 'dark' ? 'rgba(5,12,22,0.68)' : 'rgba(255,255,255,0.75)',
+                    },
+                  }}
+                />
+                {suggestions.length > 0 && (
+                  <Paper
+                    elevation={6}
+                    sx={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: '100%',
+                      mt: 0.75,
+                      zIndex: 10,
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                      border: '1px solid rgba(15,196,255,0.18)',
+                    }}
+                  >
+                    {suggestions.map((suggestion, index) => (
+                      <Box
+                        key={`${suggestion.query}-${index}`}
+                        onClick={() => {
+                          const next = { ...form, query: suggestion.query }
+                          setForm(next)
+                          commitSearch(next)
+                        }}
+                        sx={{
+                          px: 2,
+                          py: 1.2,
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'rgba(15,196,255,0.08)' },
+                        }}
+                      >
+                        <Typography sx={{ fontSize: 12, fontWeight: 700 }}>{suggestion.label}</Typography>
+                        <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: 'text.secondary' }}>
+                          {suggestion.query}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Paper>
+                )}
+              </Box>
+
+              <TextField
+                select
+                size="medium"
+                label="ช่วงเวลา"
+                value={form.timeRange}
+                onChange={(event) => handleFieldChange('timeRange', event.target.value as TimeRange)}
+                sx={{ minWidth: 120 }}
+              >
+                {TIME_RANGES.map((range) => (
+                  <MenuItem key={range} value={range}>{range}</MenuItem>
+                ))}
+              </TextField>
+
+              <Button
+                variant="contained"
+                disabled={!canSearch || flowQ.isFetching}
+                onClick={() => commitSearch(form)}
+                startIcon={flowQ.isFetching ? <CircularProgress size={15} color="inherit" /> : <SearchRoundedIcon />}
+                sx={{
+                  borderRadius: 3,
+                  px: 2.5,
+                  minHeight: 56,
+                  bgcolor: '#0FC4FF',
+                  color: '#04101E',
+                  fontWeight: 800,
+                  '&:hover': { bgcolor: '#38BDF8' },
+                }}
+              >
+                ค้นหา
+              </Button>
+            </Stack>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+              {QUICK_FILTERS.map((filter) => (
+                <Chip
+                  key={filter.label}
+                  label={filter.label}
+                  onClick={() => applyPatch(filter.patch)}
+                  sx={{
+                    cursor: 'pointer',
+                    height: 28,
+                    fontSize: 11,
+                    bgcolor: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    '&:hover': { bgcolor: 'rgba(15,196,255,0.12)', borderColor: 'rgba(15,196,255,0.24)' },
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          <Box
+            sx={{
+              borderRadius: 5,
+              p: 2.4,
+              background: theme.palette.mode === 'dark' ? 'rgba(7,15,27,0.58)' : 'rgba(255,255,255,0.58)',
+              border: '1px solid rgba(15,196,255,0.14)',
+            }}
+          >
+            <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary', mb: 1.5 }}>
+              HUNT CHECKLIST
+            </Typography>
+            <Stack spacing={1.4}>
+              {[
+                'ใช้ dstport:22 เพื่อตอบคำถามว่ามี traffic เข้า port 22 ใดบ้าง',
+                'ใช้ srcport:22 เพื่อตรวจ reply traffic หรือเครื่องที่ทำตัวเป็น SSH server',
+                'ใช้ source family เพื่อบีบ scope ไปยัง firewall, IDS, DNS หรือ NAC',
+                'กด Investigate จาก IP/Agent ในผลลัพธ์เพื่อขยายต่อในหน้า forensic',
+              ].map((line) => (
+                <Stack key={line} direction="row" spacing={1} alignItems="flex-start">
+                  <BoltRoundedIcon sx={{ fontSize: 15, color: '#0FC4FF', mt: 0.1 }} />
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{line}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {SOURCE_FAMILY_OPTIONS.slice(1).map((option) => (
+                <Chip
+                  key={option.value}
+                  label={option.label}
+                  size="small"
+                  onClick={() => applyPatch({ source_family: option.value })}
+                  sx={{
+                    cursor: 'pointer',
+                    bgcolor: 'rgba(255,255,255,0.07)',
+                    '&:hover': { bgcolor: 'rgba(15,196,255,0.1)' },
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+        </Box>
+
+        <Box sx={{ px: { xs: 2, md: 3.5 }, pb: { xs: 2, md: 3.5 }, pt: 0 }}>
+          <Button
+            variant="text"
+            startIcon={<TuneRoundedIcon />}
+            endIcon={showAdvanced ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+            onClick={() => setShowAdvanced((value) => !value)}
+            sx={{ px: 0, fontWeight: 800 }}
+          >
+            Advanced Filters
+          </Button>
+
+          <Collapse in={showAdvanced}>
+            <Box
+              sx={{
+                mt: 1.5,
+                p: 2.25,
+                borderRadius: 4,
+                background: theme.palette.mode === 'dark' ? 'rgba(4,10,19,0.7)' : 'rgba(255,255,255,0.72)',
+                border: '1px solid rgba(15,196,255,0.14)',
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    md: 'repeat(2, minmax(0, 1fr))',
+                    xl: 'repeat(4, minmax(0, 1fr))',
+                  },
+                  gap: 1.5,
+                }}
+              >
+                <TextField label="Port" size="small" value={form.port} onChange={(event) => handleFieldChange('port', event.target.value)} />
+                <TextField label="Src Port" size="small" value={form.srcport} onChange={(event) => handleFieldChange('srcport', event.target.value)} />
+                <TextField label="Dst Port" size="small" value={form.dstport} onChange={(event) => handleFieldChange('dstport', event.target.value)} />
+                <TextField label="Agent / Host" size="small" value={form.agent} onChange={(event) => handleFieldChange('agent', event.target.value)} />
+                <TextField label="Src IP" size="small" value={form.srcip} onChange={(event) => handleFieldChange('srcip', event.target.value)} />
+                <TextField label="Dst IP" size="small" value={form.dstip} onChange={(event) => handleFieldChange('dstip', event.target.value)} />
+                <TextField label="Rule Group" size="small" value={form.group} onChange={(event) => handleFieldChange('group', event.target.value)} />
+                <TextField label="ผลลัพธ์สูงสุด" size="small" value={form.size} onChange={(event) => handleFieldChange('size', event.target.value)} />
+                <TextField select label="Protocol" size="small" value={form.proto} onChange={(event) => handleFieldChange('proto', event.target.value)}>
+                  {PROTOCOL_OPTIONS.map((option) => (
+                    <MenuItem key={option || 'all'} value={option}>{option ? option.toUpperCase() : 'ทั้งหมด'}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField select label="Direction" size="small" value={form.direction} onChange={(event) => handleFieldChange('direction', event.target.value as Direction)}>
+                  {DIRECTION_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField select label="Action" size="small" value={form.action} onChange={(event) => handleFieldChange('action', event.target.value)}>
+                  {ACTION_OPTIONS.map((option) => (
+                    <MenuItem key={option || 'all'} value={option}>{option ? option.toUpperCase() : 'ทั้งหมด'}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField select label="Source Family" size="small" value={form.source_family} onChange={(event) => handleFieldChange('source_family', event.target.value)}>
+                  {SOURCE_FAMILY_OPTIONS.map((option) => (
+                    <MenuItem key={option.value || 'all'} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </Box>
+          </Collapse>
+        </Box>
+      </Box>
+
+      {!hasSearchCriteria(submitted) && (
+        <Box
+          sx={{
+            borderRadius: 5,
+            p: 5,
+            textAlign: 'center',
+            border: '1px dashed rgba(15,196,255,0.18)',
+            background: 'rgba(7,18,31,0.3)',
+          }}
+        >
+          <SearchRoundedIcon sx={{ fontSize: 42, color: 'text.secondary', opacity: 0.4, mb: 1.25 }} />
+          <Typography sx={{ fontSize: 16, fontWeight: 800 }}>เริ่มต้นการค้นหา</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.75 }}>
+            ใช้คำค้นเช่น <code>dstport:22</code>, <code>port 445</code> หรือใช้ advanced filters เพื่อ scope query ให้ชัดขึ้น
+          </Typography>
+        </Box>
+      )}
+
+      {hasSearchCriteria(submitted) && (
+        <Stack spacing={2.5}>
+          {activeChips.length > 0 && (
+            <Box
+              sx={{
+                borderRadius: 4,
+                p: 2,
+                border: '1px solid rgba(15,196,255,0.12)',
+                background: 'rgba(7,18,31,0.4)',
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.2 }}>
+                <InfoOutlinedIcon sx={{ fontSize: 16, color: '#0FC4FF' }} />
+                <Typography sx={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary' }}>
+                  ACTIVE FILTERS
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {activeChips.map((chip) => (
+                  <Chip
+                    key={`${chip.key}-${chip.label}`}
+                    label={chip.label}
+                    onDelete={() => clearField(chip.key)}
+                    sx={{ bgcolor: 'rgba(15,196,255,0.1)', border: '1px solid rgba(15,196,255,0.14)' }}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {!flowQ.isLoading && !flowQ.isError && (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                  xl: 'repeat(7, minmax(0, 1fr))',
+                },
+                gap: 1.5,
+              }}
+            >
+              <MetricCard label="Events" value={fmtN(total)} accent="#0FC4FF" helper={`${events.length} rows loaded now`} />
+              <MetricCard label="Matched Port" value={matchedPort != null ? String(matchedPort) : '—'} accent="#F97316" helper="derived from query or explicit filter" />
+              <MetricCard label="Unique Src IP" value={fmtN(flowQ.data?.unique_srcip ?? 0)} accent="#38BDF8" />
+              <MetricCard label="Unique Dst IP" value={fmtN(flowQ.data?.unique_dstip ?? 0)} accent="#22C55E" />
+              <MetricCard label="Unique Agents" value={fmtN(flowQ.data?.unique_agent ?? 0)} accent="#8B5CF6" />
+              <MetricCard label="Inbound" value={fmtN(flowQ.data?.inbound_count ?? 0)} accent="#EF4444" helper={matchedPort != null ? `traffic to port ${matchedPort}` : 'requires port-oriented query'} />
+              <MetricCard label="Outbound" value={fmtN(flowQ.data?.outbound_count ?? 0)} accent="#10B981" helper={matchedPort != null ? `traffic from port ${matchedPort}` : 'requires port-oriented query'} />
+            </Box>
+          )}
+
+          {flowQ.isError && (
+            <Alert severity="error">
+              เกิดข้อผิดพลาดในการค้นหา กรุณาตรวจสอบ query หรือ backend search service
+            </Alert>
+          )}
+
+          {flowQ.isLoading && (
+            <Box
+              sx={{
+                borderRadius: 4,
+                p: 4,
+                border: '1px solid rgba(15,196,255,0.12)',
+                background: 'rgba(7,18,31,0.35)',
+                textAlign: 'center',
+              }}
+            >
+              <CircularProgress size={28} />
+              <Typography sx={{ mt: 1.5, fontSize: 12, color: 'text.secondary' }}>
+                กำลังค้นหา across log sources...
+              </Typography>
+            </Box>
+          )}
+
+          {!flowQ.isLoading && !flowQ.isError && (
+            <>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' },
+                  gap: 2,
+                }}
+              >
+                <Box
+                  sx={{
+                    borderRadius: 5,
+                    p: 2.25,
+                    border: '1px solid rgba(15,196,255,0.12)',
+                    background: 'rgba(7,18,31,0.46)',
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary' }}>
+                      SOURCE COVERAGE
+                    </Typography>
+                    <Chip
+                      label={sourceFamilies.length ? `${sourceFamilies.length} families matched` : 'no source family signals'}
+                      size="small"
+                      sx={{ bgcolor: 'rgba(15,196,255,0.1)', color: '#0FC4FF' }}
+                    />
+                  </Stack>
+                  {sourceFamilies.length ? (
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(3, minmax(0, 1fr))' },
+                        gap: 1.25,
+                      }}
+                    >
+                      {sourceFamilies.map((item: Bucket) => (
+                        <CoverageCard key={item.key} family={item.key} count={item.count} />
+                      ))}
+                      {matchedPort != null && (
+                        <Box
+                          sx={{
+                            borderRadius: 3,
+                            p: 2,
+                            background: 'rgba(16,185,129,0.1)',
+                            border: '1px solid rgba(16,185,129,0.18)',
+                          }}
+                        >
+                          <Stack direction="row" spacing={1.25} alignItems="center">
+                            <Box
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 2.5,
+                                display: 'grid',
+                                placeItems: 'center',
+                                bgcolor: 'rgba(16,185,129,0.16)',
+                                color: '#10B981',
+                              }}
+                            >
+                              <Inventory2RoundedIcon sx={{ fontSize: 18 }} />
+                            </Box>
+                            <Box>
+                              <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
+                                Wazuh Port Inventory
+                              </Typography>
+                              <Typography sx={{ fontSize: 10, color: 'text.secondary' }}>
+                                {fmtN(listenersQ.data?.total ?? 0)} listeners on port {matchedPort}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                      query นี้ยังไม่พบ source family เด่นจาก rule groups หรือ decoders
+                    </Typography>
+                  )}
+                </Box>
+
+                <Box
+                  sx={{
+                    borderRadius: 5,
+                    p: 2.25,
+                    border: '1px solid rgba(15,196,255,0.12)',
+                    background: 'rgba(7,18,31,0.46)',
+                  }}
+                >
+                  <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary', mb: 2 }}>
+                    PIVOT ACTIONS
+                  </Typography>
+                  <Stack spacing={1.25}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<TravelExploreRoundedIcon />}
+                      disabled={!topSrcIp.length}
+                      onClick={() => topSrcIp[0] && openInvestigate(topSrcIp[0].key)}
+                    >
+                      Investigate top source IP
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<TravelExploreRoundedIcon />}
+                      disabled={!topDstIp.length}
+                      onClick={() => topDstIp[0] && openInvestigate(topDstIp[0].key)}
+                    >
+                      Investigate top destination IP
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<SearchRoundedIcon />}
+                      disabled={matchedPort == null}
+                      onClick={() => matchedPort != null && applyPatch({ query: `dstport:${matchedPort}`, port: '', srcport: '', dstport: String(matchedPort), direction: 'dst' })}
+                    >
+                      Narrow to inbound on port {matchedPort ?? '—'}
+                    </Button>
+                    <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>
+                      หน้า search ใช้สำหรับ global hunt ส่วน deep dive ให้ pivot ต่อไปหน้า Investigate
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', xl: '1.25fr 0.75fr' },
+                  gap: 2,
+                }}
+              >
+                <Box
+                  sx={{
+                    borderRadius: 5,
+                    p: 2.25,
+                    border: '1px solid rgba(15,196,255,0.12)',
+                    background: 'rgba(7,18,31,0.46)',
+                  }}
+                >
+                  <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary', mb: 2 }}>
+                    EVENT TIMELINE
+                  </Typography>
+                  {timeline.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <AreaChart data={timeline}>
+                        <defs>
+                          <linearGradient id="searchTimeline" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0FC4FF" stopOpacity={0.45} />
+                            <stop offset="100%" stopColor="#0FC4FF" stopOpacity={0.04} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                        <XAxis dataKey="time" tick={{ fontSize: 10 }} tickFormatter={(value) => String(value).slice(5, 16)} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <RechartTooltip contentStyle={CHART_TIP} formatter={(value: any) => [value, 'events']} />
+                        <Area type="monotone" dataKey="count" stroke="#0FC4FF" strokeWidth={2.1} fill="url(#searchTimeline)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>ไม่มี timeline data</Typography>
+                  )}
+                </Box>
+
+                <Box
+                  sx={{
+                    borderRadius: 5,
+                    p: 2.25,
+                    border: '1px solid rgba(15,196,255,0.12)',
+                    background: 'rgba(7,18,31,0.46)',
+                  }}
+                >
+                  <Typography sx={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: 'text.secondary', mb: 2 }}>
+                    ACTION BREAKDOWN
+                  </Typography>
+                  {topActions.length ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={topActions.map((item: Bucket) => ({ ...item, label: String(item.key || 'unknown').toUpperCase() }))} layout="vertical" margin={{ top: 4, bottom: 4, left: 12, right: 12 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} width={80} />
+                        <RechartTooltip contentStyle={CHART_TIP} formatter={(value: any) => [value, 'events']} />
+                        <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="#22C55E" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>ไม่มี action aggregate</Typography>
+                  )}
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' },
+                  gap: 2,
+                }}
+              >
+                <TopList title="TOP SOURCE IPs" items={topSrcIp} accent="#38BDF8" onSelect={(value) => applyPatch({ srcip: value })} />
+                <TopList title="TOP DESTINATION IPs" items={topDstIp} accent="#F97316" onSelect={(value) => applyPatch({ dstip: value })} />
+                <TopList title="TOP AGENTS" items={topAgents} accent="#8B5CF6" onSelect={(value) => applyPatch({ agent: value })} />
+                <TopList title="TOP PROTOCOLS" items={topProtocols} accent="#10B981" onSelect={(value) => applyPatch({ proto: value.toLowerCase() })} />
+              </Box>
+
+              {(topLogSources.length > 0 || topCountries.length > 0) && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' },
+                    gap: 2,
+                  }}
+                >
+                  <TopList title="TOP LOG SOURCES" items={topLogSources} accent="#0FC4FF" onSelect={(value) => applyPatch({ group: value })} />
+                  <TopList title="TOP COUNTRIES" items={topCountries} accent="#EAB308" />
+                </Box>
+              )}
+
+              {matchedPort != null && (
+                <Box
+                  sx={{
+                    borderRadius: 5,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(15,196,255,0.12)',
+                    background: 'rgba(7,18,31,0.46)',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      px: 2.25,
+                      py: 1.75,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setShowListeners((value) => !value)}
+                  >
+                    <Stack direction="row" spacing={1.25} alignItems="center">
+                      <Inventory2RoundedIcon sx={{ fontSize: 18, color: '#10B981' }} />
+                      <Box>
+                        <Typography sx={{ fontSize: 12, fontWeight: 800 }}>
+                          Port {matchedPort} Listeners
+                        </Typography>
+                        <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+                          ข้อมูลจาก Wazuh inventory ของเครื่องที่เปิด port นี้อยู่จริง
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip label={fmtN(listenersQ.data?.total ?? 0)} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10B981' }} />
+                      {showListeners ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+                    </Stack>
+                  </Box>
+                  <Collapse in={showListeners}>
+                    {listenersQ.isLoading ? (
+                      <Box sx={{ p: 3, textAlign: 'center' }}>
+                        <CircularProgress size={22} />
+                      </Box>
+                    ) : !listenersQ.data?.listeners?.length ? (
+                      <Box sx={{ p: 3 }}>
+                        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                          ไม่พบ listener สำหรับ port {matchedPort}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ overflow: 'auto' }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              {['Agent', 'Local IP', 'Port', 'Proto', 'Process', 'PID', 'Updated'].map((header) => (
+                                <TableCell key={header} sx={{ fontSize: 10, fontWeight: 800 }}>{header}</TableCell>
+                              ))}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {listenersQ.data.listeners.map((listener: any, index: number) => (
+                              <TableRow key={`${listener.agent}-${listener.local_port}-${index}`} hover>
+                                <TableCell sx={{ fontSize: 11, fontWeight: 700 }}>{listener.agent}</TableCell>
+                                <TableCell sx={{ fontSize: 11, fontFamily: 'monospace' }}>{listener.local_ip || '0.0.0.0'}</TableCell>
+                                <TableCell>
+                                  <Chip label={listener.local_port} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.12)', color: '#10B981' }} />
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{String(listener.protocol || '').toUpperCase() || '—'}</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{listener.process || '—'}</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{listener.pid || '—'}</TableCell>
+                                <TableCell sx={{ fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                                  {listener.updated_at ? fmtIrisUtcToBangkok(listener.updated_at) : '—'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Box>
+                    )}
+                  </Collapse>
+                </Box>
+              )}
+
+              <Box
+                sx={{
+                  borderRadius: 5,
+                  overflow: 'hidden',
+                  border: '1px solid rgba(15,196,255,0.12)',
+                  background: 'rgba(7,18,31,0.46)',
+                }}
+              >
+                <Box
+                  sx={{
+                    px: 2.25,
+                    py: 1.75,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setShowEvents((value) => !value)}
+                >
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <RouterRoundedIcon sx={{ fontSize: 18, color: '#0FC4FF' }} />
+                    <Box>
+                      <Typography sx={{ fontSize: 12, fontWeight: 800 }}>
+                        Matched Events
+                      </Typography>
+                      <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>
+                        traffic events จาก log sources ทั้งหมดที่ match query นี้
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip label={`${events.length} / ${fmtN(total)}`} size="small" sx={{ bgcolor: 'rgba(15,196,255,0.12)', color: '#0FC4FF' }} />
+                    {showEvents ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+                  </Stack>
+                </Box>
+                <Collapse in={showEvents}>
+                  {!events.length ? (
+                    <Box sx={{ p: 4, textAlign: 'center' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                        ไม่พบ event ที่ตรงกับ query ในช่วงเวลานี้
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ overflow: 'auto', maxHeight: 700 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            {['เวลา', 'Direction', 'Agent', 'Src', 'Dst', 'Proto', 'Action', 'Family', 'Log Source', 'Pivot'].map((header) => (
+                              <TableCell
+                                key={header}
+                                sx={{
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(5,12,22,0.98)' : 'rgba(248,250,252,0.98)',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {header}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {events.map((event: any, index: number) => {
+                            const data = event?.data ?? {}
+                            const agent = event?.agent ?? {}
+                            const family = deriveSourceFamily(event)
+                            const direction = deriveDirection(event, matchedPort)
+                            const logSources = normalizeGroups(event?.rule?.groups).slice(0, 2).join(', ')
+                            const srcValue = `${data.srcip ?? '—'}${data.srcport ? `:${data.srcport}` : ''}`
+                            const dstValue = `${data.dstip ?? '—'}${data.dstport ? `:${data.dstport}` : ''}`
+                            const accent = familyColor(family)
+                            const pivotTarget = data.srcip || data.dstip || agent.name
+
+                            return (
+                              <TableRow key={`${event['@timestamp']}-${index}`} hover>
+                                <TableCell sx={{ fontSize: 10, fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'text.secondary' }}>
+                                  {event['@timestamp'] ? fmtIrisUtcToBangkok(event['@timestamp']) : '—'}
+                                </TableCell>
+                                <TableCell><DirectionPill direction={direction} /></TableCell>
+                                <TableCell sx={{ fontSize: 11, fontWeight: 700 }}>{agent.name || '—'}</TableCell>
+                                <TableCell sx={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{srcValue}</TableCell>
+                                <TableCell sx={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{dstValue}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={String(data.proto || data.transport || '—').toUpperCase()}
+                                    size="small"
+                                    sx={{ height: 20, bgcolor: 'rgba(15,196,255,0.08)', color: '#0FC4FF' }}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>
+                                  {data.action ? (
+                                    <Chip
+                                      label={String(data.action).toUpperCase()}
+                                      size="small"
+                                      sx={{
+                                        height: 20,
+                                        bgcolor: ['deny', 'drop', 'block'].includes(String(data.action).toLowerCase()) ? 'rgba(239,68,68,0.14)' : 'rgba(34,197,94,0.14)',
+                                        color: ['deny', 'drop', 'block'].includes(String(data.action).toLowerCase()) ? '#EF4444' : '#22C55E',
+                                      }}
+                                    />
+                                  ) : '—'}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={familyLabel(family)}
+                                    size="small"
+                                    sx={{ height: 20, bgcolor: `${accent}18`, color: accent }}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 10, color: 'text.secondary', maxWidth: 220 }}>
+                                  <Tooltip title={logSources || event?.rule?.description || '—'}>
+                                    <Typography sx={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                                      {logSources || event?.rule?.description || '—'}
+                                    </Typography>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="text"
+                                    size="small"
+                                    disabled={!pivotTarget}
+                                    onClick={() => pivotTarget && openInvestigate(String(pivotTarget))}
+                                    sx={{ minWidth: 0, px: 0.5 }}
+                                  >
+                                    Investigate
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </Box>
+                  )}
+                </Collapse>
+              </Box>
+            </>
+          )}
+        </Stack>
+      )}
+    </PageShell>
+  )
+}

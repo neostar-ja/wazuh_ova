@@ -2,6 +2,7 @@ import asyncio
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from opensearchpy import OpenSearch
 from ..core.config import settings
 
@@ -23,6 +24,72 @@ async def _search(body: dict, *, index: str | None = None) -> dict:
     return await asyncio.to_thread(client.search, index=target_index, body=body)
 
 
+_SEARCH_SOURCE_FAMILY_QUERIES = {
+    "firewall": [
+        "rule.groups:*firewall*",
+        "rule.groups:*forti*",
+        "rule.groups:*pfsense*",
+        "rule.groups:*iptables*",
+        "decoder.name:*firewall*",
+    ],
+    "ids": [
+        "rule.groups:*ids*",
+        "rule.groups:*suricata*",
+        "rule.groups:*snort*",
+        "decoder.name:*suricata*",
+        "decoder.name:*snort*",
+    ],
+    "ssh": [
+        "rule.groups:*ssh*",
+        "rule.groups:*sshd*",
+        "decoder.name:*sshd*",
+        "predecoder.program_name:*sshd*",
+    ],
+    "dns": [
+        "rule.groups:*dns*",
+        "rule.groups:*bind*",
+        "decoder.name:*dns*",
+        "predecoder.program_name:*named*",
+    ],
+    "dhcp": [
+        "rule.groups:*dhcp*",
+        "decoder.name:*dhcp*",
+        "predecoder.program_name:*dhcp*",
+    ],
+    "nac": [
+        "rule.groups:*nac*",
+        "rule.groups:*radius*",
+        "decoder.name:*radius*",
+    ],
+    "windows": [
+        "rule.groups:*windows*",
+        "rule.groups:*sysmon*",
+        "decoder.name:*windows*",
+    ],
+    "linux": [
+        "rule.groups:*linux*",
+        "rule.groups:*syslog*",
+        "decoder.name:*syslog*",
+    ],
+    "web": [
+        "rule.groups:*web*",
+        "rule.groups:*apache*",
+        "rule.groups:*nginx*",
+        "decoder.name:*apache*",
+        "decoder.name:*nginx*",
+    ],
+}
+
+
+def _source_family_query_string(source_family: str | None) -> str | None:
+    if not source_family:
+        return None
+    patterns = _SEARCH_SOURCE_FAMILY_QUERIES.get(source_family.lower())
+    if not patterns:
+        return None
+    return " OR ".join(patterns)
+
+
 async def get_alerts(
     size=50,
     level_min=1,
@@ -37,6 +104,10 @@ async def get_alerts(
     group=None,
     srcip=None,
     dstip=None,
+    srcport=None,
+    dstport=None,
+    proto=None,
+    port=None,           # match srcport OR dstport
     decoder=None,
     program=None,
     compliance=None,
@@ -98,6 +169,18 @@ async def get_alerts(
         }
         if compliance in _COMPLIANCE_FIELD:
             must.append({"exists": {"field": _COMPLIANCE_FIELD[compliance]}})
+    if srcport:
+        must.append({"term": {"data.srcport": str(srcport)}})
+    if dstport:
+        must.append({"term": {"data.dstport": str(dstport)}})
+    if proto:
+        must.append({"term": {"data.proto": proto.lower()}})
+    if port:
+        # match either direction
+        must.append({"bool": {"should": [
+            {"term": {"data.srcport": str(port)}},
+            {"term": {"data.dstport": str(port)}},
+        ], "minimum_should_match": 1}})
     if has_srcip:
         must.append({"exists": {"field": "data.srcip"}})
     if has_mitre:
@@ -1226,3 +1309,254 @@ async def count_source_events(source_type: str, time_range: str = "30d") -> int:
         }
     }
     return _os_count_safe(client, settings.opensearch_index, body)
+
+
+# ── Network Flow Search ────────────────────────────────────────────────────────
+
+async def search_network_flow(
+    port: Optional[int] = None,
+    srcip: Optional[str] = None,
+    dstip: Optional[str] = None,
+    srcport: Optional[int] = None,
+    dstport: Optional[int] = None,
+    proto: Optional[str] = None,
+    action: Optional[str] = None,
+    agent: Optional[str] = None,
+    source_family: Optional[str] = None,
+    query_str: Optional[str] = None,
+    direction: str = "both",   # "src" | "dst" | "both"
+    time_range: str = "24h",
+    size: int = 200,
+) -> dict:
+    """
+    Cross-source network flow search.
+    Returns events, aggregated stats (top IPs, top ports, timeline).
+    """
+
+
+    must: list = [{"range": {"@timestamp": {"gte": f"now-{time_range}"}}}]
+
+    if query_str:
+        must.append({"query_string": {"query": query_str, "default_operator": "AND"}})
+
+    if srcip:
+        must.append({"term": {"data.srcip": srcip}})
+    if dstip:
+        must.append({"term": {"data.dstip": dstip}})
+    if proto:
+        must.append({"term": {"data.proto": proto.lower()}})
+    if action:
+        action_lower = action.lower()
+        variants = sorted({action_lower, action_lower.upper(), action_lower.capitalize()})
+        must.append({"bool": {"should": [
+            {"term": {"data.action": variant}} for variant in variants
+        ], "minimum_should_match": 1}})
+    if agent:
+        must.append({"match_phrase": {"agent.name": agent}})
+    family_qs = _source_family_query_string(source_family)
+    if family_qs:
+        must.append({"query_string": {"query": family_qs}})
+
+    if port is not None:
+        port_str = str(port)
+        if direction == "dst":
+            must.append({"term": {"data.dstport": port_str}})
+        elif direction == "src":
+            must.append({"term": {"data.srcport": port_str}})
+        else:
+            must.append({"bool": {"should": [
+                {"term": {"data.dstport": port_str}},
+                {"term": {"data.srcport": port_str}},
+            ], "minimum_should_match": 1}})
+    else:
+        if srcport is not None:
+            must.append({"term": {"data.srcport": str(srcport)}})
+        if dstport is not None:
+            must.append({"term": {"data.dstport": str(dstport)}})
+
+    matched_port = port if port is not None else dstport if dstport is not None else srcport
+
+    body: dict = {
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": must}},
+        "_source": [
+            "@timestamp", "agent.name", "agent.id",
+            "data.srcip", "data.dstip", "data.srcport", "data.dstport",
+            "data.proto", "data.action", "data.direction",
+            "rule.id", "rule.level", "rule.description", "rule.groups",
+            "decoder.name", "predecoder.program_name", "full_log",
+            "GeoLocation.country_name", "GeoLocation.country_code2",
+        ],
+        "aggs": {
+            "total_exact": {"value_count": {"field": "@timestamp"}},
+            "unique_srcip": {"cardinality": {"field": "data.srcip"}},
+            "unique_dstip": {"cardinality": {"field": "data.dstip"}},
+            "unique_agent": {"cardinality": {"field": "agent.name"}},
+            "top_srcip": {"terms": {"field": "data.srcip", "size": 15}},
+            "top_dstip": {"terms": {"field": "data.dstip", "size": 15}},
+            "top_dstport": {"terms": {"field": "data.dstport", "size": 15}},
+            "top_srcport": {"terms": {"field": "data.srcport", "size": 10}},
+            "top_proto": {"terms": {"field": "data.proto", "size": 10}},
+            "top_rule": {"terms": {"field": "rule.description", "size": 10}},
+            "top_agent": {"terms": {"field": "agent.name", "size": 10}},
+            "by_action": {"terms": {"field": "data.action", "size": 5}},
+            "top_country": {"terms": {"field": "GeoLocation.country_name", "size": 10}},
+            "by_direction_split": {
+                "filters": {
+                    "filters": {
+                        "inbound_to_port": {"term": {"data.dstport": str(matched_port) if matched_port is not None else "0"}},
+                        "outbound_from_port": {"term": {"data.srcport": str(matched_port) if matched_port is not None else "0"}},
+                    }
+                }
+            },
+            "timeline": {
+                "date_histogram": {
+                    "field": "@timestamp",
+                    "calendar_interval": _range_to_interval(time_range),
+                    "min_doc_count": 0,
+                }
+            },
+            "by_log_source": {"terms": {"field": "rule.groups", "size": 20}},
+            "source_families": {
+                "filters": {
+                    "filters": {
+                        family: {"query_string": {"query": qs}}
+                        for family, qs in {
+                            key: " OR ".join(patterns)
+                            for key, patterns in _SEARCH_SOURCE_FAMILY_QUERIES.items()
+                        }.items()
+                    }
+                }
+            },
+        },
+    }
+
+    try:
+        resp = await _search(body)
+        hits = [h["_source"] for h in resp["hits"]["hits"]]
+        aggs = resp.get("aggregations", {})
+        total = aggs.get("total_exact", {}).get("value", resp["hits"]["total"]["value"])
+
+        def buckets(key: str) -> list:
+            return [{"key": b["key"], "count": b["doc_count"]}
+                    for b in aggs.get(key, {}).get("buckets", [])]
+
+        timeline_raw = aggs.get("timeline", {}).get("buckets", [])
+        timeline = [{"time": b["key_as_string"], "count": b["doc_count"]} for b in timeline_raw]
+
+        direction_split = aggs.get("by_direction_split", {}).get("buckets", {})
+        inbound_count = direction_split.get("inbound_to_port", {}).get("doc_count", 0)
+        outbound_count = direction_split.get("outbound_from_port", {}).get("doc_count", 0)
+        source_family_buckets = aggs.get("source_families", {}).get("buckets", {})
+
+        return {
+            "total": total,
+            "events": hits,
+            "timeline": timeline,
+            "matched_port": matched_port,
+            "unique_srcip": aggs.get("unique_srcip", {}).get("value", 0),
+            "unique_dstip": aggs.get("unique_dstip", {}).get("value", 0),
+            "unique_agent": aggs.get("unique_agent", {}).get("value", 0),
+            "top_srcip": buckets("top_srcip"),
+            "top_dstip": buckets("top_dstip"),
+            "top_dstport": buckets("top_dstport"),
+            "top_srcport": buckets("top_srcport"),
+            "top_proto": buckets("top_proto"),
+            "top_rule": buckets("top_rule"),
+            "top_agent": buckets("top_agent"),
+            "by_action": buckets("by_action"),
+            "by_log_source": buckets("by_log_source"),
+            "top_country": buckets("top_country"),
+            "source_families": [
+                {"key": key, "count": value.get("doc_count", 0)}
+                for key, value in source_family_buckets.items()
+            ],
+            "inbound_count": inbound_count,
+            "outbound_count": outbound_count,
+        }
+    except Exception as e:
+        return {"total": 0, "events": [], "timeline": [], "error": str(e),
+                "matched_port": matched_port,
+                "unique_srcip": 0, "unique_dstip": 0, "unique_agent": 0,
+                "top_srcip": [], "top_dstip": [], "top_dstport": [], "top_srcport": [],
+                "top_proto": [], "top_rule": [], "top_agent": [], "by_action": [],
+                "by_log_source": [], "top_country": [], "source_families": [],
+                "inbound_count": 0, "outbound_count": 0}
+
+
+def _range_to_interval(time_range: str) -> str:
+    """Map time_range string to calendar_interval for date_histogram."""
+    if time_range.endswith("h"):
+        hours = int(time_range[:-1])
+        return "1h" if hours <= 24 else "6h"
+    if time_range.endswith("d"):
+        days = int(time_range[:-1])
+        return "1d" if days <= 30 else "7d"
+    return "1d"
+
+
+async def get_port_listeners(port: Optional[int] = None, proto: Optional[str] = None) -> dict:
+    """
+    Query wazuh-states-inventory-ports-wazuh for agents listening on given port.
+    Returns list of {agent, local_ip, local_port, remote_ip, remote_port, protocol, state}.
+    """
+
+
+    must: list = []
+    if port is not None:
+        must.append({"term": {"source.port": port}})
+    if proto:
+        must.append({"term": {"network.transport": proto.lower()}})
+
+    body: dict = {
+        "size": 500,
+        "query": {"bool": {"must": must}} if must else {"match_all": {}},
+        "_source": ["agent.name", "agent.id", "source.ip", "source.port",
+                    "destination.ip", "destination.port",
+                    "network.transport", "network.state", "process.name", "process.pid",
+                    "wazuh.dequeued_at"],
+        "aggs": {
+            "by_agent": {"terms": {"field": "agent.name", "size": 50}},
+            "by_port": {"terms": {"field": "source.port", "size": 30}},
+            "by_proto": {"terms": {"field": "network.transport", "size": 5}},
+        },
+    }
+    INDEX = "wazuh-states-inventory-ports-wazuh"
+    try:
+        resp = await _search(body, index=INDEX)
+        hits = resp.get("hits", {}).get("hits", [])
+        aggs = resp.get("aggregations", {})
+        total = resp["hits"]["total"]["value"]
+
+        def buckets(key: str) -> list:
+            return [{"key": b["key"], "count": b["doc_count"]}
+                    for b in aggs.get(key, {}).get("buckets", [])]
+
+        listeners = []
+        for h in hits:
+            src_raw = h["_source"]
+            listeners.append({
+                "agent": src_raw.get("agent", {}).get("name", "unknown"),
+                "agent_id": src_raw.get("agent", {}).get("id", ""),
+                "local_ip": src_raw.get("source", {}).get("ip", ""),
+                "local_port": src_raw.get("source", {}).get("port"),
+                "remote_ip": src_raw.get("destination", {}).get("ip", ""),
+                "remote_port": src_raw.get("destination", {}).get("port"),
+                "protocol": src_raw.get("network", {}).get("transport", ""),
+                "state": src_raw.get("network", {}).get("state", ""),
+                "process": src_raw.get("process", {}).get("name", ""),
+                "pid": src_raw.get("process", {}).get("pid"),
+                "updated_at": src_raw.get("wazuh", {}).get("dequeued_at", ""),
+            })
+
+        return {
+            "total": total,
+            "listeners": listeners,
+            "by_agent": buckets("by_agent"),
+            "by_port": buckets("by_port"),
+            "by_proto": buckets("by_proto"),
+        }
+    except Exception as e:
+        return {"total": 0, "listeners": [], "error": str(e),
+                "by_agent": [], "by_port": [], "by_proto": []}

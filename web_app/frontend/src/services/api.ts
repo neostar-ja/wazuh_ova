@@ -89,6 +89,23 @@ export const iocApi = {
     api.get<any>('/ioc/cdb-status'),
 }
 
+export const searchApi = {
+  flow: (params: {
+    q?: string; port?: number; srcport?: number; dstport?: number;
+    srcip?: string; dstip?: string; proto?: string;
+    direction?: string; action?: string; agent?: string; source_family?: string;
+    time_range?: string; size?: number;
+    rule_id?: string; group?: string;
+  }): Promise<AxiosResponse<any>> =>
+    api.get<any>('/search/flow', { params }),
+
+  portListeners: (params: { port?: number; proto?: string }): Promise<AxiosResponse<any>> =>
+    api.get<any>('/search/port-listeners', { params }),
+
+  suggest: (q: string): Promise<AxiosResponse<any>> =>
+    api.get<any>('/search/suggest', { params: { q } }),
+}
+
 function normalizeComplianceParams(input: any = {}): Record<string, any> {
   if (typeof input === 'string') {
     return { time_range: input }

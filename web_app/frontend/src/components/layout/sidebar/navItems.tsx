@@ -59,6 +59,21 @@ export const NAV_GROUPS: NavGroupData[] = [
         ),
       },
       {
+        id: 'log-search',
+        label: 'ค้นหา Log',
+        descriptionTh: 'ค้นหา traffic ทุก log source — port, IP, โปรโตคอล, SSH, RDP, Firewall',
+        path: '/search',
+        section: 'ปฏิบัติการรักษาความปลอดภัย',
+        color: '#06B6D4',
+        gradient: 'linear-gradient(135deg,#06B6D4,#0284C7)',
+        glow: 'rgba(6,182,212,0.55)',
+        icon: (
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 3h2v2h-2V7zm-4 0h2v2h-2V7zM4 7h4v2H4V7zm1 10l4-4H7c0-1.1.9-2 2-2h2l-2 2h1.5l4-4H13c0-1.1.9-2 2-2h5l-4 4h1.5l-4 4H11c0 1.1-.9 2-2 2H5z"/>
+          </svg>
+        ),
+      },
+      {
         id: 'ioc-lookup',
         label: 'ตรวจสอบ IOC',
         descriptionTh: 'ตรวจสอบตัวบ่งชี้ภัยคุกคาม เช่น IP, Domain, Hash และ URL',
