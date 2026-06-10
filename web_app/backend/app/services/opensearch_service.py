@@ -90,6 +90,26 @@ def _source_family_query_string(source_family: str | None) -> str | None:
     return " OR ".join(patterns)
 
 
+# Some log sources (e.g. FortiGate WUH) store data.proto as the raw IANA
+# protocol number instead of its name, so a plain term match on "tcp"/"udp"
+# never matches those documents. Match either representation.
+_PROTO_ALIASES = {
+    "tcp": ["tcp", "6"],
+    "udp": ["udp", "17"],
+    "icmp": ["icmp", "1"],
+    "icmpv6": ["icmpv6", "58"],
+    "gre": ["gre", "47"],
+}
+
+
+def _proto_query(proto: str) -> dict:
+    values = _PROTO_ALIASES.get(proto.lower(), [proto.lower()])
+    if len(values) == 1:
+        return {"term": {"data.proto": values[0]}}
+    return {"bool": {"should": [{"term": {"data.proto": v}} for v in values],
+                      "minimum_should_match": 1}}
+
+
 async def get_alerts(
     size=50,
     level_min=1,
@@ -174,7 +194,7 @@ async def get_alerts(
     if dstport:
         must.append({"term": {"data.dstport": str(dstport)}})
     if proto:
-        must.append({"term": {"data.proto": proto.lower()}})
+        must.append(_proto_query(proto))
     if port:
         # match either direction
         must.append({"bool": {"should": [
@@ -1343,8 +1363,6 @@ async def search_network_flow(
         must.append({"term": {"data.srcip": srcip}})
     if dstip:
         must.append({"term": {"data.dstip": dstip}})
-    if proto:
-        must.append({"term": {"data.proto": proto.lower()}})
     if action:
         action_lower = action.lower()
         variants = sorted({action_lower, action_lower.upper(), action_lower.capitalize()})
@@ -1373,6 +1391,9 @@ async def search_network_flow(
             must.append({"term": {"data.srcport": str(srcport)}})
         if dstport is not None:
             must.append({"term": {"data.dstport": str(dstport)}})
+
+    if proto:
+        must.append(_proto_query(proto))
 
     matched_port = port if port is not None else dstport if dstport is not None else srcport
 
