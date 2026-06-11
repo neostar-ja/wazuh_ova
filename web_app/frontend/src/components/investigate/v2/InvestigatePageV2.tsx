@@ -16,7 +16,7 @@ import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded'
 import FlashOnRoundedIcon from '@mui/icons-material/FlashOnRounded'
 
 import { PageShell } from '../../ui/layout'
-import { fmtN, BRAND, SEV_COLOR } from '../../ui/tokens'
+import { fmtN, BRAND, getSoftBg } from '../../ui/tokens'
 import api from '../../../services/api'
 import { safeStorage } from '../../../utils/safeStorage'
 
@@ -73,10 +73,6 @@ const TABS = [
   { label: 'Entity Graph',  icon: <AccountTreeRoundedIcon   fontSize="small" /> },
   { label: 'Actions',       icon: <FlashOnRoundedIcon       fontSize="small" /> },
 ]
-
-function hexRgb(hex: string) {
-  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
-}
 
 export default function InvestigatePageV2() {
   const { palette } = useTheme()
@@ -321,19 +317,19 @@ export default function InvestigatePageV2() {
                   <Box key={m.title}
                     className="rounded-xl px-4 py-3 flex items-center gap-3 transition-all duration-200"
                     sx={{
-                      background: isDark ? `rgba(${hexRgb(m.color)},0.07)` : `rgba(${hexRgb(m.color)},0.05)`,
-                      border: `1px solid rgba(${hexRgb(m.color)},0.2)`,
-                      '&:hover': { border: `1px solid rgba(${hexRgb(m.color)},0.35)`, transform: 'translateY(-1px)', boxShadow: `0 4px 16px rgba(${hexRgb(m.color)},0.1)` },
+                      background: getSoftBg(m.color, isDark ? 7 : 5),
+                      border: `1px solid ${getSoftBg(m.color, 20)}`,
+                      '&:hover': { border: `1px solid ${getSoftBg(m.color, 35)}`, transform: 'translateY(-1px)', boxShadow: `0 4px 16px ${getSoftBg(m.color, 10)}` },
                     }}
                   >
                     <span className="text-xl leading-none">{m.icon}</span>
                     <Box>
                       <Typography className="text-[9px] font-bold tracking-wide mb-0.5"
-                        sx={{ color: `rgba(${hexRgb(m.color)},0.7)` }}>
+                        sx={{ color: getSoftBg(m.color, 70) }}>
                         {m.title}
                       </Typography>
                       {isLoading ? (
-                        <Skeleton variant="text" width={40} sx={{ bgcolor: `rgba(${hexRgb(m.color)},0.15)` }} />
+                        <Skeleton variant="text" width={40} sx={{ bgcolor: getSoftBg(m.color, 15) }} />
                       ) : (
                         <Typography className="font-mono font-bold text-base leading-none" sx={{ color: m.color }}>
                           {m.value}

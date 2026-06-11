@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { BRAND, SEV_COLOR, CHART_TIP_STYLE, PIE_COLORS, fmtN } from '../../ui/tokens'
+import { BRAND, SEV_COLOR, PIE_COLORS, fmtN, getChartTipStyle } from '../../ui/tokens'
 
 interface Props {
   loading: boolean
@@ -48,10 +48,7 @@ export default function OverviewTab({ loading, hourly, levelDist, topSources, to
   const sevData  = SEV_BARS.map(s => ({ name: s.label, value: levelDist[s.key] ?? 0, color: s.color }))
   const total    = sevData.reduce((a, b) => a + b.value, 0)
 
-  const tipStyle = isDark ? CHART_TIP_STYLE : {
-    background: 'rgba(255,255,255,0.98)', border: '1px solid rgba(123,91,164,0.2)',
-    borderRadius: 8, fontSize: 12, color: '#1A1033', boxShadow: '0 4px 16px rgba(123,91,164,0.12)',
-  }
+  const tipStyle = getChartTipStyle(isDark)
 
   return (
     <Stack spacing={3.5} className="animate-fade-in">

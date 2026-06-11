@@ -36,7 +36,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters, AlertFacets } from '../../types/alert'
-import { BRAND as TOKENS, sevColor, sevLabelShort, getChartTipStyle } from '../ui/tokens'
+import { BRAND as TOKENS, sevColor, sevLabelShort, getChartTipStyle, getBorder } from '../ui/tokens'
 import { PageShell } from '../ui/layout'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1873,6 +1873,8 @@ export default function AlertsPage() {
   const navigate = useNavigate()
   const { enqueueSnackbar } = useSnackbar()
   const qc = useQueryClient()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   // Filter state
   const [level,            setLevel]            = useState<number>(12)  // Default: High+
@@ -2163,7 +2165,7 @@ export default function AlertsPage() {
       })()}
 
       {/* ── Filter Bar ── */}
-      <Card sx={{ mb: 1.5, p: 1.25, border: '1px solid rgba(123,91,164,0.14)', boxShadow: 'none' }}>
+      <Card sx={{ mb: 1.5, p: 1.25, border: `1px solid ${getBorder(isDark, 'subtle')}`, boxShadow: 'none' }}>
         <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mb: activeFilters.length ? 0.75 : 0 }}>
           {/* Search */}
           <TextField size="small" placeholder="ค้นหา IP, Rule, Description..." value={searchInput}
