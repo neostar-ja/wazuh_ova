@@ -38,10 +38,7 @@ import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { useThemeMode } from '../../theme/ThemeContext'
 import { safeStorage } from '../../utils/safeStorage'
-import { getChartTipStyle } from '../ui/tokens'
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
+import { BRAND, SEV_COLOR, getChartTipStyle } from '../ui/tokens'
 
 interface VerdictItem {
   color: string;
@@ -52,10 +49,10 @@ interface VerdictItem {
 }
 
 const VERDICT_CONFIG: Record<string, VerdictItem> = {
-  blocked:    { color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   label: 'BLOCKED',    icon: <GppBadRoundedIcon />,  desc: 'พบใน Custom IOC Block-list' },
-  malicious:  { color: '#EF4444', bg: 'rgba(239,68,68,0.08)',   label: 'MALICIOUS',  icon: <GppBadRoundedIcon />,  desc: 'ตรวจพบว่าเป็นภัยคุกคาม' },
-  suspicious: { color: '#F17422', bg: 'rgba(241,116,34,0.10)',  label: 'SUSPICIOUS', icon: <WarningRoundedIcon />, desc: 'พบสัญญาณที่น่าสงสัย' },
-  clean:      { color: '#22C55E', bg: 'rgba(34,197,94,0.08)',   label: 'CLEAN',      icon: <GppGoodRoundedIcon />, desc: 'ไม่พบภัยคุกคามในฐานข้อมูล' },
+  blocked:    { color: SEV_COLOR.critical, bg: 'rgba(239,68,68,0.12)',   label: 'BLOCKED',    icon: <GppBadRoundedIcon />,  desc: 'พบใน Custom IOC Block-list' },
+  malicious:  { color: SEV_COLOR.critical, bg: 'rgba(239,68,68,0.08)',   label: 'MALICIOUS',  icon: <GppBadRoundedIcon />,  desc: 'ตรวจพบว่าเป็นภัยคุกคาม' },
+  suspicious: { color: SEV_COLOR.high,     bg: 'rgba(241,116,34,0.10)',  label: 'SUSPICIOUS', icon: <WarningRoundedIcon />, desc: 'พบสัญญาณที่น่าสงสัย' },
+  clean:      { color: SEV_COLOR.low,      bg: 'rgba(34,197,94,0.08)',   label: 'CLEAN',      icon: <GppGoodRoundedIcon />, desc: 'ไม่พบภัยคุกคามในฐานข้อมูล' },
 }
 
 const IOC_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -73,8 +70,8 @@ const TYPE_LABEL: Record<string, string> = {
   hash_sha1: 'SHA1 Hash', hash_sha256: 'SHA256 Hash', url: 'URL',
 }
 
-const SEV_COLORS: Record<string, string> = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
-const PIE_PALETTE = [BRAND.purple, BRAND.orange, '#38BDF8', '#22C55E', '#EAB308', '#EC4899']
+const SEV_COLORS: Record<string, string> = { critical: SEV_COLOR.critical, high: SEV_COLOR.high, medium: SEV_COLOR.medium, low: SEV_COLOR.low }
+const PIE_PALETTE = [BRAND.purple, BRAND.orange, SEV_COLOR.info, SEV_COLOR.low, SEV_COLOR.medium, '#EC4899']
 
 // ── Risk Score Gauge ──────────────────────────────────────────────────────────
 interface RiskGaugeProps {
@@ -105,7 +102,7 @@ function RiskGauge({ score = 0, verdict = 'clean', size = 120 }: RiskGaugeProps)
           <text x="50" y="44" textAnchor="middle" fill={cfg.color} fontSize="20" fontWeight="800" fontFamily="IBM Plex Sans Thai, sans-serif">
             {score}
           </text>
-          <text x="50" y="58" textAnchor="middle" fill="rgba(237,233,250,0.5)" fontSize="9" fontFamily="IBM Plex Sans Thai, sans-serif">
+          <text x="50" y="58" textAnchor="middle" fill="rgba(237,233,250,0.5)" fontSize="11" fontFamily="IBM Plex Sans Thai, sans-serif">
             Risk Score
           </text>
         </svg>
@@ -1014,7 +1011,6 @@ function StatsPanel() {
     queryFn: () => iocApi.stats().then(r => r.data),
     staleTime: 60000,
   })
-  const sevColors: Record<string, string> = { critical: '#EF4444', high: BRAND.orange, medium: '#EAB308', low: '#22C55E' }
 
   if (isLoading) return <Box sx={{ p: 2 }}>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</Box>
   if (!stats.total) return (
@@ -1057,7 +1053,7 @@ function StatsPanel() {
                 <RechartTooltip contentStyle={getChartTipStyle(isDark)} />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                   {(stats.by_severity || []).map((e: any, i: number) => (
-                    <Cell key={i} fill={sevColors[e.name] || BRAND.purple} />
+                    <Cell key={i} fill={SEV_COLORS[e.name] || BRAND.purple} />
                   ))}
                 </Bar>
               </BarChart>

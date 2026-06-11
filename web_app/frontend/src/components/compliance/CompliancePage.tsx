@@ -31,7 +31,7 @@ import {
 import { complianceApi } from '../../services/api'
 import { PageShell } from '../ui/layout'
 import { AlertMessage, DetailPanel, EmptyState, LoadingSpinner, StatusDot } from '../common/CommonComponents'
-import { CHART_TIP_STYLE } from '../ui/tokens'
+import { getChartTipStyle } from '../ui/tokens'
 import {
   useComplianceAgents, useComplianceAlerts, useComplianceEvidence,
   useComplianceSca, useComplianceSummary, useComplianceVulnerabilities,
@@ -44,7 +44,6 @@ import {
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const P  = '#7B5BA4'  // purple
 const PL = '#A78BCD'  // purple light
-const ChartTip = CHART_TIP_STYLE
 
 const TAB_ICONS: React.ReactNode[] = [
   <SecurityRoundedIcon fontSize="small" />,
@@ -71,7 +70,7 @@ function ScoreGauge({ score, size = 80, color = P }: { score: number | null; siz
   const dash = (pct / 100) * circ
   return (
     <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={`${color}20`} strokeWidth={6} />
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={6}
           strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
@@ -81,7 +80,7 @@ function ScoreGauge({ score, size = 80, color = P }: { score: number | null; siz
         <Typography sx={{ fontSize: size * 0.18, fontWeight: 900, color, lineHeight: 1, fontFamily: '"IBM Plex Mono"' }}>
           {score === null ? 'N/A' : `${Math.round(score)}`}
         </Typography>
-        {score !== null && <Typography sx={{ fontSize: size * 0.1, color: 'text.disabled', lineHeight: 1 }}>%</Typography>}
+        {score !== null && <Typography sx={{ fontSize: Math.max(size * 0.12, 11), color: 'text.disabled', lineHeight: 1 }}>%</Typography>}
       </Box>
     </Box>
   )
@@ -761,7 +760,7 @@ export default function CompliancePage() {
                                       <Cell key={item.severity} fill={SEVERITY_COLORS[item.severity] || '#64748b'} stroke="none" />
                                     ))}
                                   </Pie>
-                                  <RechartsTooltip contentStyle={ChartTip} />
+                                  <RechartsTooltip contentStyle={getChartTipStyle(isDark)} />
                                 </PieChart>
                               </ResponsiveContainer>
                               <Box sx={{ flex: 1 }}>
@@ -798,7 +797,7 @@ export default function CompliancePage() {
                                 <XAxis dataKey="frameworkName" tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false}
                                   tickFormatter={(v: string) => v.replace('NIST 800-53', 'NIST').replace('ISO 27001', 'ISO').replace('MITRE ATT&CK', 'MITRE')} />
                                 <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                                <RechartsTooltip contentStyle={ChartTip} formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'คะแนน']} />
+                                <RechartsTooltip contentStyle={getChartTipStyle(isDark)} formatter={(v: any) => [`${Number(v).toFixed(1)}%`, 'คะแนน']} />
                                 <Bar dataKey="score" radius={[4, 4, 0, 0]}>
                                   {findingsByFramework.map((item: any) => <Cell key={item.frameworkId} fill={item.color} />)}
                                 </Bar>
@@ -825,7 +824,7 @@ export default function CompliancePage() {
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,91,164,0.07)" vertical={false} />
                                 <XAxis dataKey="timestamp" tick={{ fontSize: 8, fill: '#9A90BF' }} axisLine={false} tickLine={false} hide />
                                 <YAxis tick={{ fontSize: 9, fill: '#9A90BF' }} axisLine={false} tickLine={false} />
-                                <RechartsTooltip contentStyle={ChartTip} formatter={(v: any) => [formatCompactNumber(Number(v)), 'Alerts']} />
+                                <RechartsTooltip contentStyle={getChartTipStyle(isDark)} formatter={(v: any) => [formatCompactNumber(Number(v)), 'Alerts']} />
                                 <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2}
                                   fill="url(#gbl)" dot={false} name="Alerts" />
                               </AreaChart>

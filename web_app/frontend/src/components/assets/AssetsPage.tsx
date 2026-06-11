@@ -55,7 +55,7 @@ import { assetsApi } from '../../services/api'
 import { PageShell } from '../ui/layout'
 import SectionCard from '../ui/SectionCard'
 import MetricCard from '../ui/MetricCard'
-import { BRAND, CHART_TIP_STYLE, PIE_COLORS } from '../ui/tokens'
+import { BRAND, SEV_COLOR, PIE_COLORS, getChartTipStyle } from '../ui/tokens'
 import { AlertMessage, DetailPanel, EmptyState, LoadingSpinner, StatusDot } from '../common/CommonComponents'
 
 const ACCENT = '#0EA5E9'
@@ -83,9 +83,9 @@ function formatRelative(value?: string | null) {
 }
 
 function riskColor(value = 0) {
-  if (value >= 8) return '#EF4444'
+  if (value >= 8) return SEV_COLOR.critical
   if (value >= 5) return '#F59E0B'
-  return '#22C55E'
+  return SEV_COLOR.low
 }
 
 function statusConfig(status?: string) {
@@ -766,7 +766,7 @@ export default function AssetsPage() {
                           <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
-                      <RechartTooltip contentStyle={CHART_TIP_STYLE} />
+                      <RechartTooltip contentStyle={getChartTipStyle(theme.palette.mode === 'dark')} />
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>
@@ -789,7 +789,7 @@ export default function AssetsPage() {
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
                       <XAxis type="number" tick={{ fontSize: 11 }} />
                       <YAxis dataKey="label" type="category" width={110} tick={{ fontSize: 11 }} />
-                      <RechartTooltip contentStyle={CHART_TIP_STYLE} />
+                      <RechartTooltip contentStyle={getChartTipStyle(theme.palette.mode === 'dark')} />
                       <Bar dataKey="value" radius={[0, 10, 10, 0]}>
                         {osChartData.map((_, index: number) => (
                           <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
