@@ -300,3 +300,49 @@ web_app/frontend/src/components/assets/AssetsPage.tsx          (Phase 7)
 web_app/frontend/src/components/kpi/KPIPage.tsx                 (Phase 7)
 web_app/frontend/src/components/admin/AdminPage.tsx             (Phase 7)
 ```
+
+---
+
+## 8. Phase 8 — QA Pass (Responsive / Dark-Light / Accessibility)
+
+เนื่องจาก repo นี้ไม่มี visual-regression / browser-automation harness, Phase 8
+จึงเป็น **code-audit + fix pass** ครอบคลุมไฟล์ทั้งหมดที่แก้ไขใน Phase 3-7
+(`tokens.ts`, `LogSearchPage`/`BreakdownCharts`/`TimelineChart`,
+`AlertsPage`/`InvestigatePageV2`/`OverviewTab`, `SOARPage`/`CaseWorkspacePage`,
+`IOCPage`/`CompliancePage`/`AssetsPage`/`KPIPage`, `DashboardPage`) บวก
+spot-check ผ่าน dev server
+
+### ผลตรวจสอบ
+
+1. **SVG gauges**: `grep -n "<svg"` ทุกไฟล์ที่แก้ไข → ทุกตัวมี `viewBox` แล้ว
+   (RiskGauge และ ScoreGauge แก้ไปแล้วใน Phase 5/7)
+2. **Dev server smoke test**: รัน `npm run dev` แล้ว `curl /wazuh/` ได้
+   `HTTP 200` — แอปคอมไพล์และ serve ได้ปกติ ไม่มี runtime error ขึ้นตอน build
+   (environment นี้ไม่มี browser-automation tool สำหรับตรวจ overflow ที่
+   360px ด้วยภาพจริง — เป็นข้อจำกัดที่ระบุไว้ตั้งแต่ plan)
+3. **Dialog/Drawer/Escape handling**: ตรวจ `git diff sanitized-orphan...HEAD`
+   ทั้งหมดของทุก phase — ไม่มีการแก้ไข event handler ใดๆ ที่เกี่ยวกับ
+   `onClose`/`onKeyDown`/Dialog/Drawer เลย (การเปลี่ยนแปลงทั้งหมดเป็น
+   styling/token-level เท่านั้น ไม่กระทบ behavior)
+4. **Fixed-size circular elements** (110-260px gauges/decorative blobs ใน
+   AlertsPage/CompliancePage/IOCPage/AssetsPage): ทั้งหมด ≤260px ซึ่งน้อยกว่า
+   360px viewport — เป็น absolutely-positioned decorative blob
+   (`pointerEvents:'none'`, off-canvas) หรือ gauge ที่มี `viewBox` responsive
+   อยู่แล้ว ไม่ก่อให้เกิด horizontal overflow ที่ breakpoint เล็กสุด
+5. **fontSize 9/9.5/10**: พบใช้งานจำนวนมากทั่วทั้ง 13 ไฟล์ที่แก้ไข — ตรวจสอบ
+   แล้วเป็น micro-label/table-header/metadata convention ที่มีอยู่เดิมทั่ว
+   ทั้งแอป (ตรงกับ design language แบบ dense dashboard) ไม่ใช่รายการที่ Phase 1
+   audit ระบุว่าเป็นปัญหา accessibility — รายการที่ audit ระบุไว้ชัดเจน 2 จุด
+   (RiskGauge "Risk Score" label และ ScoreGauge "%" label) ได้แก้ไขแล้วใน
+   Phase 5/7 (fontSize 9 → ≥11). การไล่แก้ fontSize ทั้งหมดทั่วแอปจะเป็นการ
+   ขยาย scope เกินกว่าที่ audit ระบุ และเสี่ยงต่อ regression ของ dense-table
+   layout — จึงคงไว้ตามเดิม
+6. **TypeScript baseline**: `npx tsc --noEmit` ยังคงมีเฉพาะ pre-existing
+   errors เดิม (Stack overload + 3 จุดใน CompliancePage ที่มีมาก่อน Phase 7,
+   เพียงเลื่อนเลขบรรทัด) — ไม่มี error ใหม่เพิ่มจากการเปลี่ยนแปลงทั้งหมดใน
+   Phase 3-8
+
+### สรุป
+
+ไม่มีการแก้ไขโค้ดเพิ่มเติมใน Phase 8 — Phase 3-7 ผ่านการตรวจสอบ QA แล้วและ
+ไม่พบปัญหาที่ต้องแก้ไขเพิ่มเติมภายใน scope ของ plan นี้
