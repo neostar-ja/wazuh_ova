@@ -71,3 +71,90 @@ export function fmtN(n: number | null | undefined): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`
   return n.toLocaleString()
 }
+
+// ─── Layout / Surface tokens ──────────────────────────────────────────────────
+// SSOT for spacing, radius, surfaces and borders so pages stop redefining
+// their own copies of these values (see SOC_CENTER_UI_CLEAN_REDESIGN_AUDIT.md)
+
+export const RADIUS = {
+  card:    16, // major panels (SectionCard)
+  control: 12, // inputs, buttons, toolbars
+  chip:    8,  // chips / small badges
+} as const
+
+// MUI spacing units (×8px) for consistent gaps between/within sections
+export const LAYOUT_GAP = {
+  section: 2.5, // between major page sections
+  card:    1.5, // between cards within a section grid
+  inline:  1,   // inline element gaps (icon+label, chip rows)
+} as const
+
+// Mirrors SectionCard's variant backgrounds so non-card surfaces (e.g. inline
+// panels inside tabs) can match the same look without re-deriving values.
+export const SURFACE = {
+  default:  { dark: 'rgba(22,17,42,0.85)',  light: 'rgba(255,255,255,0.95)' },
+  glass:    { dark: 'rgba(18,14,34,0.78)',  light: 'rgba(255,255,255,0.82)' },
+  flat:     { dark: 'rgba(22,17,40,0.6)',   light: 'rgba(255,255,255,0.8)'  },
+  elevated: { dark: 'rgba(30,23,52,0.95)',  light: '#FFFFFF'                },
+} as const
+
+export const BORDER = {
+  default: { dark: 'rgba(123,91,164,0.22)', light: 'rgba(123,91,164,0.14)' },
+  subtle:  { dark: 'rgba(123,91,164,0.14)', light: 'rgba(123,91,164,0.1)'  },
+  divider: { dark: 'rgba(123,91,164,0.15)', light: 'rgba(123,91,164,0.1)'  },
+} as const
+
+export type SurfaceLevel = keyof typeof SURFACE
+export type BorderEmphasis = keyof typeof BORDER
+
+/** Theme-aware surface background — mirrors SectionCard variant backgrounds. */
+export function getSurface(isDark: boolean, level: SurfaceLevel = 'default'): string {
+  return isDark ? SURFACE[level].dark : SURFACE[level].light
+}
+
+/** Theme-aware border color — mirrors SectionCard border emphasis levels. */
+export function getBorder(isDark: boolean, emphasis: BorderEmphasis = 'default'): string {
+  return isDark ? BORDER[emphasis].dark : BORDER[emphasis].light
+}
+
+/**
+ * Soft tinted background for chips/badges/icon-wells, e.g. getSoftBg(BRAND.orange, 12)
+ * → '#F17422' + ~12% alpha as a 2-digit hex suffix (matches the `${color}18`-style
+ * literals scattered across pages, but computed instead of guessed).
+ */
+export function getSoftBg(color: string, alphaPercent: number = 12): string {
+  const hex = Math.round((alphaPercent / 100) * 255).toString(16).padStart(2, '0')
+  return `${color}${hex}`
+}
+
+/**
+ * Theme-aware recharts tooltip style. Dark mode matches the existing
+ * CHART_TIP_STYLE; light mode mirrors the pattern already used ad-hoc in
+ * BreakdownCharts.tsx so all charts share one tooltip look in both themes.
+ */
+export function getChartTipStyle(isDark: boolean) {
+  if (isDark) return CHART_TIP_STYLE
+  return {
+    ...CHART_TIP_STYLE,
+    background: 'rgba(255,255,255,0.97)',
+    border: '1px solid rgba(123,91,164,0.2)',
+    color: '#1A1033',
+  }
+}
+
+// ─── Typography scale ──────────────────────────────────────────────────────────
+// Reference sizes (px) per SOC_CENTER_UI_CLEAN_REDESIGN_AGENT_PROMPT.md —
+// anything below `metadata` should not be used for primary/important content.
+export const TYPOGRAPHY_SCALE = {
+  pageTitle:    24,   // 22-26px / weight 800-900
+  sectionTitle: 16,   // 15-18px / weight 700-800
+  body:         14,   // 13-15px
+  table:        13,   // 12.5-14px
+  metadata:     12,   // 11.5-12.5px
+} as const
+
+// Row density presets for data tables
+export const TABLE_DENSITY = {
+  comfortable: { rowPy: 1,    fontSize: 13   },
+  compact:     { rowPy: 0.5,  fontSize: 12.5 },
+} as const
