@@ -13,8 +13,7 @@ import FiberManualRecordRoundedIcon from '@mui/icons-material/FiberManualRecord'
 import { PageShell } from '../ui/layout'
 import { MetricCard } from '../ui/MetricCard'
 import { soarApi, IrisAlert } from '../../services/soarApi'
-import { BRAND, SEV_COLOR } from '../ui/tokens'
-import { hexRgb } from './soarUtils'
+import { BRAND, SEV_COLOR, getSoftBg } from '../ui/tokens'
 
 import OverviewTab from './tabs/OverviewTab'
 import IRISTab    from './tabs/IRISTab'
@@ -160,7 +159,7 @@ export default function SOARPage() {
                 {tab.label}
                 {(tab.badge ?? 0) > 0 && (
                   <Box className="px-1.5 rounded-full text-[9px] font-bold"
-                    sx={{ background: `rgba(${hexRgb(SEV_COLOR.high)},0.2)`, color: SEV_COLOR.high }}>
+                    sx={{ background: getSoftBg(SEV_COLOR.high, 20), color: SEV_COLOR.high }}>
                     {tab.badge}
                   </Box>
                 )}

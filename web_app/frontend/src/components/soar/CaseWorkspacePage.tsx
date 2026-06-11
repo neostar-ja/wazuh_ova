@@ -34,7 +34,8 @@ import ErrorOutlineRoundedIcon   from '@mui/icons-material/ErrorOutlineRounded'
 import { useSnackbar } from 'notistack'
 import { PageShell }     from '../ui/layout'
 import { soarApi, extractCaseIocs } from '../../services/soarApi'
-import { hexRgb, fmtTime } from './soarUtils'
+import { fmtTime } from './soarUtils'
+import { SEV_COLOR, getSoftBg } from '../ui/tokens'
 import CaseOverviewPanel from './iris/CaseOverviewPanel'
 import TimelinePanel     from './iris/TimelinePanel'
 import TasksPanel        from './iris/TasksPanel'
@@ -102,11 +103,8 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
     )
   }
 
-  const SEV_COLOR_MAP: Record<string, string> = {
-    critical: '#EF4444', high: '#F17422', medium: '#EAB308', low: '#22C55E',
-  }
   const sevKey = String(severity ?? '').toLowerCase()
-  const sevColor = SEV_COLOR_MAP[sevKey] ?? '#64748B'
+  const sevColor = (SEV_COLOR as Record<string, string>)[sevKey] ?? '#64748B'
 
   if (loading) {
     return (
@@ -142,17 +140,19 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
       <Box className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 sm:p-5">
         <Box className="flex items-start gap-3 flex-1 min-w-0">
           <Box className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-            sx={{ background: `rgba(${hexRgb(CASE_COLOR)},0.14)` }}>
+            sx={{ background: getSoftBg(CASE_COLOR, 14) }}>
             <FolderOpenRoundedIcon sx={{ fontSize: 22, color: CASE_COLOR }} />
           </Box>
           <Box className="flex-1 min-w-0">
             <Box className="flex items-center gap-2 flex-wrap">
-              <Typography
-                sx={{ fontSize: 18, fontWeight: 800, color: isDark ? '#EDE9FA' : '#1A1033', lineHeight: 1.2 }}
-                className="break-words"
-              >
-                {caseName ?? '—'}
-              </Typography>
+              <Tooltip title={caseName && caseName.length > 36 ? caseName : ''}>
+                <Typography
+                  noWrap
+                  sx={{ fontSize: 18, fontWeight: 800, color: isDark ? '#EDE9FA' : '#1A1033', lineHeight: 1.2, maxWidth: '100%' }}
+                >
+                  {caseName ?? '—'}
+                </Typography>
+              </Tooltip>
               {!irisOnline && (
                 <Tooltip title="IRIS ออฟไลน์ — แสดงข้อมูล cached">
                   <ErrorOutlineRoundedIcon sx={{ fontSize: 14, color: '#F59E0B' }} />
@@ -177,15 +177,15 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
         <Box className="flex flex-wrap gap-1.5 shrink-0">
           <Tooltip title="Refresh data">
             <IconButton size="small" onClick={onRefresh}
-              sx={{ color: textMuted, '&:hover': { color: CASE_COLOR, background: `rgba(${hexRgb(CASE_COLOR)},0.08)` } }}>
+              sx={{ color: textMuted, '&:hover': { color: CASE_COLOR, background: getSoftBg(CASE_COLOR, 8) } }}>
               <RefreshRoundedIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
           {irisUrl && caseId && (
             <Button size="small" variant="outlined" endIcon={<OpenInNewRoundedIcon sx={{ fontSize: 11 }} />}
               component="a" href={`${irisUrl}/case?cid=${caseId}`} target="_blank" rel="noopener"
-              sx={{ borderRadius: 2, fontSize: 11, px: 1.5, borderColor: `rgba(${hexRgb(CASE_COLOR)},0.4)`, color: CASE_COLOR,
-                '&:hover': { borderColor: CASE_COLOR, background: `rgba(${hexRgb(CASE_COLOR)},0.06)` } }}>
+              sx={{ borderRadius: 2, fontSize: 11, px: 1.5, borderColor: getSoftBg(CASE_COLOR, 40), color: CASE_COLOR,
+                '&:hover': { borderColor: CASE_COLOR, background: getSoftBg(CASE_COLOR, 6) } }}>
               DFIR-IRIS
             </Button>
           )}
@@ -217,8 +217,8 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
         {severity && (
           <Chip size="small" label={severity}
             sx={{ height: 22, fontSize: 10, fontWeight: 700,
-              bgcolor: `rgba(${hexRgb(sevColor)},0.12)`, color: sevColor,
-              border: `1px solid rgba(${hexRgb(sevColor)},0.28)` }} />
+              bgcolor: getSoftBg(sevColor, 12), color: sevColor,
+              border: `1px solid ${getSoftBg(sevColor, 28)}` }} />
         )}
 
         {/* Owner */}
@@ -254,13 +254,21 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
           </Typography>
         )}
 
-        {/* Tags */}
-        {tags.map(tag => (
+        {/* Tags (capped with overflow) */}
+        {tags.slice(0, 5).map(tag => (
           <Box key={tag} className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-            sx={{ background: `rgba(${hexRgb(CASE_COLOR)},0.1)`, color: isDark ? '#A5B4FC' : CASE_COLOR }}>
+            sx={{ background: getSoftBg(CASE_COLOR, 10), color: isDark ? '#A5B4FC' : CASE_COLOR }}>
             {tag}
           </Box>
         ))}
+        {tags.length > 5 && (
+          <Tooltip title={tags.slice(5).join(', ')}>
+            <Box className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
+              sx={{ background: getSoftBg(CASE_COLOR, 10), color: isDark ? '#A5B4FC' : CASE_COLOR }}>
+              +{tags.length - 5}
+            </Box>
+          </Tooltip>
+        )}
       </Box>
 
       {/* Description */}
@@ -408,7 +416,7 @@ export default function CaseWorkspacePage() {
             {irisOk ? 'Case ID อาจไม่ถูกต้อง หรือ IRIS ไม่มีข้อมูลนี้' : 'DFIR-IRIS ไม่ตอบสนอง — ตรวจสอบการเชื่อมต่อก่อน'}
           </Typography>
           <Button variant="outlined" startIcon={<RefreshRoundedIcon />} onClick={handleRefresh}
-            sx={{ borderRadius: 2, fontSize: 12, borderColor: `rgba(${hexRgb(CASE_COLOR)},0.4)`, color: CASE_COLOR }}>
+            sx={{ borderRadius: 2, fontSize: 12, borderColor: getSoftBg(CASE_COLOR, 40), color: CASE_COLOR }}>
             ลองใหม่
           </Button>
         </Box>
@@ -491,7 +499,7 @@ export default function CaseWorkspacePage() {
                           className="px-1.5 rounded-full font-bold"
                           sx={{
                             fontSize: 9, lineHeight: 1.6,
-                            background: activeTab === i ? `rgba(${hexRgb(CASE_COLOR)},0.18)` : 'rgba(99,102,241,0.1)',
+                            background: getSoftBg(CASE_COLOR, activeTab === i ? 18 : 10),
                             color: CASE_COLOR,
                           }}
                         >
