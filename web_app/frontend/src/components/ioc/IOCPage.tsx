@@ -38,10 +38,10 @@ import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { useThemeMode } from '../../theme/ThemeContext'
 import { safeStorage } from '../../utils/safeStorage'
+import { getChartTipStyle } from '../ui/tokens'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND = { purple: '#7B5BA4', purpleLight: '#9B7DC4', purpleDark: '#5A3E85', orange: '#F17422' }
-const ChartTip = { background: 'rgba(22,18,42,0.97)', border: '1px solid rgba(123,91,164,0.3)', borderRadius: 8, fontSize: 12, color: '#EDE9FA' }
 
 interface VerdictItem {
   color: string;
@@ -454,6 +454,8 @@ interface SearchResultsProps {
 }
 
 function SearchResults({ result, onClose }: SearchResultsProps) {
+  const { mode } = useThemeMode()
+  const isDark = mode === 'dark'
   const [historyOpen, setHistoryOpen] = useState(false)
   const [histTimeRange, setHistTimeRange] = useState('30d')
 
@@ -623,7 +625,7 @@ function SearchResults({ result, onClose }: SearchResultsProps) {
                         </defs>
                         <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                        <RechartTooltip contentStyle={ChartTip} formatter={v => [v, 'Alerts']} />
+                        <RechartTooltip contentStyle={getChartTipStyle(isDark)} formatter={v => [v, 'Alerts']} />
                         <Area type="monotone" dataKey="count" stroke={BRAND.purple} strokeWidth={1.5} fill="url(#histGrad)" dot={false} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1005,6 +1007,8 @@ function CustomIOCPanel() {
 
 // ── Statistics Panel ──────────────────────────────────────────────────────────
 function StatsPanel() {
+  const { mode } = useThemeMode()
+  const isDark = mode === 'dark'
   const { data: stats = {}, isLoading } = useQuery<any>({
     queryKey: ['ioc-stats'],
     queryFn: () => iocApi.stats().then(r => r.data),
@@ -1032,7 +1036,7 @@ function StatsPanel() {
                 <Pie data={stats.by_type || []} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={72} innerRadius={36} paddingAngle={3}>
                   {(stats.by_type || []).map((_: any, i: number) => <Cell key={i} fill={PIE_PALETTE[i % PIE_PALETTE.length]} />)}
                 </Pie>
-                <RechartTooltip contentStyle={ChartTip} formatter={(v: any, n?: any) => [v, n || '']} />
+                <RechartTooltip contentStyle={getChartTipStyle(isDark)} formatter={(v: any, n?: any) => [v, n || '']} />
                 <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11 }}>{v.toUpperCase()}</span>} />
               </PieChart>
             </ResponsiveContainer>
@@ -1050,7 +1054,7 @@ function StatsPanel() {
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
                   tickFormatter={v => v.toUpperCase()} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <RechartTooltip contentStyle={ChartTip} />
+                <RechartTooltip contentStyle={getChartTipStyle(isDark)} />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                   {(stats.by_severity || []).map((e: any, i: number) => (
                     <Cell key={i} fill={sevColors[e.name] || BRAND.purple} />

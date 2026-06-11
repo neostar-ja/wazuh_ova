@@ -36,12 +36,11 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { th } from 'date-fns/locale'
 import { useSnackbar } from 'notistack'
 import { AlertDetail, AlertStats, MitreAttackInfo, SeverityName, AlertSeverity, WazuhAlertItem, AlertFilters, AlertFacets } from '../../types/alert'
-import { BRAND as TOKENS, CHART_TIP_STYLE, sevColor, sevLabelShort } from '../ui/tokens'
+import { BRAND as TOKENS, sevColor, sevLabelShort, getChartTipStyle } from '../ui/tokens'
 import { PageShell } from '../ui/layout'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND  = { purple: TOKENS.purple, purpleLight: TOKENS.purpleLight, purpleDark: TOKENS.purpleDark, orange: TOKENS.orange }
-const ChartTip = CHART_TIP_STYLE
 
 interface SeverityOption {
   key: SeverityName;
@@ -1546,7 +1545,7 @@ function ThreatDistributionPanel({ stats, onSourceClick }: { stats?: AlertStats;
                   paddingAngle={2} startAngle={90} endAngle={-270}>
                   {withPct.map((entry, idx) => <Cell key={idx} fill={entry.color} stroke="none" />)}
                 </Pie>
-                <RechartTip contentStyle={ChartTip} formatter={(v: any, name: any) => [fmtNum(Number(v)), name]} />
+                <RechartTip contentStyle={getChartTipStyle(isDark)} formatter={(v: any, name: any) => [fmtNum(Number(v)), name]} />
               </PieChart>
             </ResponsiveContainer>
             {/* Center label */}

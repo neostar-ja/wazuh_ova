@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import {
-  Box, Card, CardContent, Typography, Grid, Skeleton, Chip,
+  Box, Card, CardContent, Typography, Grid, Skeleton, Chip, useTheme,
 } from '@mui/material'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -10,6 +10,7 @@ import { kpiApi } from '../../services/api'
 import { PageShell } from '../ui/layout'
 import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../../types'
 import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
+import { getChartTipStyle } from '../ui/tokens'
 
 interface KPICardProps {
   title: string
@@ -65,6 +66,8 @@ function ForecastCard({ forecast, loading }: { forecast?: KpiStorageForecast; lo
 }
 
 export default function KPIPage() {
+  const { palette } = useTheme()
+  const isDark = palette.mode === 'dark'
   const { data: summary, isLoading } = useQuery<KpiSummary>({
     queryKey: ['kpi-summary'],
     queryFn: () => kpiApi.summary().then(r => r.data),
@@ -118,7 +121,7 @@ export default function KPIPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8"
                     tickFormatter={d => d?.slice(5)} />
                   <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', fontSize: 12 }} />
+                  <Tooltip contentStyle={getChartTipStyle(isDark)} />
                   <Legend />
                   <Line type="monotone" dataKey="total" stroke="#3b82f6" dot={false} name="ทั้งหมด" strokeWidth={2} />
                   <Line type="monotone" dataKey="critical" stroke="#ef4444" dot={false} name="Critical" strokeWidth={1.5} />
@@ -140,7 +143,7 @@ export default function KPIPage() {
                   <XAxis type="number" tick={{ fontSize: 10 }} stroke="#94a3b8" />
                   <YAxis type="category" dataKey="date" tick={{ fontSize: 10 }} width={55}
                     tickFormatter={d => d?.slice(5)} stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', fontSize: 12 }} />
+                  <Tooltip contentStyle={getChartTipStyle(isDark)} />
                   <Bar dataKey="critical" fill="#ef4444" stackId="a" name="Critical" />
                   <Bar dataKey="high" fill="#f59e0b" stackId="a" name="High" />
                   <Bar dataKey="medium" fill="#3b82f6" stackId="a" name="Medium" radius={[0, 2, 2, 0]} />

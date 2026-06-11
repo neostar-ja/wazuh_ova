@@ -37,7 +37,7 @@ import { useSnackbar } from 'notistack'
 import { PageHeader } from '../ui/PageHeader'
 import { SectionCard } from '../ui/SectionCard'
 import { PageShell, ContentGrid } from '../ui/layout'
-import { BRAND, CHART_TIP_STYLE, PIE_COLORS, fmtN, sevColor, sevLabelShort } from '../ui/tokens'
+import { BRAND, PIE_COLORS, fmtN, sevColor, sevLabelShort, getChartTipStyle } from '../ui/tokens'
 import { DashboardStats, SecurityPosture, SeverityTrend, TimelinePoint } from '../../types/dashboard'
 import { SecurityPostureBanner } from './SecurityPostureBanner'
 import { SeverityBreakdown } from './SeverityBreakdown'
@@ -52,7 +52,6 @@ const B = {
   sky:     '#38BDF8',        pink:    '#EC4899',         teal:    '#14B8A6',
   indigo:  '#6366F1',
 }
-const TIP  = CHART_TIP_STYLE
 const PIE  = PIE_COLORS
 const N    = fmtN
 const LC   = sevColor
@@ -183,10 +182,10 @@ function MetricHero({ stats, threatStats, isLoading, tl, navigate }:
               {!isLoading && trend && m.key === 'total' && (
                 <Box sx={{ display:'flex', alignItems:'center', gap:0.5, mt:0.5 }}>
                   {trend.direction === 'up'
-                    ? <><TrendingUpRoundedIcon sx={{ fontSize:12, color:'#EF4444' }}/><Typography sx={{ fontSize:9, color:'#EF4444', fontWeight:700 }}>+{trend.change}%</Typography></>
+                    ? <><TrendingUpRoundedIcon sx={{ fontSize:12, color:'#EF4444' }}/><Typography sx={{ fontSize:11, color:'#EF4444', fontWeight:700 }}>+{trend.change}%</Typography></>
                     : trend.direction === 'down'
-                    ? <><TrendingDownRoundedIcon sx={{ fontSize:12, color:'#22C55E' }}/><Typography sx={{ fontSize:9, color:'#22C55E', fontWeight:700 }}>-{trend.change}%</Typography></>
-                    : <Typography sx={{ fontSize:9, color:'text.disabled', fontWeight:700 }}>— stable</Typography>
+                    ? <><TrendingDownRoundedIcon sx={{ fontSize:12, color:'#22C55E' }}/><Typography sx={{ fontSize:11, color:'#22C55E', fontWeight:700 }}>-{trend.change}%</Typography></>
+                    : <Typography sx={{ fontSize:11, color:'text.disabled', fontWeight:700 }}>— stable</Typography>
                   }
                 </Box>
               )}
@@ -260,7 +259,7 @@ function DualTimeline({ allData = [], threatData = [], isLoading, isDark }:
             tickFormatter={t => { try { return format(new Date(t), 'HH:mm') } catch { return '' } }}
             interval="preserveStartEnd" />
           <YAxis tick={{ fontSize:10, fill: isDark ? '#6B5F8A' : '#9B90B5' }} axisLine={false} tickLine={false} tickFormatter={N} width={44} />
-          <RechartTip contentStyle={TIP} formatter={(v, n) => [N(v as number), n]}
+          <RechartTip contentStyle={getChartTipStyle(isDark)} formatter={(v, n) => [N(v as number), n]}
             labelFormatter={l => { try { return format(new Date(l), 'dd/MM HH:mm') } catch { return l } }} />
           {view === 'threat' ? (
             <>
@@ -407,6 +406,8 @@ function IPWithCountryBar({ items = [], isLoading, onItemClick }:
 
 // ─── Network Source Donut ─────────────────────────────────────────────────────
 function NetworkDonut({ data = [], isLoading }: { data?: any[]; isLoading: boolean }) {
+  const { palette } = useTheme()
+  const isDark = palette.mode === 'dark'
   if (isLoading) return <Skeleton variant="rectangular" height={200} sx={{ borderRadius:'12px' }} />
   if (!data.length) return (
     <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:180, gap:1.5 }}>
@@ -423,7 +424,7 @@ function NetworkDonut({ data = [], isLoading }: { data?: any[]; isLoading: boole
           <Pie data={pd} dataKey="value" cx="50%" cy="50%" outerRadius={62} innerRadius={32} paddingAngle={3}>
             {pd.map((_, i) => <Cell key={i} fill={PIE[i % PIE.length]} stroke="transparent" />)}
           </Pie>
-          <RechartTip contentStyle={TIP} formatter={(v) => [N(v as number), 'events']} />
+          <RechartTip contentStyle={getChartTipStyle(isDark)} formatter={(v) => [N(v as number), 'events']} />
         </PieChart>
       </ResponsiveContainer>
       <Box sx={{ display:'flex', flexDirection:'column', gap:1, mt:1 }}>
