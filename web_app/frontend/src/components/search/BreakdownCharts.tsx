@@ -19,7 +19,7 @@ import {
   Legend,
 } from 'recharts'
 import { Bucket, protoLabel } from './searchTypes'
-import { CHART_TIP_STYLE, BRAND, PIE_COLORS } from '../ui/tokens'
+import { BRAND, PIE_COLORS, getChartTipStyle } from '../ui/tokens'
 import { SectionCard } from '../ui/SectionCard'
 
 interface BreakdownChartsProps {
@@ -35,15 +35,7 @@ export function BreakdownCharts({
   const isDark = theme.palette.mode === 'dark'
   const textColor = theme.palette.text.secondary as string
   const gridColor = isDark ? 'rgba(123,91,164,0.12)' : 'rgba(123,91,164,0.08)'
-
-  const tooltipStyle = isDark
-    ? CHART_TIP_STYLE
-    : {
-        ...CHART_TIP_STYLE,
-        background: 'rgba(255,255,255,0.97)',
-        border: '1px solid rgba(123,91,164,0.2)',
-        color: '#1A1033',
-      }
+  const tooltipStyle = getChartTipStyle(isDark)
 
   const actionColors: Record<string, string> = {
     allow:   '#22C55E',

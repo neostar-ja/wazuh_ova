@@ -9,7 +9,7 @@ import { Box, Button, Stack, Tooltip, IconButton } from '@mui/material'
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded'
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded'
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
-import { BRAND } from '../ui/tokens'
+import { BRAND, LAYOUT_GAP } from '../ui/tokens'
 
 import { PageShell } from '../ui/layout'
 import { useLogSearch } from './hooks/useLogSearch'
@@ -107,7 +107,7 @@ export default function LogSearchPage() {
           search.commitSearch(next)
         }}
       />
-      <Box sx={{ mt: 2 }}>
+      <Box sx={{ mt: LAYOUT_GAP.section }}>
         <AdvancedFilters
           form={search.form}
           onFieldChange={search.handleFieldChange}
@@ -129,7 +129,7 @@ export default function LogSearchPage() {
         actions={actions}
       >
         {searchInput}
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: LAYOUT_GAP.section }}>
           <EmptyState onOpenAdvanced={() => search.setShowAdvanced(true)} />
         </Box>
       </PageShell>
@@ -150,7 +150,7 @@ export default function LogSearchPage() {
       {searchInput}
 
       {/* Main Results Section */}
-      <Stack spacing={2.5} sx={{ mt: 3 }}>
+      <Stack spacing={LAYOUT_GAP.section} sx={{ mt: LAYOUT_GAP.section }}>
         {/* Active Filters Display */}
         {search.activeChips.length > 0 && (
           <ActiveFiltersDisplay
