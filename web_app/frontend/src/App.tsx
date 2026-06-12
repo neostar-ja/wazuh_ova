@@ -13,6 +13,7 @@ import AdminPage from './components/admin/AdminPage'
 import SOARPage from './components/soar/SOARPage'
 import CaseWorkspacePage from './components/soar/CaseWorkspacePage'
 import LogSearchPage from './components/search/LogSearchPage'
+import InfraMonitorPage from './components/infra/InfraMonitorPage'
 import { useAuth } from './hooks/useAuth'
 import { UserRole } from './types/auth'
 
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="ioc" element={<IOCPage />} />
           <Route path="compliance" element={<CompliancePage />} />
           <Route path="assets" element={<AssetsPage />} />
+          <Route path="infra" element={<InfraMonitorPage />} />
           <Route path="kpi" element={<KPIPage />} />
           <Route path="search" element={<LogSearchPage />} />
           <Route path="soar" element={<SOARPage />} />

@@ -4,6 +4,7 @@ import { DashboardStats, ClusterHealth } from '../types/dashboard'
 import { AlertStats } from '../types/alert'
 import { ComplianceSummary } from '../types/compliance'
 import { KpiSummary, KpiTimelinePoint, KpiStorageForecast } from '../types/kpi'
+import { InfraNode, InfraNodeStatus } from '../types/infra'
 import { safeStorage } from '../utils/safeStorage'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/wazuh/api'
@@ -137,6 +138,11 @@ export const kpiApi = {
   summary: (): Promise<AxiosResponse<KpiSummary>> => api.get<KpiSummary>('/kpi/summary'),
   timeline: (days = 30): Promise<AxiosResponse<KpiTimelinePoint[]>> => api.get<KpiTimelinePoint[]>(`/kpi/timeline?days=${days}`),
   storageForecast: (): Promise<AxiosResponse<KpiStorageForecast>> => api.get<KpiStorageForecast>('/kpi/storage-forecast'),
+}
+
+export const infraApi = {
+  status: (): Promise<AxiosResponse<InfraNodeStatus[]>> => api.get<InfraNodeStatus[]>('/infra/status'),
+  nodes: (): Promise<AxiosResponse<InfraNode[]>> => api.get<InfraNode[]>('/infra/nodes'),
 }
 
 export const adminApi = {

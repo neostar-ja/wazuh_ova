@@ -160,6 +160,21 @@ export const NAV_GROUPS: NavGroupData[] = [
           </svg>
         ),
       },
+      {
+        id: 'infra-monitor',
+        label: 'ตรวจสอบเซิร์ฟเวอร์',
+        descriptionTh: 'ตรวจสอบ CPU, RAM, Disk และบริการของเครื่อง Wazuh Cluster',
+        path: '/infra',
+        section: 'โครงสร้างพื้นฐาน',
+        color: '#10B981',
+        gradient: 'linear-gradient(135deg,#10B981,#047857)',
+        glow: 'rgba(16,185,129,0.55)',
+        icon: (
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M4 1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm0 11h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1zm2.5-7.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" />
+          </svg>
+        ),
+      },
     ],
   },
   {

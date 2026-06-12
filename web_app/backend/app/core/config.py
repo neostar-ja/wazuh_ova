@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     huawei_nac_user: str = ""
     huawei_nac_pass: str = ""
 
+    # Infrastructure server monitoring (SSH)
+    infra_ssh_user: str = ""
+    infra_ssh_pass: str = ""
+    infra_ssh_port: int = 22
+
     class Config:
         env_file = "/opt/code/wazuh_ova/web_app/.env"
         case_sensitive = False

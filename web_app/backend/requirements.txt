@@ -13,3 +13,4 @@ pydantic-settings==2.2.1
 opensearch-py==2.6.0
 schedule==1.2.2
 pywebpush==2.0.0
+asyncssh==2.14.2
