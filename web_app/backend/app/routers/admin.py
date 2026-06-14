@@ -8,7 +8,7 @@ from datetime import datetime
 from ..routers.auth import get_current_user
 from ..models.database import get_db, User, AuditLog, AlertTuning, AlertConfig
 from ..core.security import get_password_hash
-from ..services import wazuh_service
+from ..services import log_source_control_service, wazuh_service
 from ..services.opensearch_management_service import (
     apply_policy_to_indices,
     build_retention_policy,
@@ -306,6 +306,56 @@ async def delete_tuning(
     db.delete(entry)
     _write_audit(db, current_user, "delete_tuning", rule_id,
                  ip=request.client.host if request.client else None)
+
+
+# ─── Log Source Control ───────────────────────────────────────────────────────
+
+class LogSourceDisableRequest(BaseModel):
+    reason: str
+
+
+@router.get("/log-sources")
+async def list_log_sources(current_user=Depends(require_admin), db: Session = Depends(get_db)):
+    return log_source_control_service.get_log_source_status(db)
+
+
+@router.post("/log-sources/{source_key}/disable")
+async def disable_log_source(
+    source_key: str,
+    body: LogSourceDisableRequest,
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if not body.reason.strip():
+        raise HTTPException(status_code=400, detail="กรุณาระบุเหตุผล")
+    try:
+        result = await log_source_control_service.disable_log_source(
+            db, source_key, body.reason.strip(), current_user.username
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _write_audit(db, current_user, "disable_log_source", source_key, body.reason.strip(),
+                  request.client.host if request.client else None)
+    return result
+
+
+@router.post("/log-sources/{source_key}/enable")
+async def enable_log_source(
+    source_key: str,
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = await log_source_control_service.enable_log_source(
+            db, source_key, current_user.username
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    _write_audit(db, current_user, "enable_log_source", source_key,
+                  ip=request.client.host if request.client else None)
+    return result
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────

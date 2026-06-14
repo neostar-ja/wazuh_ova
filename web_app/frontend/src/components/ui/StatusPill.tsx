@@ -10,10 +10,10 @@ interface StatusPillProps {
 
 const STATUS_CONFIG = {
   active:   { color: '#22C55E', defaultLabel: 'Active' },
-  inactive: { color: '#5A5278', defaultLabel: 'Inactive' },
-  warning:  { color: '#EAB308', defaultLabel: 'Warning' },
+  inactive: { color: '#8B95B3', defaultLabel: 'Inactive' },
+  warning:  { color: '#F59E0B', defaultLabel: 'Warning' },
   error:    { color: '#EF4444', defaultLabel: 'Error' },
-  unknown:  { color: '#9A90BF', defaultLabel: 'Unknown' },
+  unknown:  { color: '#8B95B3', defaultLabel: 'Unknown' },
 }
 
 export function StatusPill({

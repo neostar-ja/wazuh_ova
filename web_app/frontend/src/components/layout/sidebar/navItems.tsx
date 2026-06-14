@@ -13,9 +13,9 @@ export const NAV_GROUPS: NavGroupData[] = [
         path: '/',
         exact: true,
         section: 'ภาพรวม',
-        color: '#7B5BA4',
-        gradient: 'linear-gradient(135deg,#7B5BA4,#4A2D7A)',
-        glow: 'rgba(123,91,164,0.55)',
+        color: '#4F6EF7',
+        gradient: 'linear-gradient(135deg,#4F6EF7,#2F47C9)',
+        glow: 'rgba(79,110,247,0.55)',
         icon: (
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
@@ -79,9 +79,9 @@ export const NAV_GROUPS: NavGroupData[] = [
         descriptionTh: 'ตรวจสอบตัวบ่งชี้ภัยคุกคาม เช่น IP, Domain, Hash และ URL',
         path: '/ioc',
         section: 'ปฏิบัติการรักษาความปลอดภัย',
-        color: '#F17422',
-        gradient: 'linear-gradient(135deg,#F17422,#C05310)',
-        glow: 'rgba(241,116,34,0.55)',
+        color: '#22D3EE',
+        gradient: 'linear-gradient(135deg,#22D3EE,#0EA5C4)',
+        glow: 'rgba(34,211,238,0.55)',
         icon: (
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 14l-3-3 1.41-1.41L11 12.17l4.59-4.58L17 9l-6 6z" />

@@ -6,6 +6,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded'
 import { SecurityPosture } from '../../types/dashboard'
 import { useNavigate } from 'react-router-dom'
+import { BRAND, SEV_COLOR, getSoftBg } from '../ui/tokens'
 
 interface SecurityPostureBannerProps {
   posture: SecurityPosture | null
@@ -24,25 +25,25 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
   const riskConfig = {
     critical: {
       icon: ErrorRoundedIcon,
-      color: '#EF4444',
-      bgColor: '#EF444420',
-      borderColor: '#EF444430',
+      color: SEV_COLOR.critical,
+      bgColor: getSoftBg(SEV_COLOR.critical, 12),
+      borderColor: getSoftBg(SEV_COLOR.critical, 18),
       titleTh: 'สถานการณ์วิกฤต',
       descTh: 'พบการโจมตีระดับวิกฤตหลายรายการ ต้องดำเนินการอย่างเร่งด่วน',
     },
     elevated: {
       icon: WarningRoundedIcon,
-      color: '#F17422',
-      bgColor: '#F1742220',
-      borderColor: '#F1742230',
+      color: SEV_COLOR.high,
+      bgColor: getSoftBg(SEV_COLOR.high, 12),
+      borderColor: getSoftBg(SEV_COLOR.high, 18),
       titleTh: 'สถานการณ์สูง',
       descTh: 'พบการโจมตีหลายรายการที่ต้องตรวจสอบเพิ่มเติม',
     },
     normal: {
       icon: CheckCircleRoundedIcon,
-      color: '#22C55E',
-      bgColor: '#22C55E20',
-      borderColor: '#22C55E30',
+      color: SEV_COLOR.low,
+      bgColor: getSoftBg(SEV_COLOR.low, 12),
+      borderColor: getSoftBg(SEV_COLOR.low, 18),
       titleTh: 'ระบบปกติ',
       descTh: 'ระบบทำงานตามปกติ ไม่พบภัยคุกคามที่สำคัญ',
     },
@@ -126,7 +127,7 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
           {posture.criticalCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>วิกฤต:</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#EF4444' }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: SEV_COLOR.critical }}>
                 {posture.criticalCount}
               </Typography>
             </Box>
@@ -134,7 +135,7 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
           {posture.highCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>สูง:</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#F17422' }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: SEV_COLOR.high }}>
                 {posture.highCount}
               </Typography>
             </Box>
@@ -146,7 +147,7 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
                 sx={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: '#7B5BA4',
+                  color: isDark ? BRAND.primaryLight : BRAND.primary,
                   fontFamily: '"IBM Plex Mono",monospace',
                   cursor: 'pointer',
                   '&:hover': { textDecoration: 'underline' },

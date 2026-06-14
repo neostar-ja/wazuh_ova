@@ -3,7 +3,7 @@ import { Box, Typography, Skeleton, Tooltip } from '@mui/material'
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded'
 import TrendingDownRoundedIcon from '@mui/icons-material/TrendingDownRounded'
 import TrendingFlatRoundedIcon from '@mui/icons-material/TrendingFlatRounded'
-import { fmtN } from './tokens'
+import { fmtN, RADIUS } from './tokens'
 
 interface MetricCardProps {
   title: string
@@ -27,7 +27,7 @@ export function MetricCard({
   value,
   subtitle,
   icon,
-  color = '#7B5BA4',
+  color = '#4F6EF7',
   bgColor,
   trend,
   trendValue,
@@ -47,7 +47,7 @@ export function MetricCard({
       ? TrendingDownRoundedIcon
       : TrendingFlatRoundedIcon
 
-  const trendColor = trend === 'up' ? '#EF4444' : trend === 'down' ? '#22C55E' : '#9A90BF'
+  const trendColor = trend === 'up' ? '#EF4444' : trend === 'down' ? '#22C55E' : '#8B95B3'
 
   return (
     <Box
@@ -56,7 +56,7 @@ export function MetricCard({
       sx={{
         p: compact ? '12px 14px' : '16px 18px',
         bgcolor: bg,
-        borderRadius: '14px',
+        borderRadius: `${RADIUS.card}px`,
         border: `1px solid ${color}20`,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
@@ -69,7 +69,7 @@ export function MetricCard({
               right: 0,
               height: '3px',
               background: color,
-              borderRadius: '14px 14px 0 0',
+              borderRadius: `${RADIUS.card}px ${RADIUS.card}px 0 0`,
             }
           : undefined,
         '&:hover': onClick

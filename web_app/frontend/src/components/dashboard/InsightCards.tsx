@@ -6,7 +6,7 @@ import DevicesRoundedIcon from '@mui/icons-material/DevicesRounded'
 import GppBadRoundedIcon from '@mui/icons-material/GppBadRounded'
 import RouterRoundedIcon from '@mui/icons-material/RouterRounded'
 import { CountByNameItem, RuleItem, AgentItem, IPAddressItem } from '../../types/dashboard'
-import { fmtN } from '../ui/tokens'
+import { fmtN, BRAND, getBorder } from '../ui/tokens'
 
 interface InsightCardsProps {
   topAgent?: AgentItem
@@ -26,7 +26,7 @@ export function InsightCards({ topAgent, topIP, topRule, isLoading = false }: In
       title: 'Risk Agent ชั้นนำ',
       titleTh: 'Agent ที่มีความเสี่ยงสูง',
       icon: DevicesRoundedIcon,
-      color: '#F17422',
+      color: BRAND.accent,
       data: topAgent,
       onClick: () => {
         if (topAgent?.name) {
@@ -52,7 +52,7 @@ export function InsightCards({ topAgent, topIP, topRule, isLoading = false }: In
       title: 'Top Triggered Rule',
       titleTh: 'Rule ที่เรียกใช้มากที่สุด',
       icon: GppBadRoundedIcon,
-      color: '#7B5BA4',
+      color: BRAND.primary,
       data: topRule,
       onClick: () => {
         if (topRule?.name) {
@@ -75,14 +75,14 @@ export function InsightCards({ topAgent, topIP, topRule, isLoading = false }: In
             sx={{
               borderRadius: '12px',
               p: '16px',
-              border: `1px solid ${hasData ? card.color : 'text.disabled'}20`,
+              border: `1px solid ${hasData ? `${card.color}20` : getBorder(isDark)}`,
               bgcolor: isDark
                 ? hasData
                   ? `linear-gradient(135deg, ${card.color}0A 0%, rgba(16,12,32,0.6) 100%)`
-                  : 'rgba(123,91,164,0.05)'
+                  : 'rgba(79,110,247,0.05)'
                 : hasData
                   ? `linear-gradient(135deg, ${card.color}06 0%, rgba(255,255,255,0.4) 100%)`
-                  : 'rgba(123,91,164,0.02)',
+                  : 'rgba(79,110,247,0.02)',
               transition: 'all 0.2s ease',
               cursor: hasData ? 'pointer' : 'default',
               opacity: hasData ? 1 : 0.5,

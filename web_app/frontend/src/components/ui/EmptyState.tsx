@@ -25,7 +25,7 @@ export function EmptyState({
   const defaults = {
     empty: {
       Icon: InboxRoundedIcon,
-      color: '#5A5278',
+      color: '#8B95B3',
       defaultTitle: 'ไม่พบข้อมูล',
       defaultDesc: 'ลองเปลี่ยนช่วงเวลา หรือกด Refresh เพื่อตรวจสอบข้อมูลล่าสุด',
     },
@@ -37,7 +37,7 @@ export function EmptyState({
     },
     offline: {
       Icon: WifiOffRoundedIcon,
-      color: '#EAB308',
+      color: '#F59E0B',
       defaultTitle: 'ขาดการเชื่อมต่อ',
       defaultDesc: 'ไม่สามารถเชื่อมต่อกับ API กรุณาตรวจสอบการเชื่อมต่อเครือข่าย',
     },

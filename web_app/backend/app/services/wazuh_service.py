@@ -71,19 +71,21 @@ async def wazuh_get(path: str) -> dict:
         return r.json()
 
 
-async def wazuh_put(path: str, data: str) -> dict:
+async def wazuh_put(path: str, data: str, params: dict | None = None) -> dict:
     token = await get_token()
     async with _client(30) as c:
         r = await c.put(
             f"{BASE}{path}",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/xml"},
+            params=params,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"},
             content=data.encode(),
         )
         if r.status_code == 401:
             token = await get_token(force_refresh=True)
             r = await c.put(
                 f"{BASE}{path}",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/xml"},
+                params=params,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"},
                 content=data.encode(),
             )
         r.raise_for_status()
@@ -117,7 +119,7 @@ async def get_rule_file(filename: str) -> str:
 
 
 async def put_rule_file(filename: str, content: str) -> dict:
-    return await wazuh_put(f"/rules/files/{filename}", content)
+    return await wazuh_put(f"/rules/files/{filename}", content, params={"overwrite": "true"})
 
 
 async def restart_manager() -> dict:
@@ -199,7 +201,7 @@ async def get_decoder_file(filename: str) -> str:
 
 
 async def put_decoder_file(filename: str, content: str) -> dict:
-    return await wazuh_put(f"/decoders/files/{filename}", content)
+    return await wazuh_put(f"/decoders/files/{filename}", content, params={"overwrite": "true"})
 
 
 # ─── CDB Lists ────────────────────────────────────────────────────────────────

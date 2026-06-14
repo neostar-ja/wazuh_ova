@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, useTheme } from '@mui/material'
+import { Box } from '@mui/material'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../../hooks/useAuth'
 import { NAV_GROUPS } from './navItems'
@@ -27,8 +27,6 @@ function hasRole(groupRoles: UserRole[] | undefined, userRole: string | undefine
 }
 
 export default function SidebarContent({ collapsed, onClose, onToggleCollapse }: SidebarContentProps) {
-  const theme = useTheme()
-  const isDark = theme.palette.mode === 'dark'
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
@@ -49,11 +47,10 @@ export default function SidebarContent({ collapsed, onClose, onToggleCollapse }:
       {/* Brand header */}
       <SidebarBrand collapsed={collapsed} onToggleCollapse={onToggleCollapse} />
 
-      {/* Navigation */}
       <Box
         component="nav"
         aria-label="Main navigation"
-        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 0.75 }}
+        sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 0.8 }}
         className="scrollbar-hide"
       >
         <Box component="ul" sx={{ m: 0, p: 0, listStyle: 'none' }}>
@@ -83,33 +80,6 @@ export default function SidebarContent({ collapsed, onClose, onToggleCollapse }:
         </Box>
       </Box>
 
-      {/* System status placeholder */}
-      {!collapsed && (
-        <Box sx={{
-          mx: 1.5, mb: 1, px: 1.25, py: 1,
-          borderRadius: '10px',
-          background: isDark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.05)',
-          border: '1px solid',
-          borderColor: isDark ? 'rgba(34,197,94,0.15)' : 'rgba(34,197,94,0.12)',
-          display: 'flex', alignItems: 'center', gap: 1,
-        }}>
-          {/* placeholder status — not real-time data */}
-          <Box sx={{
-            width: 7, height: 7, borderRadius: '50%', bgcolor: '#22C55E', flexShrink: 0,
-            boxShadow: '0 0 6px rgba(34,197,94,0.8)',
-          }} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-              <span style={{
-                fontSize: 11.5, fontWeight: 700,
-                color: isDark ? 'rgba(34,197,94,0.9)' : '#15803D',
-              }}>กำลังตรวจสอบระบบ</span>
-            </Box>
-          </Box>
-        </Box>
-      )}
-
-      {/* User card */}
       <SidebarUserCard user={user} collapsed={collapsed} onLogout={handleLogout} />
     </Box>
   )

@@ -16,7 +16,8 @@ _RULE_DESC_CACHE: dict[str, str] = {}
 
 _GROUP_TO_SOURCE = [
     ("fortigate_wuh", "FortiGate WUH"),
-    ("huawei_ac",     "Huawei AC WiFi"),
+    ("huawei_usg",    "Huawei USG/FW"),
+    ("huawei_ac",     "Huawei Agile Controller"),
     ("mikrotik",      "MikroTik Router"),
     ("infoblox_dhcp", "Infoblox DHCP"),
     ("infoblox_dns",  "Infoblox DNS"),
@@ -181,8 +182,9 @@ async def alert_facets(
     _SOURCE_LABEL_TO_KEY = {
         "MikroTik Router":  "mikrotik",
         "FortiGate WUH":    "fortigate",
-        "Huawei USG/FW":    "huawei_ac",
+        "Huawei USG/FW":    "huawei_usg",
         "Huawei AC WiFi":   "huawei_ac",
+        "Huawei Agile Controller": "huawei_ac",
         "Infoblox DNS":     "infoblox_dns",
         "Infoblox DHCP":    "infoblox_dhcp",
         "Suricata IDS":     "suricata",

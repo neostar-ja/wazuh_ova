@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Typography, useTheme } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
-import { fmtN } from '../ui/tokens'
+import { fmtN, SEV_COLOR } from '../ui/tokens'
 
 interface SeverityBreakdownProps {
   critical: number
@@ -44,10 +44,10 @@ export function SeverityBreakdown({
   }
 
   const severities = [
-    { level: 15, label: 'Critical', labelTh: 'วิกฤต', count: critical, color: '#EF4444' },
-    { level: 12, label: 'High', labelTh: 'สูง', count: high, color: '#F17422' },
-    { level: 7, label: 'Medium', labelTh: 'กลาง', count: medium, color: '#EAB308' },
-    { level: 1, label: 'Low', labelTh: 'ต่ำ', count: low, color: '#22C55E' },
+    { level: 15, label: 'Critical', labelTh: 'วิกฤต', count: critical, color: SEV_COLOR.critical },
+    { level: 12, label: 'High', labelTh: 'สูง', count: high, color: SEV_COLOR.high },
+    { level: 7, label: 'Medium', labelTh: 'กลาง', count: medium, color: SEV_COLOR.medium },
+    { level: 1, label: 'Low', labelTh: 'ต่ำ', count: low, color: SEV_COLOR.low },
   ]
 
   return (
@@ -118,7 +118,7 @@ export function SeverityBreakdown({
               py: 0.75,
               borderRadius: '8px',
               transition: 'all 0.2s ease',
-              '&:hover': { bgcolor: isDark ? 'rgba(123,91,164,0.08)' : 'rgba(123,91,164,0.05)' },
+              '&:hover': { bgcolor: isDark ? 'rgba(79,110,247,0.08)' : 'rgba(79,110,247,0.05)' },
             }}
           >
             <Box

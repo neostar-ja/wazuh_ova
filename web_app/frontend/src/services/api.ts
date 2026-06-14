@@ -188,6 +188,12 @@ export const adminApi = {
   explainIsmIndex: (indexName: string): Promise<AxiosResponse<any>> => api.get<any>(`/admin/ism/explain/${encodeURIComponent(indexName)}`),
   // Audit
   auditLog: (limit = 100): Promise<AxiosResponse<any>> => api.get<any>(`/admin/audit?limit=${limit}`),
+  // Log Source Control
+  listLogSources: (): Promise<AxiosResponse<any>> => api.get<any>('/admin/log-sources'),
+  disableLogSource: (key: string, reason: string): Promise<AxiosResponse<any>> =>
+    api.post<any>(`/admin/log-sources/${key}/disable`, { reason }),
+  enableLogSource: (key: string): Promise<AxiosResponse<any>> =>
+    api.post<any>(`/admin/log-sources/${key}/enable`),
 }
 
 export const pushApi = {

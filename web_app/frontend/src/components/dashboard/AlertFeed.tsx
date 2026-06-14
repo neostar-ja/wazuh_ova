@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSnackbar } from 'notistack'
 import { format } from 'date-fns'
 import { RecentAlert } from '../../types/dashboard'
-import { sevColor, sevLabel, sevLabelShort, fmtN } from '../ui/tokens'
+import { sevColor, sevLabel, sevLabelShort, fmtN, BRAND } from '../ui/tokens'
 
 interface AlertFeedProps {
   alerts?: RecentAlert[]
@@ -101,10 +101,10 @@ export function AlertFeed({ alerts = [], isLoading = false, maxItems = 12 }: Ale
           bgcolor: 'transparent',
         },
         '&::-webkit-scrollbar-thumb': {
-          bgcolor: isDark ? 'rgba(123,91,164,0.3)' : 'rgba(123,91,164,0.2)',
+          bgcolor: isDark ? 'rgba(79,110,247,0.3)' : 'rgba(79,110,247,0.2)',
           borderRadius: '3px',
           '&:hover': {
-            bgcolor: isDark ? 'rgba(123,91,164,0.5)' : 'rgba(123,91,164,0.4)',
+            bgcolor: isDark ? 'rgba(79,110,247,0.5)' : 'rgba(79,110,247,0.4)',
           },
         },
       }}
@@ -128,7 +128,7 @@ export function AlertFeed({ alerts = [], isLoading = false, maxItems = 12 }: Ale
               gap: 2,
               p: 1.5,
               borderRadius: '10px',
-              border: `1px solid ${isDark ? 'rgba(123,91,164,0.15)' : 'rgba(123,91,164,0.1)'}`,
+              border: `1px solid ${isDark ? 'rgba(79,110,247,0.15)' : 'rgba(79,110,247,0.1)'}`,
               bgcolor: isDark
                 ? `linear-gradient(90deg, ${color}08 0%, transparent 80%)`
                 : `linear-gradient(90deg, ${color}04 0%, transparent 80%)`,
@@ -270,9 +270,9 @@ export function AlertFeed({ alerts = [], isLoading = false, maxItems = 12 }: Ale
                       px: 0.75,
                       py: 0.25,
                       borderRadius: '5px',
-                      bgcolor: isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.05)',
+                      bgcolor: isDark ? 'rgba(79,110,247,0.1)' : 'rgba(79,110,247,0.05)',
                       '&:hover': {
-                        bgcolor: isDark ? 'rgba(123,91,164,0.2)' : 'rgba(123,91,164,0.1)',
+                        bgcolor: isDark ? 'rgba(79,110,247,0.2)' : 'rgba(79,110,247,0.1)',
                       },
                     }}
                   >
@@ -280,7 +280,7 @@ export function AlertFeed({ alerts = [], isLoading = false, maxItems = 12 }: Ale
                       sx={{
                         fontSize: 10,
                         fontFamily: '"IBM Plex Mono",monospace',
-                        color: '#7B5BA4',
+                        color: isDark ? BRAND.primaryLight : BRAND.primary,
                       }}
                     >
                       {srcip}
@@ -310,7 +310,7 @@ export function AlertFeed({ alerts = [], isLoading = false, maxItems = 12 }: Ale
                       px: 0.75,
                       py: 0.25,
                       borderRadius: '5px',
-                      bgcolor: isDark ? 'rgba(123,91,164,0.1)' : 'rgba(123,91,164,0.05)',
+                      bgcolor: isDark ? 'rgba(79,110,247,0.1)' : 'rgba(79,110,247,0.05)',
                     }}
                   >
                     <Typography sx={{ fontSize: 10 }}>Agent:</Typography>

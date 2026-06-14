@@ -27,6 +27,8 @@ const ACTION_HEX: Record<string, string> = {
   delete_tuning:    '#EF4444',
   add_tuning:       '#F59E0B',
   save_config:      '#8B5CF6',
+  disable_log_source: '#EF4444',
+  enable_log_source:  '#22C55E',
 }
 
 function ActionChip({ action }: { action: string }) {

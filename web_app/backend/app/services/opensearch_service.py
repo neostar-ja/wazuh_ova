@@ -145,6 +145,7 @@ async def get_alerts(
         _GROUP_MAP = {
             "fortigate": "fortigate_wuh", "fortigate_wuh": "fortigate_wuh",
             "huawei-ac": "huawei_ac", "huawei_ac": "huawei_ac",
+            "huawei-usg": "huawei_usg", "huawei_usg": "huawei_usg",
             "mikrotik": "mikrotik", "routeros": "mikrotik",
             "infoblox": "infoblox", "infoblox_dhcp": "infoblox_dhcp",
             "infoblox_dns": "infoblox_dns",
@@ -173,7 +174,19 @@ async def get_alerts(
         must.append({"term": {"rule.mitre.tactic.keyword": mitre_tactic}})
     # Explicit safe filters (no query_string injection)
     if group:
-        must.append({"term": {"rule.groups": group}})
+        _GROUP_ALIASES = {
+            "suricata": ["suricata", "ids"],
+            "systemd": ["systemd", "sudo", "kernel", "syslog", "linux_system", "linux/system"],
+            "syscheck": ["syscheck", "fim", "file_integrity_monitoring"],
+            "ossec": ["ossec", "wazuh"],
+            "threat_intel": ["threat_intel", "threat_intelligence", "threatintel"],
+            "cdb_intel": ["cdb_intel", "soc_blocklist"],
+            "vulnerability_detector": ["vulnerability_detector", "vulnerability-detector"],
+            "huawei_usg": ["huawei_usg", "huawei-usg"],
+            "huawei_ac": ["huawei_ac", "huawei-ac"],
+        }
+        aliases = _GROUP_ALIASES.get(group, [group])
+        must.append({"terms": {"rule.groups": aliases}})
     if srcip:
         must.append({"term": {"data.srcip.keyword": srcip}})
     if dstip:
@@ -273,7 +286,7 @@ async def get_alert_aggs(time_range: str = "24h", level_min: int = 1):
                     "MikroTik Router":  {"term": {"rule.groups": "mikrotik"}},
                     "FortiGate WUH":    {"term": {"rule.groups": "fortigate_wuh"}},
                     "Huawei USG/FW":    {"term": {"rule.groups": "huawei_usg"}},
-                    "Huawei AC WiFi":   {"term": {"rule.groups": "huawei_ac"}},
+                    "Huawei Agile Controller": {"term": {"rule.groups": "huawei_ac"}},
                     "Infoblox DNS":     {"term": {"rule.groups": "infoblox_dns"}},
                     "Infoblox DHCP":    {"term": {"rule.groups": "infoblox_dhcp"}},
                     "Suricata IDS":     {"term": {"rule.groups": "ids"}},
@@ -389,7 +402,7 @@ async def get_alert_stats(time_range="24h"):
                     "MikroTik Router":  {"term": {"rule.groups": "mikrotik"}},
                     "FortiGate WUH":    {"term": {"rule.groups": "fortigate_wuh"}},
                     "Huawei USG/FW":    {"term": {"rule.groups": "huawei_usg"}},
-                    "Huawei AC WiFi":   {"term": {"rule.groups": "huawei_ac"}},
+                    "Huawei Agile Controller": {"term": {"rule.groups": "huawei_ac"}},
                     "Infoblox DNS":     {"term": {"rule.groups": "infoblox_dns"}},
                     "Infoblox DHCP":    {"term": {"rule.groups": "infoblox_dhcp"}},
                     "Suricata IDS":     {"term": {"rule.groups": "ids"}},

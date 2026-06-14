@@ -15,6 +15,7 @@ import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsAct
 import PeopleRoundedIcon from '@mui/icons-material/PeopleRounded'
 import SettingsSuggestRoundedIcon from '@mui/icons-material/SettingsSuggestRounded'
 import StorageRoundedIcon from '@mui/icons-material/StorageRounded'
+import ToggleOnRoundedIcon from '@mui/icons-material/ToggleOnRounded'
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
 import { PageShell } from '../ui/layout'
 import { BRAND } from './shared'
@@ -24,6 +25,7 @@ import { DecodersTab } from './tabs/DecodersTab'
 import { ListsTab } from './tabs/ListsTab'
 import { WazuhConfigTab } from './tabs/WazuhConfigTab'
 import { TuningTab } from './tabs/TuningTab'
+import { LogSourcesTab } from './tabs/LogSourcesTab'
 import { ISMRetentionTab } from './tabs/ISMRetentionTab'
 import { NotifyTab } from './tabs/NotifyTab'
 import { UsersTab } from './tabs/UsersTab'
@@ -47,6 +49,7 @@ const NAV: NavGroup[] = [
     section: 'OPERATIONS',
     items: [
       { id: 'tuning',  label: 'Alert Tuning',  icon: <TuneRoundedIcon sx={{ fontSize: 17 }} />,                color: '#EAB308' },
+      { id: 'logsources', label: 'แหล่งข้อมูล Log', icon: <ToggleOnRoundedIcon sx={{ fontSize: 17 }} />,       color: '#F43F5E' },
       { id: 'ism',     label: 'ISM Retention', icon: <StorageRoundedIcon sx={{ fontSize: 17 }} />,             color: '#14B8A6' },
       { id: 'notify',  label: 'การแจ้งเตือน', icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 17 }} />, color: '#229ED9' },
     ],
@@ -67,6 +70,7 @@ const CONTENT_MAP: Record<string, React.ReactNode> = {
   lists:    <ListsTab />,
   wazuhcfg: <WazuhConfigTab />,
   tuning:   <TuningTab />,
+  logsources: <LogSourcesTab />,
   ism:      <ISMRetentionTab />,
   notify:   <NotifyTab />,
   users:    <UsersTab />,

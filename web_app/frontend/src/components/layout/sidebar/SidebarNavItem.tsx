@@ -21,13 +21,13 @@ function BadgeChip({ count, label, variant }: { count?: number; label?: string; 
   if (!text) return null
   return (
     <Box sx={{
-      minWidth: 20, height: 20, borderRadius: '10px', px: 0.7,
-      background: `linear-gradient(135deg,${c},${c}CC)`,
+      minWidth: 22, height: 22, borderRadius: '999px', px: 0.8,
+      background: `${c}18`,
+      border: `1px solid ${c}28`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      boxShadow: `0 2px 8px ${c}55`,
       flexShrink: 0,
     }}>
-      <Typography sx={{ fontSize: 10, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+      <Typography sx={{ fontSize: 10, fontWeight: 800, color: c, lineHeight: 1 }}>
         {text}
       </Typography>
     </Box>
@@ -55,13 +55,16 @@ function ItemContent({ item, active, collapsed, isDark }: {
         borderRadius: '12px',
         flexShrink: 0,
         background: active
-          ? item.gradient
-          : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(123,91,164,0.08)',
-        boxShadow: active ? `0 4px 16px ${item.glow}` : 'none',
+          ? `${item.color}18`
+          : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)',
+        border: '1px solid',
+        borderColor: active
+          ? `${item.color}26`
+          : isDark ? 'rgba(148,163,184,0.12)' : 'rgba(15,23,42,0.06)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: active
-          ? '#fff'
-          : isDark ? 'rgba(255,255,255,0.4)' : 'rgba(90,62,133,0.5)',
+          ? item.color
+          : isDark ? 'rgba(226,232,240,0.46)' : 'rgba(71,85,105,0.58)',
         transition: 'all 0.2s ease',
       }}>
         {item.icon}
@@ -72,12 +75,11 @@ function ItemContent({ item, active, collapsed, isDark }: {
         <>
           <Typography sx={{
             flex: 1, minWidth: 0,
-            fontSize: 15, fontWeight: active ? 700 : 500,
+            fontSize: 14, fontWeight: active ? 700 : 600,
             color: active
-              ? isDark ? '#EDE9FA' : '#1A1033'
-              : isDark ? 'rgba(237,233,250,0.6)' : 'rgba(26,16,51,0.6)',
+              ? isDark ? '#EEF2FF' : '#0F172A'
+              : isDark ? 'rgba(226,232,240,0.72)' : 'rgba(15,23,42,0.7)',
             lineHeight: 1.3,
-            letterSpacing: '-0.1px',
             transition: 'all 0.18s',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -102,10 +104,10 @@ export default function SidebarNavItem({ item, active, collapsed, onClick }: Sid
 
   const tooltipTitle = collapsed ? (
     <Box>
-      <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#EDE9FA', lineHeight: 1.3 }}>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: isDark ? '#EDE9FA' : '#0F172A', lineHeight: 1.3 }}>
         {item.label}
       </Typography>
-      <Typography sx={{ fontSize: 11.5, color: 'rgba(237,233,250,0.65)', mt: 0.3, lineHeight: 1.5 }}>
+      <Typography sx={{ fontSize: 11.5, color: isDark ? 'rgba(237,233,250,0.65)' : 'rgba(15,23,42,0.6)', mt: 0.3, lineHeight: 1.5 }}>
         {item.descriptionTh}
       </Typography>
     </Box>
@@ -127,40 +129,37 @@ export default function SidebarNavItem({ item, active, collapsed, onClick }: Sid
         transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
         background: active
           ? isDark
-            ? 'linear-gradient(135deg,rgba(123,91,164,0.2) 0%,rgba(123,91,164,0.07) 100%)'
-            : 'linear-gradient(135deg,rgba(123,91,164,0.1) 0%,rgba(123,91,164,0.04) 100%)'
+            ? 'rgba(255,255,255,0.05)'
+            : 'rgba(255,255,255,0.7)'
           : 'transparent',
         border: '1px solid',
         borderColor: active
-          ? isDark ? 'rgba(123,91,164,0.28)' : 'rgba(123,91,164,0.18)'
+          ? `${item.color}24`
           : 'transparent',
         boxShadow: active
-          ? isDark ? '0 2px 16px rgba(123,91,164,0.12)' : '0 2px 10px rgba(123,91,164,0.08)'
+          ? isDark ? '0 10px 24px rgba(2,6,23,0.12)' : '0 10px 22px rgba(15,23,42,0.05)'
           : 'none',
         '&:hover': {
           background: active
             ? isDark
-              ? 'linear-gradient(135deg,rgba(123,91,164,0.26) 0%,rgba(123,91,164,0.1) 100%)'
-              : 'linear-gradient(135deg,rgba(123,91,164,0.14) 0%,rgba(123,91,164,0.06) 100%)'
-            : isDark ? 'rgba(255,255,255,0.04)' : 'rgba(123,91,164,0.05)',
+              ? 'rgba(255,255,255,0.07)'
+              : 'rgba(255,255,255,0.92)'
+            : isDark ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.85)',
           borderColor: active
-            ? isDark ? 'rgba(123,91,164,0.38)' : 'rgba(123,91,164,0.25)'
-            : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(123,91,164,0.1)',
-          transform: collapsed ? 'scale(1.06)' : 'translateX(3px)',
+            ? `${item.color}32`
+            : isDark ? 'rgba(148,163,184,0.14)' : 'rgba(15,23,42,0.08)',
         },
         '&:focus-visible': {
           outline: `2px solid ${item.color}`,
           outlineOffset: 2,
         },
-        // Left accent bar for active item
         '&::before': active ? {
           content: '""',
           position: 'absolute',
-          left: 0, top: '18%', bottom: '18%',
-          width: '3px',
-          borderRadius: '0 3px 3px 0',
-          background: `linear-gradient(180deg, ${item.color}, ${item.color}88)`,
-          boxShadow: `0 0 10px ${item.glow}`,
+          left: 10, right: 10, top: 0,
+          height: 2,
+          borderRadius: '999px',
+          background: item.color,
         } : {},
       }}
       aria-label={`${item.label} — ${item.descriptionTh}`}
@@ -182,19 +181,20 @@ export default function SidebarNavItem({ item, active, collapsed, onClick }: Sid
         tooltip: {
           sx: {
             maxWidth: 240,
-            bgcolor: isDark ? 'rgba(22,16,44,0.97)' : 'rgba(26,16,51,0.96)',
+            bgcolor: isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.98)',
+            color: isDark ? '#EEF2FF' : '#0F172A',
             backdropFilter: 'blur(16px)',
             border: '1px solid',
-            borderColor: isDark ? 'rgba(123,91,164,0.3)' : 'rgba(123,91,164,0.25)',
+            borderColor: isDark ? 'rgba(148,163,184,0.18)' : 'rgba(15,23,42,0.08)',
             borderRadius: '10px',
             px: 1.5, py: 1,
             boxShadow: isDark
-              ? '0 8px 32px rgba(0,0,0,0.5)'
-              : '0 8px 24px rgba(0,0,0,0.15)',
+              ? '0 18px 40px rgba(2,6,23,0.28)'
+              : '0 18px 36px rgba(15,23,42,0.12)',
           },
         },
         arrow: {
-          sx: { color: isDark ? 'rgba(22,16,44,0.97)' : 'rgba(26,16,51,0.96)' },
+          sx: { color: isDark ? 'rgba(15,23,42,0.96)' : 'rgba(255,255,255,0.98)' },
         },
       }}
     >

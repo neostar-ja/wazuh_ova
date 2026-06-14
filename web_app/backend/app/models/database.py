@@ -162,6 +162,17 @@ class IOCEnrichmentCache(Base):
     expires_at = Column(DateTime, nullable=True)
 
 
+class LogSourceState(Base):
+    __tablename__ = "log_source_state"
+    id = Column(Integer, primary_key=True, index=True)
+    source_key = Column(String(50), unique=True, nullable=False, index=True)
+    enabled = Column(Boolean, default=True)
+    reason = Column(Text, nullable=True)
+    backup_content = Column(Text, nullable=True)  # JSON: {filename: original_xml}
+    updated_by = Column(String(50), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
     id = Column(Integer, primary_key=True, index=True)

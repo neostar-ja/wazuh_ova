@@ -73,8 +73,8 @@ export function ChartCard({
           mt: 1.5,
           px: 1.5, py: 1,
           borderRadius: '8px',
-          bgcolor: 'rgba(123,91,164,0.06)',
-          border: '1px solid rgba(123,91,164,0.1)',
+          bgcolor: 'rgba(79,110,247,0.06)',
+          border: '1px solid rgba(79,110,247,0.12)',
         }}>
           <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.5 }}>
             💡 {insight}

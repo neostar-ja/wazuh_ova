@@ -100,8 +100,8 @@ export function DataToolbar({
               <Box component="span" sx={{
                 ml: 0.75, px: 0.75, py: 0.1,
                 borderRadius: '10px', fontSize: 10, fontWeight: 800,
-                bgcolor: filterOpen ? 'rgba(255,255,255,0.25)' : BRAND.purpleFaint,
-                color: filterOpen ? '#fff' : BRAND.purple,
+                bgcolor: filterOpen ? 'rgba(255,255,255,0.25)' : BRAND.primaryFaint,
+                color: filterOpen ? '#fff' : BRAND.primary,
               }}>
                 {activeFilterCount}
               </Box>
@@ -135,9 +135,9 @@ export function DataToolbar({
               deleteIcon={<CloseRoundedIcon sx={{ fontSize: '12px !important' }} />}
               sx={{
                 height: 22, fontSize: 11, fontWeight: 600,
-                bgcolor: BRAND.purpleFaint, color: BRAND.purpleLight,
-                border: '1px solid rgba(123,91,164,0.2)',
-                '& .MuiChip-deleteIcon': { color: BRAND.purple, opacity: 0.6, '&:hover': { opacity: 1 } },
+                bgcolor: BRAND.primaryFaint, color: BRAND.primaryLight,
+                border: '1px solid rgba(79,110,247,0.2)',
+                '& .MuiChip-deleteIcon': { color: BRAND.primary, opacity: 0.6, '&:hover': { opacity: 1 } },
               }}
             />
           ))}

@@ -3,72 +3,43 @@ import { Box, Skeleton, useTheme } from '@mui/material'
 import { PageShellProps, PageMaxWidth } from './layout.types'
 import { PageHeader } from '../PageHeader'
 
-function resolveMaxWidth(mw: PageMaxWidth): string | number {
-  if (mw === 'full')    return '100%'
-  if (mw === 'wide')    return 1600
-  if (mw === 'content') return 1280
-  return mw
+function resolveMaxWidth(maxWidth: PageMaxWidth): string | number {
+  if (maxWidth === 'full') return '100%'
+  if (maxWidth === 'wide') return 1600
+  if (maxWidth === 'content') return 1180
+  return maxWidth
 }
 
 function PageLoadingSkeleton() {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
-      {/* Header skeleton */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-          <Skeleton width={80} height={14} sx={{ borderRadius: '6px' }} />
-          <Skeleton width={260} height={32} sx={{ borderRadius: '8px' }} />
-          <Skeleton width={180} height={14} sx={{ borderRadius: '6px' }} />
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Skeleton width={90} height={34} sx={{ borderRadius: '10px' }} />
-          <Skeleton width={120} height={34} sx={{ borderRadius: '10px' }} />
-        </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
+      <Box sx={{ display: 'grid', gap: 1 }}>
+        <Skeleton width={140} height={14} sx={{ borderRadius: 2 }} />
+        <Skeleton width="min(440px, 80%)" height={40} sx={{ borderRadius: 2 }} />
+        <Skeleton width="min(720px, 100%)" height={18} sx={{ borderRadius: 2 }} />
       </Box>
-      {/* Metric strip */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 2 }}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} height={96} sx={{ borderRadius: '14px' }} />
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2 }}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} height={110} sx={{ borderRadius: 4 }} />
         ))}
       </Box>
-      {/* Content rows */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 2 }}>
-        <Skeleton height={240} sx={{ borderRadius: '14px' }} />
-        <Skeleton height={240} sx={{ borderRadius: '14px' }} />
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} height={180} sx={{ borderRadius: '14px' }} />
-        ))}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: '1.6fr 1fr' }, gap: 2 }}>
+        <Skeleton height={260} sx={{ borderRadius: 4 }} />
+        <Skeleton height={260} sx={{ borderRadius: 4 }} />
       </Box>
     </Box>
   )
 }
 
-/**
- * PageShell — universal content-area wrapper for every route.
- *
- * Handles:
- *  - Consistent page padding (responsive)
- *  - Max-width constraint with centring
- *  - Optional PageHeader (title, subtitle, actions, status, breadcrumbs)
- *  - Page-level loading / error / empty state
- *  - Subtle background tint per variant
- *  - No horizontal overflow
- *
- * Usage:
- *   <PageShell title="Threat Alerts" status="live" actions={<Button>…</Button>}>
- *     …page content…
- *   </PageShell>
- *
- * Variants:
- *   default     — generic page
- *   dashboard   — overview/metric-heavy page
- *   workbench   — investigate/search split layout
- *   console     — alert list / event console
- *   report      — compliance/audit output
- *   management  — admin settings / tables
- */
+const VARIANT_TONES: Record<string, string> = {
+  dashboard: '123,91,164',
+  workbench: '56,189,248',
+  console: '239,68,68',
+  report: '34,197,94',
+  management: '100,116,139',
+  default: '123,91,164',
+}
+
 export function PageShell({
   title,
   subtitle,
@@ -90,42 +61,55 @@ export function PageShell({
   const isDark = theme.palette.mode === 'dark'
 
   const px = density === 'compact'
-    ? { xs: '12px', sm: '16px', md: '20px', xl: '24px' }
-    : { xs: '16px', sm: '20px', md: '28px', xl: '32px' }
+    ? { xs: 1.5, sm: 2, md: 2.5, xl: 3 }
+    : { xs: 2, sm: 2.5, md: 3, xl: 3.5 }
 
   const py = density === 'compact'
-    ? { xs: '12px', sm: '14px', md: '16px' }
-    : { xs: '16px', sm: '20px', md: '24px' }
+    ? { xs: 1.5, sm: 1.75, md: 2.25 }
+    : { xs: 2, sm: 2.5, md: 3 }
 
-  const gapY = density === 'compact' ? { xs: 2, md: 2.5 } : { xs: 2.5, md: 3.5 }
-
-  const hasHeader = !!(title || subtitle || breadcrumbs?.length || actions || status)
-
-  // Subtle per-variant bg tint
-  const variantBg: Record<string, string> = {
-    dashboard:  isDark ? 'rgba(123,91,164,0.03)' : 'rgba(123,91,164,0.015)',
-    workbench:  isDark ? 'rgba(59,130,246,0.03)' : 'rgba(59,130,246,0.015)',
-    console:    isDark ? 'rgba(239,68,68,0.025)' : 'rgba(239,68,68,0.012)',
-    report:     isDark ? 'rgba(34,197,94,0.025)' : 'rgba(34,197,94,0.012)',
-    management: isDark ? 'rgba(100,116,139,0.04)' : 'rgba(100,116,139,0.02)',
-    default:    'transparent',
-  }
-
-  const resolvedMax = resolveMaxWidth(maxWidth)
+  const gapY = density === 'compact' ? { xs: 2, md: 2.5 } : { xs: 2.5, md: 3.25 }
+  const hasHeader = !!(title || subtitle || breadcrumbs?.length || actions || status || lastUpdated)
+  const maxWidthValue = resolveMaxWidth(maxWidth)
+  const tone = VARIANT_TONES[variant] ?? VARIANT_TONES.default
 
   return (
     <Box
       className={`page-enter ${className}`}
       sx={{
+        position: 'relative',
         width: '100%',
         minHeight: 0,
-        overflowX: 'hidden',
-        bgcolor: variantBg[variant] ?? 'transparent',
+        overflow: 'hidden',
+        borderRadius: { xs: 0, md: 4 },
+        backgroundColor: isDark ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.55)',
+        border: { xs: 'none', md: '1px solid' },
+        borderColor: { md: isDark ? 'rgba(148,163,184,0.08)' : 'rgba(15,23,42,0.06)' },
+        boxShadow: { md: isDark ? '0 18px 40px rgba(2,6,23,0.18)' : '0 18px 40px rgba(15,23,42,0.04)' },
       }}
     >
       <Box
+        aria-hidden="true"
         sx={{
-          maxWidth: resolvedMax,
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background: isDark
+            ? `
+              radial-gradient(circle at top right, rgba(${tone},0.12), transparent 26%),
+              linear-gradient(180deg, rgba(255,255,255,0.03), transparent 26%)
+            `
+            : `
+              radial-gradient(circle at top right, rgba(${tone},0.08), transparent 26%),
+              linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0))
+            `,
+        }}
+      />
+
+      <Box
+        sx={{
+          position: 'relative',
+          maxWidth: maxWidthValue,
           mx: 'auto',
           px,
           py,
@@ -135,21 +119,19 @@ export function PageShell({
           minWidth: 0,
         }}
       >
-        {/* Page header */}
         {hasHeader && (
           <PageHeader
             title={title ?? ''}
             subtitle={subtitle}
             breadcrumbs={breadcrumbs}
             actions={actions}
-            status={status as 'live' | 'paused' | 'offline' | undefined}
+            status={status}
             statusLabel={statusLabel}
             lastUpdated={lastUpdated}
             loading={loading && !title}
           />
         )}
 
-        {/* Page body */}
         {loading ? (
           <PageLoadingSkeleton />
         ) : error ? (

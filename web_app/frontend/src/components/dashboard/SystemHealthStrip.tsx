@@ -6,6 +6,7 @@ import DevicesRoundedIcon from '@mui/icons-material/DevicesRounded'
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded'
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded'
 import { format } from 'date-fns'
+import { BRAND, SEV_COLOR } from '../ui/tokens'
 
 interface SystemHealthStripProps {
   clusterStatus?: 'active' | 'warning' | 'error'
@@ -28,9 +29,9 @@ export function SystemHealthStrip({
   const isDark = palette.mode === 'dark'
 
   const statusConfig = {
-    active: { color: '#22C55E', label: 'Active', pulse: true },
-    warning: { color: '#F17422', label: 'Warning', pulse: false },
-    error: { color: '#EF4444', label: 'Error', pulse: false },
+    active: { color: SEV_COLOR.low, label: 'Active', pulse: true },
+    warning: { color: SEV_COLOR.high, label: 'Warning', pulse: false },
+    error: { color: SEV_COLOR.critical, label: 'Error', pulse: false },
   }
 
   const status = statusConfig[clusterStatus]
@@ -50,21 +51,21 @@ export function SystemHealthStrip({
       label: 'Active Agents',
       value: `${activeAgents}/${totalAgents}`,
       icon: DevicesRoundedIcon,
-      color: agentHealthPercent >= 80 ? '#22C55E' : agentHealthPercent >= 50 ? '#F17422' : '#EF4444',
+      color: agentHealthPercent >= 80 ? SEV_COLOR.low : agentHealthPercent >= 50 ? SEV_COLOR.high : SEV_COLOR.critical,
     },
     {
       id: 'eps',
       label: 'EPS',
       value: `${eps}/s`,
       icon: BoltRoundedIcon,
-      color: '#7B5BA4',
+      color: BRAND.primary,
     },
     {
       id: 'refresh',
       label: 'Auto Refresh',
       value: isAutoRefresh ? 'Live' : 'Paused',
       icon: RefreshRoundedIcon,
-      color: isAutoRefresh ? '#22C55E' : '#9A90BF',
+      color: isAutoRefresh ? SEV_COLOR.low : '#94A3B8',
     },
   ]
 
@@ -78,11 +79,11 @@ export function SystemHealthStrip({
         px: 2,
         py: 1.25,
         borderRadius: '10px',
-        border: `1px solid ${isDark ? 'rgba(123,91,164,0.15)' : 'rgba(123,91,164,0.1)'}`,
-        bgcolor: isDark ? 'rgba(123,91,164,0.04)' : 'rgba(123,91,164,0.02)',
+        border: `1px solid ${isDark ? 'rgba(79,110,247,0.15)' : 'rgba(79,110,247,0.1)'}`,
+        bgcolor: isDark ? 'rgba(79,110,247,0.04)' : 'rgba(79,110,247,0.02)',
         background: isDark
-          ? 'linear-gradient(90deg, rgba(123,91,164,0.06) 0%, transparent 80%)'
-          : 'linear-gradient(90deg, rgba(123,91,164,0.04) 0%, transparent 80%)',
+          ? 'linear-gradient(90deg, rgba(79,110,247,0.06) 0%, transparent 80%)'
+          : 'linear-gradient(90deg, rgba(79,110,247,0.04) 0%, transparent 80%)',
       }}
     >
       {/* Status chips */}

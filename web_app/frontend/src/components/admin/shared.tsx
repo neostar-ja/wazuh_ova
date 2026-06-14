@@ -24,6 +24,7 @@ export const ACTION_COLOR: Record<string, 'primary' | 'default' | 'warning' | 'i
   deploy_restart: 'error',
   create_user: 'success', update_user: 'info', delete_tuning: 'error',
   add_tuning: 'warning', save_config: 'secondary',
+  disable_log_source: 'error', enable_log_source: 'success',
 }
 
 export function getLevelColor(lv: number): string {

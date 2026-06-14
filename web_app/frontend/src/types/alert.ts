@@ -114,6 +114,7 @@ export interface WazuhAlertItem {
   agentIp?: string;
   managerName?: string;
   decoderName?: string;
+  programName?: string;
   location?: string;
   sourceIp?: string;
   sourcePort?: string | number;

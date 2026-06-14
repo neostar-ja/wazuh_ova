@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react'
-import { Box, CircularProgress, Typography } from '@mui/material'
+import { Box, CircularProgress, Typography, useTheme } from '@mui/material'
+import { SEV_COLOR } from '../ui/tokens'
 
 // Country name → { x, y } percentage coordinates on the map
 const COORDS: Record<string, [number, number]> = {
@@ -65,9 +66,11 @@ interface AttackLine {
 
 const TARGET_X = 76, TARGET_Y = 50  // Thailand
 
-const SEV_COLORS = ['#EF4444','#F97316','#EAB308','#06B6D4','#A855F7','#EC4899','#22C55E']
+const SEV_COLORS = [SEV_COLOR.critical, SEV_COLOR.high, SEV_COLOR.medium, '#06B6D4', '#A855F7', '#EC4899', SEV_COLOR.low]
 
 function WorldMap({ countries = [], loading = false }: WorldMapProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [tick, setTick] = useState(0)
 
   // Periodic re-render to animate lines
@@ -126,9 +129,11 @@ function WorldMap({ countries = [], loading = false }: WorldMapProps) {
 
   return (
     <Box sx={{
-      position:'relative', overflow:'hidden', bgcolor:'#060d1a',
+      position:'relative', overflow:'hidden',
+      bgcolor: isDark ? '#060d1a' : '#0B1330',
       borderRadius:2, height:'100%', minHeight:260,
-      border:'1px solid rgba(239,68,68,0.08)',
+      border: `1px solid ${isDark ? 'rgba(239,68,68,0.08)' : 'rgba(79,110,247,0.18)'}`,
+      boxShadow: isDark ? 'none' : '0 8px 24px rgba(15,23,42,0.12)',
     }}>
       {/* CSS animations */}
       <style>{`
@@ -162,9 +167,9 @@ function WorldMap({ countries = [], loading = false }: WorldMapProps) {
         backgroundImage:`
           radial-gradient(circle at 76% 50%, rgba(34,197,94,0.08) 0%, transparent 18%),
           radial-gradient(circle at 18% 30%, rgba(239,68,68,0.06) 0%, transparent 20%),
-          radial-gradient(circle at 50% 30%, rgba(56,189,248,0.04) 0%, transparent 30%),
-          linear-gradient(rgba(96,165,250,0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(96,165,250,0.04) 1px, transparent 1px)
+          radial-gradient(circle at 50% 30%, rgba(34,211,238,0.05) 0%, transparent 30%),
+          linear-gradient(rgba(124,147,255,0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(124,147,255,0.05) 1px, transparent 1px)
         `,
         backgroundSize:'auto,auto,auto,36px 36px,36px 36px',
       }} />
@@ -172,7 +177,7 @@ function WorldMap({ countries = [], loading = false }: WorldMapProps) {
       {/* Equator line */}
       <Box sx={{
         position:'absolute', left:0, right:0, top:'50%',
-        height:'1px', bgcolor:'rgba(96,165,250,0.06)',
+        height:'1px', bgcolor:'rgba(124,147,255,0.08)',
         transform:'translateY(-50%)',
       }} />
 

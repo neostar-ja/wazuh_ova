@@ -1,21 +1,34 @@
-// ─── Shared Design Tokens ─────────────────────────────────────────────────────
+// ─── Shared Design Tokens (v3 — Indigo / Cyan) ────────────────────────────────
 // Single source of truth for brand colors and severity palette
 
 export const BRAND = {
-  purple:      '#7B5BA4',
-  purpleLight: '#9B7DC4',
-  purpleDark:  '#5A3E85',
-  purpleFaint: 'rgba(123,91,164,0.12)',
-  orange:      '#F17422',
-  orangeLight: '#FF9642',
-  orangeDark:  '#D05810',
-  orangeFaint: 'rgba(241,116,34,0.12)',
+  // Primary — Electric Indigo/Blue (actions, active nav, focus rings)
+  primary:      '#4F6EF7',
+  primaryLight: '#7C93FF',
+  primaryDark:  '#2F47C9',
+  primaryFaint: 'rgba(79,110,247,0.12)',
+  // Accent — Cyan/Teal (live indicators, glow, highlights)
+  accent:       '#22D3EE',
+  accentLight:  '#67E8F9',
+  accentDark:   '#0EA5C4',
+  accentFaint:  'rgba(34,211,238,0.12)',
+
+  // Legacy aliases (purple/orange) — kept so pages not yet migrated to v3
+  // automatically pick up the new brand colors (purple → primary, orange → accent)
+  purple:      '#4F6EF7',
+  purpleLight: '#7C93FF',
+  purpleDark:  '#2F47C9',
+  purpleFaint: 'rgba(79,110,247,0.12)',
+  orange:      '#22D3EE',
+  orangeLight: '#67E8F9',
+  orangeDark:  '#0EA5C4',
+  orangeFaint: 'rgba(34,211,238,0.12)',
 } as const
 
 export const SEV_COLOR = {
   critical: '#EF4444',
-  high:     '#F17422',
-  medium:   '#EAB308',
+  high:     '#F97316',
+  medium:   '#F59E0B',
   low:      '#22C55E',
   info:     '#38BDF8',
 } as const
@@ -49,18 +62,57 @@ export function sevFromName(name: string): string {
 
 // Chart tooltip style (recharts)
 export const CHART_TIP_STYLE = {
-  background:   'rgba(22,18,42,0.97)',
-  border:       '1px solid rgba(123,91,164,0.35)',
-  borderRadius: 8,
+  background:   'rgba(19,24,41,0.97)',
+  border:       '1px solid rgba(124,147,255,0.22)',
+  borderRadius: 10,
   fontSize:     12,
-  color:        '#EDE9FA',
+  color:        '#E7EBF7',
 } as const
 
 // Chart pie palette
 export const PIE_COLORS = [
-  BRAND.purple, BRAND.orange, '#38BDF8', '#22C55E',
-  '#EAB308', '#EC4899', '#A855F7',
+  BRAND.primary, BRAND.accent, '#F59E0B', '#22C55E',
+  '#EC4899', '#A855F7', '#38BDF8',
 ] as const
+
+// Categorical colors for data sources / rule groups — distinct hues that stay
+// legible alongside SEV_COLOR and BRAND. Reuse SEV_COLOR/BRAND directly where
+// a category IS a severity signal (e.g. SSH auth failures -> SEV_COLOR.medium).
+export const CATEGORY_COLOR = {
+  mikrotik:     '#3B82F6',          // blue
+  fortigate:    BRAND.accent,       // '#22D3EE'
+  huaweiUsg:    SEV_COLOR.low,      // '#22C55E'
+  huaweiAc:     '#10B981',          // emerald
+  infobloxDns:  BRAND.primaryLight, // '#7C93FF'
+  infobloxDhcp: '#A78BFA',          // violet
+  suricata:     '#EC4899',          // pink
+  linuxSystem:  '#64748B',          // slate
+  windows:      '#0EA5E9',          // sky
+  ossec:        '#94A3B8',          // light slate
+  compliance:   '#A78BFA',          // violet
+} as const
+
+// Threat-intel feed brand colors (AlertDrawer "Threat Intel" tab FeedMiniCards)
+export const FEED_COLOR = {
+  abuseipdb:  SEV_COLOR.critical, // '#EF4444'
+  otx:        SEV_COLOR.high,     // '#F97316'
+  shodan:     BRAND.accentDark,   // '#0EA5C4'
+  virustotal: BRAND.primaryLight, // '#7C93FF'
+} as const
+
+// Display-label -> color, used by AlertsPage source rail + ThreatDistributionPanel
+export const SOURCE_COLOR_MAP: Record<string, string> = {
+  'MikroTik Router': CATEGORY_COLOR.mikrotik,
+  'FortiGate WUH':   CATEGORY_COLOR.fortigate,
+  'Huawei USG/FW':   CATEGORY_COLOR.huaweiUsg,
+  'Huawei AC WiFi':  CATEGORY_COLOR.huaweiAc,
+  'Huawei Agile Controller': CATEGORY_COLOR.huaweiAc,
+  'Infoblox DNS':    CATEGORY_COLOR.infobloxDns,
+  'Infoblox DHCP':   CATEGORY_COLOR.infobloxDhcp,
+  'Suricata IDS':    CATEGORY_COLOR.suricata,
+  'Linux/SSH':       SEV_COLOR.medium,
+  'Linux/System':    CATEGORY_COLOR.linuxSystem,
+}
 
 // Format large numbers
 export function fmtN(n: number | null | undefined): string {
@@ -74,7 +126,7 @@ export function fmtN(n: number | null | undefined): string {
 
 // ─── Layout / Surface tokens ──────────────────────────────────────────────────
 // SSOT for spacing, radius, surfaces and borders so pages stop redefining
-// their own copies of these values (see SOC_CENTER_UI_CLEAN_REDESIGN_AUDIT.md)
+// their own copies of these values.
 
 export const RADIUS = {
   card:    16, // major panels (SectionCard)
@@ -92,16 +144,16 @@ export const LAYOUT_GAP = {
 // Mirrors SectionCard's variant backgrounds so non-card surfaces (e.g. inline
 // panels inside tabs) can match the same look without re-deriving values.
 export const SURFACE = {
-  default:  { dark: 'rgba(22,17,42,0.85)',  light: 'rgba(255,255,255,0.95)' },
-  glass:    { dark: 'rgba(18,14,34,0.78)',  light: 'rgba(255,255,255,0.82)' },
-  flat:     { dark: 'rgba(22,17,40,0.6)',   light: 'rgba(255,255,255,0.8)'  },
-  elevated: { dark: 'rgba(30,23,52,0.95)',  light: '#FFFFFF'                },
+  default:  { dark: 'rgba(19,24,41,0.88)', light: 'rgba(255,255,255,0.96)' },
+  glass:    { dark: 'rgba(16,21,36,0.72)', light: 'rgba(255,255,255,0.80)' },
+  flat:     { dark: 'rgba(14,18,30,0.58)', light: 'rgba(247,249,252,0.86)' },
+  elevated: { dark: 'rgba(27,34,54,0.97)', light: '#FFFFFF' },
 } as const
 
 export const BORDER = {
-  default: { dark: 'rgba(123,91,164,0.22)', light: 'rgba(123,91,164,0.14)' },
-  subtle:  { dark: 'rgba(123,91,164,0.14)', light: 'rgba(123,91,164,0.1)'  },
-  divider: { dark: 'rgba(123,91,164,0.15)', light: 'rgba(123,91,164,0.1)'  },
+  default: { dark: 'rgba(124,147,255,0.14)', light: 'rgba(79,110,247,0.10)' },
+  subtle:  { dark: 'rgba(124,147,255,0.08)', light: 'rgba(79,110,247,0.06)' },
+  divider: { dark: 'rgba(124,147,255,0.10)', light: 'rgba(79,110,247,0.08)' },
 } as const
 
 export type SurfaceLevel = keyof typeof SURFACE
@@ -118,8 +170,8 @@ export function getBorder(isDark: boolean, emphasis: BorderEmphasis = 'default')
 }
 
 /**
- * Soft tinted background for chips/badges/icon-wells, e.g. getSoftBg(BRAND.orange, 12)
- * → '#F17422' + ~12% alpha as a 2-digit hex suffix (matches the `${color}18`-style
+ * Soft tinted background for chips/badges/icon-wells, e.g. getSoftBg(BRAND.accent, 12)
+ * → '#22D3EE' + ~12% alpha as a 2-digit hex suffix (matches the `${color}18`-style
  * literals scattered across pages, but computed instead of guessed).
  */
 export function getSoftBg(color: string, alphaPercent: number = 12): string {
@@ -137,14 +189,33 @@ export function getChartTipStyle(isDark: boolean) {
   return {
     ...CHART_TIP_STYLE,
     background: 'rgba(255,255,255,0.97)',
-    border: '1px solid rgba(123,91,164,0.2)',
-    color: '#1A1033',
+    border: '1px solid rgba(79,110,247,0.16)',
+    color: '#161B2E',
   }
 }
 
+// ─── Effects (gradients / glow) ───────────────────────────────────────────────
+
+export const GRADIENT = {
+  primary:    'linear-gradient(135deg,#4F6EF7 0%,#2F47C9 100%)',
+  accent:     'linear-gradient(135deg,#22D3EE 0%,#0EA5C4 100%)',
+  aurora:     'linear-gradient(135deg,#4F6EF7 0%,#22D3EE 100%)',
+  auroraSoft: 'linear-gradient(135deg,rgba(79,110,247,0.16) 0%,rgba(34,211,238,0.12) 100%)',
+} as const
+
+/** Soft glow box-shadow for live/critical indicators and hover states. */
+export function getGlow(color: string, intensityPercent: number = 45): string {
+  return `0 0 18px ${getSoftBg(color, intensityPercent)}`
+}
+
+export const TRANSITION = {
+  base:   '200ms cubic-bezier(0.4,0,0.2,1)',
+  smooth: '320ms cubic-bezier(0.16,1,0.3,1)',
+} as const
+
 // ─── Typography scale ──────────────────────────────────────────────────────────
-// Reference sizes (px) per SOC_CENTER_UI_CLEAN_REDESIGN_AGENT_PROMPT.md —
-// anything below `metadata` should not be used for primary/important content.
+// Reference sizes (px) — anything below `metadata` should not be used for
+// primary/important content.
 export const TYPOGRAPHY_SCALE = {
   pageTitle:    24,   // 22-26px / weight 800-900
   sectionTitle: 16,   // 15-18px / weight 700-800

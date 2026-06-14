@@ -49,5 +49,5 @@ Validated with real POLICY/POLICYPERMIT logs from May 13 2026.
   <use_own_name>true</use_own_name>
   <prematch offset="after_parent">^\S+\s+%%01SECLOG/</prematch>
   <regex type="pcre2" offset="after_parent">^(\S+)\s+%%01SECLOG/(\d)/(\w+)\(\w\):.*?Protocol=(\w+),SourceIP=([^,]+),DestinationIP=([^,]+),SourcePort=(\d+),DestinationPort=(\d+).*?SourceZone=([^,]+),DestinationZone=([^,]+),PolicyName=([^,]+),CloseReason=([^.,]+)</regex>
-  <order>usg_hostname, usg_severity, usg_event, protocol, srcip, dstip, srcport, dstport, data.src_zone, data.dst_zone, policy_rule, data.close_reason</order>
+  <order>usg_hostname, usg_severity, usg_event, protocol, srcip, dstip, srcport, dstport, src_zone, dst_zone, policy_rule, close_reason</order>
 </decoder>
