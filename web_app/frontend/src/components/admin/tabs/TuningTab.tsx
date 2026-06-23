@@ -9,6 +9,7 @@ import {
 } from '@mui/material'
 import AddRoundedIcon from '@mui/icons-material/AddRounded'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded'
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded'
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded'
 import { format } from 'date-fns'
@@ -61,6 +62,7 @@ export function TuningTab() {
   const isDark = theme.palette.mode === 'dark'
   const { enqueueSnackbar } = useSnackbar()
   const [addOpen, setAddOpen] = useState(false)
+  const [deployOpen, setDeployOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [form, setForm] = useState({ rule_id: '', original_level: 7, tuned_level: 3, reason: '' })
   const [formError, setFormError] = useState<Record<string, string>>({})
@@ -98,6 +100,16 @@ export function TuningTab() {
     onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'ลบไม่สำเร็จ', { variant: 'error' }),
   })
 
+  const deployMut = useMutation({
+    mutationFn: adminApi.deployTuningToWazuh,
+    onSuccess: (res) => {
+      setDeployOpen(false)
+      const deployed = res.data?.deployed?.length ?? 0
+      enqueueSnackbar(`Deploy ไป Wazuh สำเร็จ (${deployed} rules)`, { variant: 'success' })
+    },
+    onError: (e: any) => enqueueSnackbar(e.response?.data?.detail || 'Deploy ไป Wazuh ไม่สำเร็จ', { variant: 'error' }),
+  })
+
   const validateForm = () => {
     const err: Record<string, string> = {}
     if (!form.rule_id.trim()) err.rule_id = 'กรุณาระบุ Rule ID'
@@ -118,18 +130,26 @@ export function TuningTab() {
         count={tunings.length}
         color={ACCENT}
         action={
-          <Button size="small" variant="outlined" startIcon={<AddRoundedIcon sx={{ fontSize: 16 }} />}
-            onClick={() => setAddOpen(true)}
-            sx={{ borderRadius: 2, fontSize: 12, height: 32, borderColor: ACCENT, color: ACCENT,
-              '&:hover': { borderColor: ACCENT, bgcolor: alpha(ACCENT, 0.08) } }}>
-            เพิ่ม Tuning
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button size="small" variant="outlined" startIcon={<CloudUploadRoundedIcon sx={{ fontSize: 16 }} />}
+              onClick={() => setDeployOpen(true)}
+              disabled={!activeCount || deployMut.isPending}
+              sx={{ borderRadius: 2, fontSize: 12, height: 32 }}>
+              ใช้กับ Wazuh
+            </Button>
+            <Button size="small" variant="outlined" startIcon={<AddRoundedIcon sx={{ fontSize: 16 }} />}
+              onClick={() => setAddOpen(true)}
+              sx={{ borderRadius: 2, fontSize: 12, height: 32, borderColor: ACCENT, color: ACCENT,
+                '&:hover': { borderColor: ACCENT, bgcolor: alpha(ACCENT, 0.08) } }}>
+              เพิ่ม Tuning
+            </Button>
+          </Box>
         }
       />
 
       <Alert severity="info" sx={{ mt: 2, mb: 2, fontSize: 12, borderRadius: 1.75 }}>
-        ปรับระดับ Rule เฉพาะ SOC Center — ไม่กระทบ Wazuh default rules ·{' '}
-        <strong>active</strong> {activeCount} รายการมีผลอยู่
+        ค่า active มีผลทันทีใน SOC Center · ถ้าต้องการให้ Wazuh สร้าง alert ใหม่ด้วยระดับนี้ ให้กด <strong>ใช้กับ Wazuh</strong> ·{' '}
+        ระบบจะเขียนไฟล์ managed rules แยกจาก default rules · <strong>active</strong> {activeCount} รายการมีผลอยู่
       </Alert>
 
       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
@@ -302,6 +322,13 @@ export function TuningTab() {
         title="ลบ Alert Tuning"
         message={`ลบ Tuning Rule ID "${deleteTarget?.rule_id}" ออกจากระบบ? การกระทำนี้ไม่สามารถย้อนกลับได้`}
         loading={deleteMut.isPending} />
+
+      <ConfirmDialog open={deployOpen} onClose={() => setDeployOpen(false)}
+        onConfirm={() => deployMut.mutate()}
+        title="ใช้ Alert Tuning กับ Wazuh"
+        message={`ระบบจะคัดลอก rule ต้นฉบับของ active tuning ${activeCount} รายการไปยังไฟล์ soc_center_tuning_rules.xml พร้อม overwrite level แล้ว restart Wazuh Manager มีผลกับ alert ใหม่หลัง deploy เท่านั้น`}
+        confirmColor="warning"
+        loading={deployMut.isPending} />
     </Box>
   )
 }

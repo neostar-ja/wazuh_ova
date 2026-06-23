@@ -46,6 +46,7 @@ import ShuffleActionsPanel from './iris/ShuffleActionsPanel'
 import ActivityPanel     from './iris/ActivityPanel'
 import ReportPanel       from './iris/ReportPanel'
 import ClosurePanel      from './iris/ClosurePanel'
+import CaseStatusSelect  from './iris/CaseStatusSelect'
 
 const CASE_COLOR = '#6366F1'
 
@@ -71,9 +72,10 @@ interface CaseHeaderProps {
   loading: boolean
   onRefresh: () => void
   irisOnline: boolean
+  onStatusUpdated: () => void
 }
 
-function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseHeaderProps) {
+function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline, onStatusUpdated }: CaseHeaderProps) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
   const { enqueueSnackbar } = useSnackbar()
@@ -85,12 +87,14 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
   const caseName  = caseInfo?.case_name  as string | undefined
   const caseId    = caseInfo?.case_id    as number | undefined
   const isOpen    = !(caseInfo?.close_date ?? caseInfo?.case_close_date)
-  const owner     = caseInfo?.owner      as string | undefined
-  const client    = caseInfo?.customer_name ?? caseInfo?.client_name as string | undefined
-  const openDate  = caseInfo?.open_date  ?? caseInfo?.case_open_date as string | undefined
-  const closeDate = caseInfo?.close_date ?? caseInfo?.case_close_date as string | undefined
+  const owner     = caseInfo?.owner as string | undefined
+  const client    = (caseInfo?.customer_name ?? caseInfo?.client_name) as string | undefined
+  const openDate  = (caseInfo?.open_date ?? caseInfo?.case_open_date) as string | undefined
+  const closeDate = (caseInfo?.close_date ?? caseInfo?.case_close_date) as string | undefined
+  const stateId   = (caseInfo?.state_id ?? caseInfo?.case_state_id) as number | undefined
+  const stateName = caseInfo?.state_name as string | undefined
   const tags      = (caseInfo?.case_tags as string | undefined)?.split(',').map(t => t.trim()).filter(Boolean) ?? []
-  const severity  = caseInfo?.severity_name ?? caseInfo?.case_severity as string | undefined
+  const severity  = (caseInfo?.severity_name ?? caseInfo?.case_severity) as string | undefined
   const desc      = caseInfo?.case_description as string | undefined
 
   const daysOpen = openDate
@@ -203,15 +207,26 @@ function CaseHeader({ caseInfo, irisUrl, loading, onRefresh, irisOnline }: CaseH
         className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 pb-4"
       >
         {/* Status */}
-        <Chip size="small"
-          label={isOpen ? '● กำลังดำเนินการ' : '✓ ปิดแล้ว'}
-          sx={{
-            height: 22, fontSize: 10, fontWeight: 700,
-            bgcolor: isOpen ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
-            color: isOpen ? '#22C55E' : '#64748B',
-            border: isOpen ? '1px solid rgba(34,197,94,0.28)' : '1px solid rgba(100,116,139,0.28)',
-          }}
-        />
+        {caseId ? (
+          <CaseStatusSelect
+            caseId={caseId}
+            stateId={stateId}
+            stateName={stateName}
+            closeDate={closeDate ?? null}
+            disabled={!irisOnline}
+            onUpdated={onStatusUpdated}
+          />
+        ) : (
+          <Chip size="small"
+            label={isOpen ? '● กำลังดำเนินการ' : '✓ ปิดแล้ว'}
+            sx={{
+              height: 22, fontSize: 10, fontWeight: 700,
+              bgcolor: isOpen ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
+              color: isOpen ? '#22C55E' : '#64748B',
+              border: isOpen ? '1px solid rgba(34,197,94,0.28)' : '1px solid rgba(100,116,139,0.28)',
+            }}
+          />
+        )}
 
         {/* Severity */}
         {severity && (
@@ -366,7 +381,10 @@ export default function CaseWorkspacePage() {
     case_close_date:  (caseInfo.close_date ?? caseInfo.case_close_date ?? null) as string | null,
     opened_by:        (caseInfo.opened_by ?? '') as string,
     owner:            (caseInfo.owner ?? '') as string,
+    state_id:         (caseInfo.state_id ?? caseInfo.case_state_id ?? null) as number | null,
+    status_id:        (caseInfo.status_id ?? caseInfo.case_status_id ?? null) as number | null,
     state_name:       (caseInfo.state_name ?? null) as string | null,
+    status_name:      (caseInfo.status_name ?? null) as string | null,
     client_name:      (caseInfo.customer_name ?? caseInfo.client_name ?? '') as string,
   } : null
 
@@ -450,6 +468,7 @@ export default function CaseWorkspacePage() {
         loading={isLoading}
         onRefresh={handleRefresh}
         irisOnline={irisOk}
+        onStatusUpdated={handleRefresh}
       />
 
       {/* Main workspace */}

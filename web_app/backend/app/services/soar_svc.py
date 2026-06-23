@@ -2,7 +2,9 @@
 import asyncio
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
+from urllib.parse import urlencode, urlparse
 
 import httpx
 
@@ -15,6 +17,7 @@ _TIMEOUT = 15
 
 _IRIS_DATETIME_MINUTE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
 _IRIS_DATETIME_SECOND_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+_WAZUH_SOURCE_HINTS = ("wazuh", "opensearch", "dashboard")
 
 
 def _iris_headers() -> dict:
@@ -96,15 +99,242 @@ async def get_iris_stats() -> dict:
 
 # ── IRIS Alerts ────────────────────────────────────────────────────────────────
 
-async def get_iris_alerts(page: int = 1, per_page: int = 20, status_id: Optional[int] = None) -> dict:
-    params = f"?page={page}&per_page={per_page}"
+async def get_iris_alerts(
+    page: int = 1,
+    per_page: int = 20,
+    status_id: Optional[int] = None,
+    severity_id: Optional[int] = None,
+    q: Optional[str] = None,
+) -> dict:
+    params: dict[str, object] = {"page": page, "per_page": per_page}
     if status_id:
-        params += f"&alert_status_id={status_id}"
-    return await _iris_get(f"/alerts/filter{params}")
+        params["alert_status_id"] = status_id
+    if severity_id:
+        params["alert_severity_id"] = severity_id
+    if q and q.strip():
+        # IRIS ignores generic q/search on this deployment; alert_title is the
+        # native filter that searches the title text generated from Wazuh alerts.
+        params["alert_title"] = q.strip()
+    return await _iris_get(f"/alerts/filter?{urlencode(params)}")
 
 
 async def get_iris_alert(alert_id: int) -> dict:
     return await _iris_get(f"/alerts/filter?alert_id={alert_id}")
+
+
+async def get_iris_alert_statuses() -> dict:
+    return await _iris_get("/manage/alert-status/list")
+
+
+async def get_iris_severities() -> dict:
+    return await _iris_get("/manage/severities/list")
+
+
+def extract_iris_alert_detail(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return {}
+    alerts = data.get("alerts")
+    if not isinstance(alerts, list) or not alerts:
+        return {}
+    first = alerts[0]
+    return first if isinstance(first, dict) else {}
+
+
+def _parse_iris_datetime(value: object) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    if re.search(r"[+-]\d{4}$", normalized):
+        normalized = f"{normalized[:-5]}{normalized[-5:-2]}:{normalized[-2:]}"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _extract_first_ioc_value(alert: dict) -> Optional[str]:
+    iocs = alert.get("iocs")
+    if not isinstance(iocs, list):
+        return None
+    for ioc in iocs:
+        if not isinstance(ioc, dict):
+            continue
+        value = str(ioc.get("ioc_value") or "").strip()
+        if value:
+            return value
+    return None
+
+
+def _infer_source_type(alert: dict) -> Optional[str]:
+    source_link = str(alert.get("alert_source_link") or "").lower()
+    alert_source = str(alert.get("alert_source") or "").lower()
+    combined = f"{source_link} {alert_source}"
+    if any(hint in combined for hint in _WAZUH_SOURCE_HINTS):
+        return "wazuh"
+    return None
+
+
+def _describe_source_status(alert: dict) -> dict:
+    source_link = str(alert.get("alert_source_link") or "").strip()
+    source_type = _infer_source_type(alert)
+    notes: list[str] = []
+    if not source_link:
+        notes.append("IRIS alert has no source link")
+        return {
+            "status": "not_found",
+            "source_type": source_type,
+            "match_strategy": "none",
+            "source_url": None,
+            "source_ref": alert.get("alert_source_ref"),
+            "event_time": alert.get("alert_source_event_time"),
+            "notes": notes,
+        }
+    if source_type != "wazuh":
+        notes.append("Source link is present but not recognized as a Wazuh source")
+        return {
+            "status": "unsupported",
+            "source_type": source_type,
+            "match_strategy": "none",
+            "source_url": source_link,
+            "source_ref": alert.get("alert_source_ref"),
+            "event_time": alert.get("alert_source_event_time"),
+            "notes": notes,
+        }
+    parsed = urlparse(source_link)
+    if parsed.netloc:
+        notes.append(f"Wazuh source host: {parsed.netloc}")
+    return {
+        "status": "not_found",
+        "source_type": "wazuh",
+        "match_strategy": "none",
+        "source_url": source_link,
+        "source_ref": alert.get("alert_source_ref"),
+        "event_time": alert.get("alert_source_event_time"),
+        "notes": notes,
+    }
+
+
+def _score_wazuh_event(event: dict, *, rule_id: Optional[str], ioc_value: Optional[str], event_time: Optional[datetime]) -> int:
+    score = 0
+    event_rule_id = str(((event.get("rule") or {}).get("id")) or "")
+    if rule_id and event_rule_id == rule_id:
+        score += 50
+    data = event.get("data") or {}
+    srcip = str(data.get("srcip") or "")
+    dstip = str(data.get("dstip") or "")
+    full_log = str(event.get("full_log") or "")
+    if ioc_value and ioc_value in {srcip, dstip}:
+        score += 40
+    elif ioc_value and ioc_value in full_log:
+        score += 20
+
+    if event_time:
+        matched_time = _parse_iris_datetime(event.get("@timestamp"))
+        if matched_time:
+            delta = abs((matched_time - event_time).total_seconds())
+            if delta <= 30:
+                score += 30
+            elif delta <= 120:
+                score += 20
+            elif delta <= 300:
+                score += 10
+    return score
+
+
+def _build_wazuh_summary(primary_event: Optional[dict]) -> dict:
+    event = primary_event or {}
+    rule = event.get("rule") or {}
+    data = event.get("data") or {}
+    decoder = event.get("decoder") or {}
+    mitre = rule.get("mitre") or {}
+    agent = event.get("agent") or {}
+    return {
+        "agent_name": agent.get("name"),
+        "rule_id": str(rule.get("id")) if rule.get("id") is not None else None,
+        "rule_level": rule.get("level"),
+        "srcip": data.get("srcip"),
+        "dstip": data.get("dstip"),
+        "decoder": decoder.get("name") or ((event.get("predecoder") or {}).get("program_name")),
+        "groups": rule.get("groups") or [],
+        "mitre": {
+            "tactic": mitre.get("tactic") or [],
+            "technique": mitre.get("technique") or [],
+        },
+    }
+
+
+async def search_alert_context_candidates(
+    rule_id: Optional[str],
+    event_time: Optional[str],
+    ioc_value: Optional[str],
+    size: int = 8,
+) -> list[dict]:
+    from ..services import opensearch_service
+
+    return await opensearch_service.search_alert_context_candidates(rule_id, event_time, ioc_value, size=size)
+
+
+async def get_iris_alert_detail(alert_id: int) -> dict:
+    raw = await get_iris_alert(alert_id)
+    alert = extract_iris_alert_detail(raw)
+    if not alert:
+        return raw
+
+    source_context = _describe_source_status(alert)
+    primary_event: Optional[dict] = None
+    related_events: list[dict] = []
+
+    if source_context.get("source_type") == "wazuh":
+        rule_id = str(alert.get("alert_source_ref") or "").strip() or None
+        event_time = _parse_iris_datetime(alert.get("alert_source_event_time"))
+        ioc_value = _extract_first_ioc_value(alert)
+
+        try:
+            candidates = await search_alert_context_candidates(
+                rule_id,
+                alert.get("alert_source_event_time"),
+                ioc_value,
+                size=8,
+            )
+            ranked = sorted(
+                (event for event in candidates if isinstance(event, dict)),
+                key=lambda event: _score_wazuh_event(event, rule_id=rule_id, ioc_value=ioc_value, event_time=event_time),
+                reverse=True,
+            )
+            if ranked:
+                primary_event = ranked[0]
+                related_events = ranked[1:5]
+                best_score = _score_wazuh_event(primary_event, rule_id=rule_id, ioc_value=ioc_value, event_time=event_time)
+                source_context["status"] = "matched" if best_score >= 50 else "partial"
+                source_context["match_strategy"] = "rule_ioc_time" if rule_id and ioc_value else "rule_time" if rule_id else "ioc_time" if ioc_value else "none"
+            else:
+                source_context["status"] = "not_found"
+                source_context["notes"] = [*source_context.get("notes", []), "No Wazuh events matched the alert correlation window"]
+        except Exception as exc:
+            logger.error("IRIS alert %s Wazuh enrichment failed: %s", alert_id, exc)
+            source_context["status"] = "error"
+            source_context["notes"] = [*source_context.get("notes", []), f"OpenSearch lookup failed: {exc}"]
+
+    return {
+        "status": raw.get("status", "success") if isinstance(raw, dict) else "success",
+        "message": raw.get("message", "") if isinstance(raw, dict) else "",
+        "data": {
+            "alert": alert,
+            "source_context": source_context,
+            "wazuh_context": {
+                "primary_event": primary_event,
+                "related_events": related_events,
+                "summary": _build_wazuh_summary(primary_event),
+            },
+        },
+    }
 
 
 async def create_iris_alert(
@@ -157,7 +387,11 @@ async def get_iris_cases(page: int = 1, per_page: int = 20) -> dict:
 
 
 async def get_iris_case(case_id: int) -> dict:
-    return await _iris_get(f"/case/summary?cid={case_id}")
+    return await _iris_get(f"/manage/cases/{case_id}")
+
+
+async def get_iris_case_states() -> dict:
+    return await _iris_get("/manage/case-states/list")
 
 
 async def create_iris_case(
@@ -225,15 +459,102 @@ async def create_iris_case(
 
 
 async def update_iris_case(case_id: int, data: dict) -> dict:
-    return await _iris_post("/case/update", {"cid": case_id, **data})
+    return await _iris_post(f"/manage/cases/update/{case_id}", data)
+
+
+def _extract_iris_case(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    return data if isinstance(data, dict) else {}
+
+
+def _extract_iris_case_states(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return []
+    return [state for state in data if isinstance(state, dict)]
+
+
+def _iris_ok(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("error"):
+        return False
+    status = str(payload.get("status") or "").lower()
+    if status in {"success", "ok"}:
+        return True
+    data = payload.get("data")
+    if isinstance(data, dict) and (data.get("case_id") or data.get("status") == "success"):
+        return True
+    return False
+
+
+async def set_iris_case_status(case_id: int, status_id: int) -> dict:
+    return await set_iris_case_state(case_id, status_id)
+
+
+async def set_iris_case_state(case_id: int, state_id: int) -> dict:
+    states_payload = await get_iris_case_states()
+    states = _extract_iris_case_states(states_payload)
+    closed_state_id = next(
+        (
+            int(state["state_id"])
+            for state in states
+            if str(state.get("state_name") or "").strip().lower() == "closed"
+        ),
+        9,
+    )
+
+    current = await get_iris_case(case_id)
+    current_data = _extract_iris_case(current)
+    is_closed = bool(current_data.get("close_date") or current_data.get("case_close_date"))
+    current_state_name = str(current_data.get("state_name") or "").strip().lower()
+    if current_state_name == "closed" or current_data.get("state_id") == closed_state_id:
+        is_closed = True
+
+    if state_id == closed_state_id:
+        result = await close_iris_case(case_id)
+        if _iris_ok(result):
+            detail = await get_iris_case(case_id)
+            case_data = _extract_iris_case(detail)
+            if case_data:
+                result["case"] = case_data
+            result["state_id"] = state_id
+        return result
+
+    if is_closed:
+        reopen_result = await reopen_iris_case(case_id)
+        if not _iris_ok(reopen_result):
+            return reopen_result
+
+    if current_data.get("state_id") == state_id and not is_closed:
+        return {
+            "status": "success",
+            "message": "unchanged",
+            "data": current_data,
+            "case": current_data,
+            "state_id": state_id,
+        }
+
+    result = await update_iris_case(case_id, {"state_id": state_id})
+    if _iris_ok(result):
+        detail = await get_iris_case(case_id)
+        case_data = _extract_iris_case(detail)
+        if case_data:
+            result["case"] = case_data
+        result["state_id"] = state_id
+    return result
 
 
 async def close_iris_case(case_id: int) -> dict:
-    return await _iris_get(f"/manage/cases/{case_id}/close")
+    return await _iris_post(f"/manage/cases/close/{case_id}", {})
 
 
 async def reopen_iris_case(case_id: int) -> dict:
-    return await _iris_post(f"/manage/cases/{case_id}/reopen", {})
+    return await _iris_post(f"/manage/cases/reopen/{case_id}", {})
 
 
 # ── Case Notes ─────────────────────────────────────────────────────────────────

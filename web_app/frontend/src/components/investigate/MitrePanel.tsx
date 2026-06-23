@@ -62,19 +62,23 @@ export function MitrePanel({ summary, onFilterTechnique }: MitrePanelProps) {
             <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.12em', mb: 1 }}>
               Top Techniques
             </Typography>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {summary.techniques.map((item) => (
                 <Button
                   key={item.name}
                   variant="outlined"
                   size="small"
                   onClick={() => onFilterTechnique?.(item.name)}
-                  sx={{ borderRadius: '999px', textTransform: 'none' }}
+                  sx={{
+                    borderRadius: '999px', textTransform: 'none', px: 1.5, py: 0.5,
+                    whiteSpace: 'normal', textAlign: 'left', maxWidth: 320, alignItems: 'center',
+                  }}
                 >
-                  {item.name} · {item.count}
+                  <span style={{ display: 'inline-block', maxWidth: 'calc(100% - 48px)', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle' }}>{item.name}</span>
+                  <span style={{ marginLeft: 8, fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace' }}>{item.count}</span>
                 </Button>
               ))}
-            </Stack>
+            </Box>
           </Box>
         </Stack>
       )}

@@ -104,9 +104,11 @@ export interface AlertFacets {
 
 export interface WazuhAlertItem {
   id: string;
+  socAlertId?: string;
   timestamp: string;
   ruleId?: string;
   ruleLevel: number;
+  originalRuleLevel?: number;
   severity: AlertSeverity;
   description: string;
   agentId?: string;
@@ -131,6 +133,12 @@ export interface WazuhAlertItem {
   cis?: string[];
   fullLog?: string;
   countryName?: string;
+  socTuning?: {
+    scope: 'single' | 'rule';
+    original_level: number;
+    tuned_level: number;
+    reason?: string;
+  };
   raw?: unknown;
 }
 

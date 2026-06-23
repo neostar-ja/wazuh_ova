@@ -14,6 +14,8 @@ import SOARPage from './components/soar/SOARPage'
 import CaseWorkspacePage from './components/soar/CaseWorkspacePage'
 import LogSearchPage from './components/search/LogSearchPage'
 import InfraMonitorPage from './components/infra/InfraMonitorPage'
+import AttackMapPage from './components/attackmap/AttackMapPage'
+import IncidentReportsPage from './components/reports/IncidentReportsPage'
 import { useAuth } from './hooks/useAuth'
 import { UserRole } from './types/auth'
 
@@ -39,6 +41,7 @@ export default function App() {
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="alerts" element={<AlertsPage />} />
+          <Route path="attack-map" element={<AttackMapPage />} />
           <Route path="investigate" element={<InvestigatePageV2 />} />
           <Route path="ioc" element={<IOCPage />} />
           <Route path="compliance" element={<CompliancePage />} />
@@ -48,6 +51,7 @@ export default function App() {
           <Route path="search" element={<LogSearchPage />} />
           <Route path="soar" element={<SOARPage />} />
           <Route path="soar/cases/:caseId" element={<CaseWorkspacePage />} />
+          <Route path="reports/incidents" element={<IncidentReportsPage />} />
           <Route
             path="admin/*"
             element={

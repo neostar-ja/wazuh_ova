@@ -54,6 +54,7 @@ export const dashboardApi = {
   cluster:     (): Promise<AxiosResponse<ClusterHealth>>                   => api.get<ClusterHealth>('/dashboard/cluster'),
   agents:      (): Promise<AxiosResponse<any>>                             => api.get<any>('/dashboard/agents'),
   sources:     (timeRange = '24h'): Promise<AxiosResponse<any>>            => api.get<any>('/dashboard/sources', { params: { time_range: timeRange } }),
+  attackMap:   (timeRange = '24h'): Promise<AxiosResponse<any>>            => api.get<any>('/dashboard/attack_map', { params: { time_range: timeRange } }),
 }
 
 export const alertsApi = {
@@ -61,6 +62,14 @@ export const alertsApi = {
   recent: (limit = 20, level = 7): Promise<AxiosResponse<any>> => api.get<any>('/alerts/recent', { params: { limit, level } }),
   stats:  (timeRange = '24h', level = 12): Promise<AxiosResponse<AlertStats>> => api.get<AlertStats>('/alerts/stats', { params: { time_range: timeRange, level } }),
   facets: (timeRange = '24h', level = 12): Promise<AxiosResponse<any>> => api.get<any>('/alerts/facets', { params: { time_range: timeRange, level } }),
+  setSeverityOverride: (data: {
+    scope: 'single' | 'rule'
+    alert_id?: string
+    rule_id?: string
+    original_level: number
+    tuned_level: number
+    reason: string
+  }): Promise<AxiosResponse<any>> => api.post<any>('/alerts/severity-override', data),
   export: (params: Record<string, any> = {}): Promise<AxiosResponse<Blob>> => api.get<Blob>('/alerts/export', { params, responseType: 'blob' }),
 }
 
@@ -170,7 +179,10 @@ export const adminApi = {
   getSystemStatus: (): Promise<AxiosResponse<any>> => api.get<any>('/admin/system-status'),
   // Alert Tuning
   listTuning: (): Promise<AxiosResponse<any>> => api.get<any>('/admin/tuning'),
+  listTuningHistory: (params: Record<string, any> = {}): Promise<AxiosResponse<any>> =>
+    api.get<any>('/admin/tuning/history', { params }),
   addTuning: (data: any): Promise<AxiosResponse<any>> => api.post<any>('/admin/tuning', data),
+  deployTuningToWazuh: (): Promise<AxiosResponse<any>> => api.post<any>('/admin/tuning/deploy-wazuh'),
   updateTuningStatus: (id: string | number, status: string): Promise<AxiosResponse<any>> => api.patch<any>(`/admin/tuning/${id}`, { status }),
   deleteTuning: (id: string | number): Promise<AxiosResponse<any>> => api.delete<any>(`/admin/tuning/${id}`),
   // Users
@@ -202,6 +214,13 @@ export const pushApi = {
     api.post('/push/subscribe', sub),
   unsubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<AxiosResponse<any>> =>
     api.delete('/push/subscribe', { data: sub }),
+}
+
+export const reportsApi = {
+  getIncidentCases: (timeRange = '7d', limit = 500): Promise<AxiosResponse<any>> =>
+    api.get<any>('/reports/incident-cases', { params: { time_range: timeRange, limit } }),
+  exportIncidentCases: (fmt = 'excel', timeRange = '7d', limit = 5000): Promise<AxiosResponse<Blob>> =>
+    api.get<Blob>('/reports/incident-cases/export', { params: { fmt, time_range: timeRange, limit }, responseType: 'blob' }),
 }
 
 export default api

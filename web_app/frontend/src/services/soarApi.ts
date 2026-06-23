@@ -7,20 +7,117 @@ export interface IrisAlert {
   alert_title: string
   alert_description?: string
   alert_source: string
-  alert_source_ref: string
-  alert_source_event_time: string
-  alert_creation_time: string
+  alert_source_ref: string | null
+  alert_source_link?: string | null
+  alert_source_content?: string | null
+  alert_source_event_time: string | null
+  alert_creation_time: string | null
   alert_tags: string | null
   alert_severity_id: number
   alert_status_id: number
   alert_note: string | null
   alert_owner_id: number | null
   alert_customer_id: number
-  severity: { severity_id: number; severity_name: string }
-  status: { status_id: number; status_name: string }
+  alert_uuid?: string | null
+  alert_context?: string | null
+  alert_classification_id?: number | null
+  alert_resolution_status_id?: number | null
+  severity: { severity_id: number; severity_name: string; severity_description?: string | null }
+  status: { status_id: number; status_name: string; status_description?: string | null }
+  customer?: {
+    customer_name?: string | null
+    customer_id?: number | null
+    client_uuid?: string | null
+    creation_date?: string | null
+    last_update_date?: string | null
+  } | null
+  classification?: { name?: string | null; description?: string | null } | null
   owner: { user_login: string } | null
-  iocs: Array<{ ioc_value: string; ioc_type: { type_name: string } }>
-  cases: unknown[]
+  resolution_status?: { name?: string | null; description?: string | null } | null
+  iocs: Array<{
+    ioc_value: string
+    ioc_type: { type_name: string; type_description?: string | null }
+    ioc_description?: string | null
+    ioc_tlp_id?: number | null
+    ioc_tags?: string | null
+  }>
+  cases: Array<Record<string, unknown>>
+  comments?: Array<Record<string, unknown>>
+  assets?: Array<Record<string, unknown>>
+  modification_history?: Record<string, { user?: string; user_id?: number; action?: string }>
+}
+
+export interface IrisAlertSourceContext {
+  status: 'matched' | 'partial' | 'not_found' | 'unsupported' | 'error'
+  source_type?: string | null
+  match_strategy?: string | null
+  source_url?: string | null
+  source_ref?: string | null
+  event_time?: string | null
+  notes: string[]
+}
+
+export interface IrisAlertWazuhEvent {
+  '@timestamp'?: string
+  rule?: {
+    id?: string
+    level?: number
+    description?: string
+    groups?: string[]
+    mitre?: { tactic?: string[]; technique?: string[] }
+  }
+  agent?: { id?: string; name?: string; ip?: string }
+  decoder?: { name?: string }
+  predecoder?: { program_name?: string }
+  location?: string
+  data?: {
+    srcip?: string
+    dstip?: string
+    srcport?: string | number
+    dstport?: string | number
+    protocol?: string
+  }
+  full_log?: string
+}
+
+export interface IrisAlertWazuhContext {
+  primary_event: IrisAlertWazuhEvent | null
+  related_events: IrisAlertWazuhEvent[]
+  summary: {
+    agent_name?: string | null
+    rule_id?: string | null
+    rule_level?: number | null
+    srcip?: string | null
+    dstip?: string | null
+    decoder?: string | null
+    groups: string[]
+    mitre: {
+      tactic: string[]
+      technique: string[]
+    }
+  }
+}
+
+export interface IrisAlertDetailResponse {
+  status: string
+  message?: string
+  data: {
+    alert: IrisAlert | null
+    source_context: IrisAlertSourceContext
+    wazuh_context: IrisAlertWazuhContext
+  }
+}
+
+export interface IrisSeverityOption {
+  severity_id: number
+  severity_name: string
+  severity_description?: string | null
+}
+
+export interface IrisAlertStatusOption {
+  status_id: number
+  status_name: string
+  status_description?: string | null
 }
 
 export interface IrisCase {
@@ -31,7 +128,10 @@ export interface IrisCase {
   case_close_date: string | null
   opened_by: string
   owner: string
+  state_id?: number | null
+  status_id?: number | null
   state_name: string | null
+  status_name?: string | null
   client_name: string
 }
 
@@ -42,7 +142,18 @@ export interface IrisCaseDetail {
   open_date: string
   close_date: string | null
   owner: string
-  status_id: number
+  state_id?: number | null
+  state_name?: string | null
+  status_id?: number | null
+  status_name?: string | null
+  customer_name?: string | null
+}
+
+export interface IrisCaseState {
+  state_id: number
+  state_name: string
+  state_description?: string
+  protected?: boolean
 }
 
 export interface CaseNoteGroup {
@@ -334,11 +445,17 @@ export const soarApi = {
   getStats: () => api.get('/soar/stats'),
 
   // Alerts
-  getIrisAlerts: (params?: { page?: number; per_page?: number; status_id?: number }) =>
+  getIrisAlerts: (params?: { page?: number; per_page?: number; status_id?: number; severity_id?: number; q?: string }) =>
     api.get('/soar/iris/alerts', { params }),
 
   getIrisAlert: (alertId: number) =>
-    api.get(`/soar/iris/alerts/${alertId}`),
+    api.get<IrisAlertDetailResponse>(`/soar/iris/alerts/${alertId}`),
+
+  getIrisAlertStatuses: () =>
+    api.get<{ status: string; message?: string; data: IrisAlertStatusOption[] }>('/soar/iris/alert-statuses'),
+
+  getIrisSeverities: () =>
+    api.get<{ status: string; message?: string; data: IrisSeverityOption[] }>('/soar/iris/severities'),
 
   createIrisAlert: (data: {
     title: string
@@ -367,6 +484,9 @@ export const soarApi = {
   getIrisCase: (caseId: number) =>
     api.get(`/soar/iris/cases/${caseId}`),
 
+  getIrisCaseStates: () =>
+    api.get('/soar/iris/case-states'),
+
   createIrisCase: (data: {
     case_name: string
     case_description?: string
@@ -377,6 +497,9 @@ export const soarApi = {
     case_name?: string
     case_description?: string
   }) => api.put(`/soar/iris/cases/${caseId}`, data),
+
+  setIrisCaseStatus: (caseId: number, data: { state_id: number }) =>
+    api.put(`/soar/iris/cases/${caseId}/status`, data),
 
   closeIrisCase: (caseId: number) =>
     api.post(`/soar/iris/cases/${caseId}/close`, {}),

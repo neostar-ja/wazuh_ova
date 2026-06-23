@@ -45,6 +45,7 @@ export interface SourceItem extends CountByNameItem {
 
 export interface RuleItem extends CountByNameItem {
   rule_id?: string;
+  description?: string;
 }
 
 export interface AgentItem extends CountByNameItem {
@@ -175,7 +176,7 @@ export interface AgentSummary {
 }
 
 // ─── Risk Assessment ──────────────────────────────────────────────────────────
-export type RiskLevel = 'normal' | 'elevated' | 'critical';
+export type RiskLevel = 'normal' | 'watch' | 'elevated' | 'critical';
 
 export interface SecurityPosture {
   riskLevel: RiskLevel;
@@ -183,5 +184,20 @@ export interface SecurityPosture {
   highCount: number;
   topSourceIP?: IPAddressItem;
   topRule?: RuleItem;
+  reasons: string[];
+  disconnectedAgents?: number;
+  clusterDegraded?: boolean;
   suggestedAction: string;
+}
+
+// ─── Recommended Actions ──────────────────────────────────────────────────────
+export type RecommendedActionSeverity = 'critical' | 'high' | 'medium' | 'info';
+
+export interface RecommendedAction {
+  id: string;
+  title: string;
+  description: string;
+  severity: RecommendedActionSeverity;
+  icon: string;
+  route: string;
 }

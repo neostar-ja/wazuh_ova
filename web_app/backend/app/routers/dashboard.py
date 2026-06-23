@@ -237,6 +237,106 @@ async def threat_stats(
     }
 
 
+@router.get("/attack_map")
+async def attack_map(
+    time_range: str = Query("24h"),
+    current_user=Depends(get_current_user),
+):
+    """
+    SOC Attack Map — level 12+ threats enriched with geo-coordinates.
+    Returns country/source-IP centroids for plotting on a world map, KPI
+    counts, a timeline, and a live feed of the most recent high-severity alerts.
+    """
+    raw = await opensearch_service.get_attack_map_aggs(time_range=time_range)
+    if not raw:
+        return _empty_attack_map()
+
+    aggs = raw.get("aggregations", {})
+    total_obj = raw.get("hits", {}).get("total", {})
+    total = total_obj.get("value", 0) if isinstance(total_obj, dict) else int(total_obj or 0)
+
+    tl_buckets = aggs.get("timeline", {}).get("buckets", [])
+    timeline = []
+    for b in tl_buckets:
+        sev = {sv["key"]: sv["doc_count"] for sv in b.get("by_severity", {}).get("buckets", [])}
+        timeline.append({
+            "time":     b["key_as_string"],
+            "total":    b["doc_count"],
+            "critical": sev.get("critical", 0),
+            "high":     sev.get("high", 0),
+        })
+
+    raw_rules = _buckets(aggs, "by_rule", 10)
+    by_rule = [
+        {"name": r["name"], "count": r["count"],
+         "description": RULE_DESCRIPTIONS.get(str(r["name"]), "")}
+        for r in raw_rules
+    ]
+
+    by_country = []
+    for b in aggs.get("by_country", {}).get("buckets", []):
+        lat, lon = _geo_latlon(b.get("centroid", {}).get("location"))
+        by_country.append({"name": b["key"], "count": b["doc_count"], "lat": lat, "lon": lon})
+
+    by_srcip = []
+    for b in aggs.get("by_srcip", {}).get("buckets", []):
+        country_buckets = b.get("top_country", {}).get("buckets", [])
+        country = country_buckets[0]["key"] if country_buckets else ""
+        lat, lon = _geo_latlon(b.get("centroid", {}).get("location"))
+        by_srcip.append({"ip": b["key"], "count": b["doc_count"], "country": country, "lat": lat, "lon": lon})
+
+    # Live feed: most recent high-severity alerts, with geo info for map pins
+    alerts = await opensearch_service.get_alerts(level_min=12, size=30, time_range=time_range)
+    live_feed = []
+    for a in alerts:
+        geo = a.get("GeoLocation") or {}
+        lat, lon = _geo_latlon(geo.get("location"))
+        rule = a.get("rule", {})
+        live_feed.append({
+            "timestamp":   a.get("@timestamp"),
+            "rule_id":     rule.get("id"),
+            "level":       rule.get("level"),
+            "description": rule.get("description"),
+            "srcip":       a.get("data", {}).get("srcip"),
+            "country":     geo.get("country_name", ""),
+            "lat": lat, "lon": lon,
+            "agent":       a.get("agent", {}).get("name"),
+        })
+
+    return {
+        "total":            total,
+        "critical":         aggs.get("critical_count", {}).get("doc_count", 0),
+        "high":             aggs.get("high_count", {}).get("doc_count", 0),
+        "unique_countries": aggs.get("unique_countries", {}).get("value", 0),
+        "unique_ips":       aggs.get("unique_ips", {}).get("value", 0),
+        "timeline":   timeline,
+        "by_rule":    by_rule,
+        "by_mitre":   _buckets(aggs, "by_mitre", 10),
+        "by_country": by_country,
+        "by_srcip":   by_srcip,
+        "live_feed":  live_feed,
+    }
+
+
+def _geo_latlon(loc):
+    """Normalize a GeoLocation.location value (dict, [lon,lat] array, or
+    "lat,lon" string) to a (lat, lon) tuple, or (None, None) if unavailable."""
+    if isinstance(loc, dict):
+        lat, lon = loc.get("lat"), loc.get("lon")
+        if lat is not None and lon is not None:
+            return float(lat), float(lon)
+        return None, None
+    if isinstance(loc, (list, tuple)) and len(loc) == 2:
+        return float(loc[1]), float(loc[0])
+    if isinstance(loc, str) and "," in loc:
+        try:
+            lat_s, lon_s = loc.split(",", 1)
+            return float(lat_s), float(lon_s)
+        except ValueError:
+            return None, None
+    return None, None
+
+
 def _empty():
     return {
         "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "eps": 0,
@@ -250,4 +350,13 @@ def _empty_threat():
         "total": 0, "critical": 0, "high": 0,
         "timeline": [], "by_rule": [], "by_srcip": [],
         "by_country": [], "by_mitre": [], "by_agent": [], "by_source": [],
+    }
+
+
+def _empty_attack_map():
+    return {
+        "total": 0, "critical": 0, "high": 0,
+        "unique_countries": 0, "unique_ips": 0,
+        "timeline": [], "by_rule": [], "by_mitre": [],
+        "by_country": [], "by_srcip": [], "live_feed": [],
     }

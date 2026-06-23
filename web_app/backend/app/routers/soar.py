@@ -11,9 +11,10 @@ from ..models.database import get_db, CaseTask, CaseActivityLog, ShuffleActionHi
 from sqlalchemy.orm import Session
 from ..services import opensearch_service
 from ..services.soar_svc import (
-    get_iris_stats, get_iris_alerts, get_iris_alert, get_iris_cases, get_iris_case,
+    get_iris_stats, get_iris_alerts, get_iris_alert, get_iris_alert_detail, get_iris_alert_statuses, get_iris_severities, get_iris_cases, get_iris_case,
+    get_iris_case_states,
     create_iris_alert, update_iris_alert, escalate_iris_alerts,
-    create_iris_case, update_iris_case, close_iris_case, reopen_iris_case,
+    create_iris_case, update_iris_case, set_iris_case_state, close_iris_case, reopen_iris_case,
     get_case_note_groups, add_case_note_group, get_case_note, add_case_note,
     get_case_iocs, add_case_ioc,
     get_case_timeline, add_case_timeline_event,
@@ -556,6 +557,11 @@ class UpdateCaseBody(BaseModel):
     case_description: Optional[str] = None
 
 
+class UpdateCaseStatusBody(BaseModel):
+    state_id: Optional[int] = None
+    status_id: Optional[int] = None
+
+
 class AddNoteBody(BaseModel):
     title: str
     content: str
@@ -847,14 +853,26 @@ async def iris_alerts(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     status_id: Optional[int] = None,
+    severity_id: Optional[int] = None,
+    q: Optional[str] = Query(None, max_length=200),
     _=Depends(get_current_user),
 ):
-    return await get_iris_alerts(page=page, per_page=per_page, status_id=status_id)
+    return await get_iris_alerts(page=page, per_page=per_page, status_id=status_id, severity_id=severity_id, q=q)
 
 
 @router.get("/iris/alerts/{alert_id}")
 async def iris_alert_detail(alert_id: int, _=Depends(get_current_user)):
-    return await get_iris_alert(alert_id)
+    return await get_iris_alert_detail(alert_id)
+
+
+@router.get("/iris/alert-statuses")
+async def iris_alert_statuses(_=Depends(get_current_user)):
+    return await get_iris_alert_statuses()
+
+
+@router.get("/iris/severities")
+async def iris_severities(_=Depends(get_current_user)):
+    return await get_iris_severities()
 
 
 @router.post("/iris/alerts")
@@ -897,6 +915,11 @@ async def iris_cases(
 @router.get("/iris/cases/{case_id}")
 async def iris_case_detail(case_id: int, _=Depends(get_current_user)):
     return await get_iris_case(case_id)
+
+
+@router.get("/iris/case-states")
+async def iris_case_states(_=Depends(get_current_user)):
+    return await get_iris_case_states()
 
 
 @router.get("/iris/cases/{case_id}/full")
@@ -964,6 +987,31 @@ async def iris_create_case(body: CreateCaseBody, _=Depends(get_current_user)):
 async def iris_update_case(case_id: int, body: UpdateCaseBody, _=Depends(get_current_user)):
     data = {k: v for k, v in body.dict().items() if v is not None}
     return await update_iris_case(case_id, data)
+
+
+@router.put("/iris/cases/{case_id}/status")
+async def iris_update_case_status(
+    case_id: int,
+    body: UpdateCaseStatusBody,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    target_state_id = body.state_id if body.state_id is not None else body.status_id
+    if target_state_id is None:
+        raise HTTPException(status_code=400, detail="state_id is required")
+
+    before = await get_iris_case(case_id)
+    before_data = before.get("data", {}) if isinstance(before, dict) else {}
+    before_label = before_data.get("state_name") or ("Closed" if before_data.get("close_date") or before_data.get("case_close_date") else "Open")
+
+    result = await set_iris_case_state(case_id, target_state_id)
+    if isinstance(result, dict) and not result.get("error"):
+        after_case = result.get("case", {})
+        if not isinstance(after_case, dict):
+            after_case = {}
+        after_label = after_case.get("state_name") or ("Closed" if after_case.get("close_date") or after_case.get("case_close_date") else f"State {target_state_id}")
+        _log_activity(db, case_id, "case_status_updated", f"เปลี่ยนสถานะเคส: {before_label} → {after_label}", current_user)
+    return result
 
 
 @router.post("/iris/cases/{case_id}/close")

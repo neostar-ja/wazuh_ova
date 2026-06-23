@@ -3,11 +3,16 @@ Alerts Router — Wazuh Security Alert Management
 Endpoints: list, stats/aggregations, recent, export
 """
 import io, csv
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from typing import Literal, Optional
 from ..routers.auth import get_current_user
+from ..models.database import AlertSeverityOverride, AlertTuning, get_db
 from ..services import opensearch_service
+from ..services.alert_tuning_service import _apply_alert_tuning, _compose_alert_id
+from ..services.alert_tuning_history_service import record_tuning_history
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -27,6 +32,21 @@ _GROUP_TO_SOURCE = [
 ]
 
 
+class SeverityOverrideBody(BaseModel):
+    scope: Literal["single", "rule"]
+    alert_id: Optional[str] = None
+    rule_id: Optional[str] = None
+    original_level: int = Field(..., ge=1, le=15)
+    tuned_level: int = Field(..., ge=1, le=15)
+    reason: str = Field(..., min_length=3, max_length=1000)
+
+
+def require_alert_tuning_user(current_user=Depends(get_current_user)):
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Admin role required for alert severity tuning")
+    return current_user
+
+
 def _resolve_source(alert: dict) -> str:
     """Derive human-readable source label from rule.groups or predecoder.program_name."""
     groups = alert.get("rule", {}).get("groups", [])
@@ -35,6 +55,20 @@ def _resolve_source(alert: dict) -> str:
             return label
     prog = alert.get("predecoder", {}).get("program_name", "")
     return prog or "unknown"
+
+
+def _active_rule_tunings(db: Session) -> list[AlertTuning]:
+    return db.query(AlertTuning).filter(AlertTuning.status == "active").all()
+
+
+def _active_alert_overrides(db: Session, alert_ids: list[str]) -> list[AlertSeverityOverride]:
+    if not alert_ids:
+        return []
+    return (
+        db.query(AlertSeverityOverride)
+        .filter(AlertSeverityOverride.status == "active", AlertSeverityOverride.alert_id.in_(alert_ids))
+        .all()
+    )
 
 
 # ── List alerts ────────────────────────────────────────────────────────────────
@@ -60,6 +94,7 @@ async def get_alerts(
     time_range:   str = Query("24h"),
     q:            Optional[str] = None,
     current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     sources = [source] if source else None
     alerts = await opensearch_service.get_alerts(
@@ -82,7 +117,99 @@ async def get_alerts(
         has_srcip=has_srcip,
         has_mitre=has_mitre,
     )
-    return alerts
+    alert_ids = [_compose_alert_id(alert) for alert in alerts if isinstance(alert, dict)]
+    return _apply_alert_tuning(alerts, _active_rule_tunings(db), _active_alert_overrides(db, alert_ids))
+
+
+@router.post("/severity-override")
+async def set_severity_override(
+    body: SeverityOverrideBody,
+    current_user=Depends(require_alert_tuning_user),
+    db: Session = Depends(get_db),
+):
+    if body.scope == "single":
+        alert_id = (body.alert_id or "").strip()
+        if not alert_id:
+            raise HTTPException(status_code=400, detail="alert_id is required for single-alert tuning")
+        entry = db.query(AlertSeverityOverride).filter(AlertSeverityOverride.alert_id == alert_id).first()
+        action = "create"
+        previous_tuned_level = None
+        if entry is None:
+            entry = AlertSeverityOverride(
+                alert_id=alert_id,
+                rule_id=(body.rule_id or "").strip() or None,
+                original_level=body.original_level,
+                tuned_level=body.tuned_level,
+                reason=body.reason,
+                added_by=current_user.username,
+            )
+            db.add(entry)
+        else:
+            action = "update"
+            previous_tuned_level = entry.tuned_level
+            entry.rule_id = (body.rule_id or "").strip() or entry.rule_id
+            entry.original_level = body.original_level
+            entry.tuned_level = body.tuned_level
+            entry.reason = body.reason
+            entry.added_by = current_user.username
+            entry.status = "active"
+        record_tuning_history(
+            db,
+            actor=current_user.username,
+            action=action,
+            scope="single",
+            alert_id=alert_id,
+            rule_id=(body.rule_id or "").strip() or None,
+            original_level=body.original_level,
+            tuned_level=body.tuned_level,
+            previous_tuned_level=previous_tuned_level,
+            reason=body.reason,
+            status="active",
+            commit=False,
+        )
+        db.commit()
+        db.refresh(entry)
+        return {"id": entry.id, "scope": "single", "alert_id": entry.alert_id, "tuned_level": entry.tuned_level}
+
+    rule_id = (body.rule_id or "").strip()
+    if not rule_id:
+        raise HTTPException(status_code=400, detail="rule_id is required for rule tuning")
+    entry = db.query(AlertTuning).filter(AlertTuning.rule_id == rule_id).first()
+    action = "create"
+    previous_tuned_level = None
+    if entry is None:
+        entry = AlertTuning(
+            rule_id=rule_id,
+            original_level=body.original_level,
+            tuned_level=body.tuned_level,
+            reason=body.reason,
+            added_by=current_user.username,
+        )
+        db.add(entry)
+    else:
+        action = "update"
+        previous_tuned_level = entry.tuned_level
+        entry.original_level = body.original_level
+        entry.tuned_level = body.tuned_level
+        entry.reason = body.reason
+        entry.added_by = current_user.username
+        entry.status = "active"
+    record_tuning_history(
+        db,
+        actor=current_user.username,
+        action=action,
+        scope="rule",
+        rule_id=rule_id,
+        original_level=body.original_level,
+        tuned_level=body.tuned_level,
+        previous_tuned_level=previous_tuned_level,
+        reason=body.reason,
+        status="active",
+        commit=False,
+    )
+    db.commit()
+    db.refresh(entry)
+    return {"id": entry.id, "scope": "rule", "rule_id": entry.rule_id, "tuned_level": entry.tuned_level}
 
 
 @router.get("/recent")

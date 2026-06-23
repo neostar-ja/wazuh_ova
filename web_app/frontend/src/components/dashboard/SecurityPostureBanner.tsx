@@ -1,19 +1,33 @@
 import React from 'react'
-import { Box, Typography, Button, useTheme, Tooltip } from '@mui/material'
+import { Box, Typography, Button, Chip, useTheme, Tooltip } from '@mui/material'
 import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded'
 import WarningRoundedIcon from '@mui/icons-material/WarningRounded'
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
-import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded'
 import { SecurityPosture } from '../../types/dashboard'
+import { IntegrationHealth } from '../../services/soarApi'
 import { useNavigate } from 'react-router-dom'
 import { BRAND, SEV_COLOR, getSoftBg } from '../ui/tokens'
 
 interface SecurityPostureBannerProps {
   posture: SecurityPosture | null
   isLoading: boolean
+  integrations?: IntegrationHealth[]
+  integrationsLoading?: boolean
 }
 
-export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBannerProps) {
+// Fixed display order + short Thai/EN labels for the integration health strip
+const INTEGRATION_DISPLAY: { id: string; label: string }[] = [
+  { id: 'wazuh', label: 'Wazuh' },
+  { id: 'opensearch', label: 'OpenSearch' },
+  { id: 'dfir_iris', label: 'IRIS' },
+  { id: 'shuffle', label: 'Shuffle' },
+  { id: 'misp', label: 'MISP' },
+  { id: 'infoblox', label: 'Infoblox' },
+  { id: 'huawei_nac', label: 'NAC' },
+]
+
+export function SecurityPostureBanner({ posture, isLoading, integrations, integrationsLoading }: SecurityPostureBannerProps) {
   const navigate = useNavigate()
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
@@ -39,6 +53,14 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
       titleTh: 'สถานการณ์สูง',
       descTh: 'พบการโจมตีหลายรายการที่ต้องตรวจสอบเพิ่มเติม',
     },
+    watch: {
+      icon: WarningAmberRoundedIcon,
+      color: SEV_COLOR.medium,
+      bgColor: getSoftBg(SEV_COLOR.medium, 12),
+      borderColor: getSoftBg(SEV_COLOR.medium, 18),
+      titleTh: 'ต้องเฝ้าระวัง',
+      descTh: 'พบ Alert ระดับ High ที่ควรเฝ้าติดตามอย่างใกล้ชิด',
+    },
     normal: {
       icon: CheckCircleRoundedIcon,
       color: SEV_COLOR.low,
@@ -51,6 +73,16 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
 
   const config = riskConfig[posture.riskLevel]
   const IconComponent = config.icon
+
+  const grayChip = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'
+  const grayChipBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
+  const grayChipBorder = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
+
+  const integrationColor = (status: string) => {
+    if (status === 'connected') return SEV_COLOR.low
+    if (status === 'error' || status === 'degraded') return SEV_COLOR.high
+    return grayChip
+  }
 
   return (
     <Box
@@ -88,7 +120,7 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
       </Box>
 
       {/* Main content */}
-      <Box sx={{ flex: 1 }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
           <Typography
             sx={{
@@ -121,6 +153,64 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
         >
           {config.descTh}
         </Typography>
+
+        {/* Reason chips */}
+        {posture.reasons.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6, mt: 1 }}>
+            {posture.reasons.map((reason, i) => (
+              <Chip
+                key={i}
+                label={reason}
+                size="small"
+                sx={{
+                  height: 20, fontSize: 10.5, fontWeight: 600,
+                  bgcolor: grayChipBg, color: 'text.secondary',
+                  border: `1px solid ${grayChipBorder}`,
+                  '& .MuiChip-label': { px: 1 },
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
+        {/* Integration health mini chips */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.6, mt: 1 }}>
+          <Typography sx={{ fontSize: 10, color: 'text.disabled', fontWeight: 700, letterSpacing: '0.04em', mr: 0.25 }}>
+            INTEGRATIONS:
+          </Typography>
+          {integrationsLoading || !integrations ? (
+            <Chip
+              label="ข้อมูล Integration ไม่ครบ"
+              size="small"
+              sx={{
+                height: 20, fontSize: 10.5, fontWeight: 600,
+                bgcolor: grayChipBg, color: 'text.disabled',
+                border: `1px solid ${grayChipBorder}`,
+                '& .MuiChip-label': { px: 1 },
+              }}
+            />
+          ) : (
+            INTEGRATION_DISPLAY.map(({ id, label }) => {
+              const integ = integrations.find(i => i.id === id)
+              const status = integ?.status || 'not_configured'
+              const color = integrationColor(status)
+              return (
+                <Tooltip key={id} title={integ?.label || 'ไม่มีข้อมูล'}>
+                  <Chip
+                    label={label}
+                    size="small"
+                    sx={{
+                      height: 20, fontSize: 10.5, fontWeight: 700,
+                      bgcolor: `${color}14`, color,
+                      border: `1px solid ${color}30`,
+                      '& .MuiChip-label': { px: 1 },
+                    }}
+                  />
+                </Tooltip>
+              )
+            })
+          )}
+        </Box>
 
         {/* Quick stats */}
         <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
@@ -159,6 +249,11 @@ export function SecurityPostureBanner({ posture, isLoading }: SecurityPostureBan
             </Box>
           )}
         </Box>
+
+        {/* Suggested action */}
+        <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: config.color, mt: 1 }}>
+          {posture.suggestedAction}
+        </Typography>
       </Box>
 
       {/* Actions */}

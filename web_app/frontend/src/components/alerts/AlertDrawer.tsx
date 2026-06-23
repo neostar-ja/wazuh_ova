@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import {
   Drawer, Box, Typography, Chip, IconButton, Tooltip, Button, Grid,
   CircularProgress, Alert, LinearProgress, useTheme,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material'
 import VisibilityRoundedIcon   from '@mui/icons-material/VisibilityRounded'
 import SecurityRoundedIcon     from '@mui/icons-material/SecurityRounded'
@@ -15,7 +17,7 @@ import BookmarkAddRoundedIcon  from '@mui/icons-material/BookmarkAddRounded'
 import TuneRoundedIcon         from '@mui/icons-material/TuneRounded'
 import GppBadRoundedIcon       from '@mui/icons-material/GppBadRounded'
 import GppGoodRoundedIcon      from '@mui/icons-material/GppGoodRounded'
-import { investigateApi } from '../../services/api'
+import { alertsApi, investigateApi } from '../../services/api'
 import { format } from 'date-fns'
 import { useSnackbar } from 'notistack'
 import { WazuhAlertItem } from '../../types/alert'
@@ -28,14 +30,27 @@ interface AlertDrawerProps {
   alert: WazuhAlertItem | null;
   open: boolean;
   onClose: () => void;
+  onTuned?: () => void;
 }
 
-export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
+const LEVEL_OPTIONS = [
+  { value: 15, label: '15 · Critical' },
+  { value: 12, label: '12 · High' },
+  { value: 7, label: '7 · Medium' },
+  { value: 3, label: '3 · Low' },
+]
+
+export function AlertDrawer({ alert, open, onClose, onTuned }: AlertDrawerProps) {
   const navigate   = useNavigate()
   const { enqueueSnackbar } = useSnackbar()
   const [tab, setTab]       = useState(0)
   const [enrichData, setEnrich]       = useState<any>(null)
   const [enrichLoading, setEnrichLoading] = useState(false)
+  const [tuneOpen, setTuneOpen] = useState(false)
+  const [tuneScope, setTuneScope] = useState<'single' | 'rule'>('single')
+  const [tuneLevel, setTuneLevel] = useState(12)
+  const [tuneReason, setTuneReason] = useState('')
+  const [tuneSaving, setTuneSaving] = useState(false)
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -47,6 +62,7 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
   const geo      = rawWazuh.GeoLocation || {}
 
   const lv       = alert?.ruleLevel || 0
+  const originalLv = alert?.originalRuleLevel || lv
   const color    = sevColor(lv)
   const srcip    = alert?.sourceIp
   const dstip    = alert?.destinationIp
@@ -62,6 +78,7 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
   ].filter(c => c.items.length > 0)
 
   const hasMitre = rule.mitre?.tactic?.length || rule.mitre?.technique?.length
+  const tuning = alert?.socTuning
 
   const fetchEnrich = useCallback(async () => {
     if (!srcip || enrichLoading || enrichData) return
@@ -77,6 +94,43 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
 
   useEffect(() => { if (open && srcip && tab === 1) fetchEnrich() }, [open, srcip, tab, fetchEnrich])
   useEffect(() => { if (!open) { setTab(0); setEnrich(null) } }, [open])
+  useEffect(() => {
+    if (!open || !alert) return
+    setTuneScope('single')
+    setTuneLevel(alert.ruleLevel >= 15 ? 12 : alert.ruleLevel)
+    setTuneReason('')
+  }, [open, alert])
+
+  const saveTuning = async () => {
+    if (!alert) return
+    const reason = tuneReason.trim()
+    if (!reason) {
+      enqueueSnackbar('กรุณาระบุเหตุผลการปรับระดับ', { variant: 'warning' })
+      return
+    }
+    if (tuneScope === 'rule' && !alert.ruleId) {
+      enqueueSnackbar('Alert นี้ไม่มี Rule ID จึงปรับแบบทั้ง Rule ไม่ได้', { variant: 'warning' })
+      return
+    }
+    setTuneSaving(true)
+    try {
+      await alertsApi.setSeverityOverride({
+        scope: tuneScope,
+        alert_id: alert.socAlertId || alert.id,
+        rule_id: alert.ruleId,
+        original_level: originalLv,
+        tuned_level: tuneLevel,
+        reason,
+      })
+      enqueueSnackbar(tuneScope === 'rule' ? 'ปรับระดับทั้ง Rule สำเร็จ' : 'ปรับระดับเฉพาะ Alert สำเร็จ', { variant: 'success' })
+      setTuneOpen(false)
+      onTuned?.()
+    } catch (err: any) {
+      enqueueSnackbar(err?.response?.data?.detail || 'ไม่สามารถปรับระดับได้', { variant: 'error' })
+    } finally {
+      setTuneSaving(false)
+    }
+  }
 
   const TABS = [
     { label: 'รายละเอียด', icon: <VisibilityRoundedIcon sx={{ fontSize: 13 }} />, hint: 'Network · Rules · MITRE' },
@@ -171,20 +225,33 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
                     <Chip label={program} size="small"
                       sx={{ height: 26, fontSize: 11, bgcolor: 'rgba(79,110,247,0.14)', color: BRAND.primaryLight, fontWeight: 600 }} />
                   )}
+                  {tuning && (
+                    <Chip label={`TUNED ${tuning.original_level}→${tuning.tuned_level} · ${tuning.scope === 'rule' ? 'ทั้ง Rule' : 'เฉพาะ Alert'}`} size="small"
+                      sx={{ height: 26, fontSize: 10.5, bgcolor: 'rgba(234,179,8,0.16)', color: '#FBBF24', fontWeight: 800 }} />
+                  )}
                 </Box>
-                <IconButton size="small" onClick={onClose}
-                  sx={{
-                    borderRadius: '12px',
-                    bgcolor: 'rgba(79,110,247,0.1)',
-                    p: 0.8,
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      bgcolor: 'rgba(79,110,247,0.2)',
-                      transform: 'rotate(90deg)',
-                    }
-                  }}>
-                  <CloseRoundedIcon sx={{ fontSize: 18 }} />
-                </IconButton>
+                <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
+                  <Tooltip title="ปรับระดับความรุนแรง">
+                    <IconButton size="small" onClick={() => setTuneOpen(true)}
+                      sx={{ borderRadius: '12px', bgcolor: 'rgba(234,179,8,0.12)', color: '#FBBF24', p: 0.8,
+                        '&:hover': { bgcolor: 'rgba(234,179,8,0.22)' } }}>
+                      <TuneRoundedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
+                  <IconButton size="small" onClick={onClose}
+                    sx={{
+                      borderRadius: '12px',
+                      bgcolor: 'rgba(79,110,247,0.1)',
+                      p: 0.8,
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        bgcolor: 'rgba(79,110,247,0.2)',
+                        transform: 'rotate(90deg)',
+                      }
+                    }}>
+                    <CloseRoundedIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Box>
               </Box>
 
               {/* Rule description */}
@@ -764,7 +831,7 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
             )}
             <Button variant="outlined" size="small"
               startIcon={<TuneRoundedIcon sx={{ fontSize: 15 }} />}
-              onClick={() => { onClose(); navigate(`/admin?tab=1`) }}
+              onClick={() => setTuneOpen(true)}
               sx={{
                 borderRadius: '10px', fontSize: 12.5, py: 1.1,
                 transition: 'all 0.2s',
@@ -773,9 +840,55 @@ export function AlertDrawer({ alert, open, onClose }: AlertDrawerProps) {
                   boxShadow: '0 4px 12px rgba(79,110,247, 0.15)',
                 }
               }}>
-              Rule Tuning
+              ปรับระดับ
             </Button>
           </Box>
+
+          <Dialog open={tuneOpen} onClose={() => !tuneSaving && setTuneOpen(false)} maxWidth="sm" fullWidth
+            slotProps={{ paper: { sx: { borderRadius: 3, bgcolor: isDark ? 'rgba(22,18,42,0.98)' : '#fff' } } }}>
+            <DialogTitle sx={{ fontSize: 16, fontWeight: 800 }}>
+              ปรับระดับความรุนแรง
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+              <Alert severity="info" sx={{ fontSize: 12, borderRadius: 2 }}>
+                การปรับนี้เป็น Web override ใน SOC Center ไม่แก้ raw log ย้อนหลังใน OpenSearch และไม่แก้ Wazuh rule file โดยตรง
+              </Alert>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip label={`Alert: ${alert.socAlertId || alert.id}`} size="small" sx={{ fontFamily: '"IBM Plex Mono"', maxWidth: '100%' }} />
+                {alert.ruleId && <Chip label={`Rule #${alert.ruleId}`} size="small" />}
+                <Chip label={`เดิม ${originalLv} → แสดงปัจจุบัน ${lv}`} size="small" color="warning" />
+              </Box>
+              <FormControl size="small" fullWidth>
+                <InputLabel>ขอบเขตผลกระทบ</InputLabel>
+                <Select value={tuneScope} label="ขอบเขตผลกระทบ" onChange={e => setTuneScope(e.target.value as 'single' | 'rule')}>
+                  <MenuItem value="single">เฉพาะ Alert นี้เท่านั้น</MenuItem>
+                  <MenuItem value="rule" disabled={!alert.ruleId}>ทั้งหมดที่เป็น Rule #{alert.ruleId || '—'}</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl size="small" fullWidth>
+                <InputLabel>ระดับใหม่</InputLabel>
+                <Select value={tuneLevel} label="ระดับใหม่" onChange={e => setTuneLevel(Number(e.target.value))}>
+                  {LEVEL_OPTIONS.map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <TextField
+                label="เหตุผล"
+                size="small"
+                multiline
+                minRows={3}
+                value={tuneReason}
+                onChange={e => setTuneReason(e.target.value)}
+                placeholder="เช่น firewall allowed event นี้ตรวจสอบแล้วเป็น expected traffic จึงลดจาก Critical เป็น High"
+              />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={() => setTuneOpen(false)} disabled={tuneSaving} sx={{ borderRadius: 2 }}>ยกเลิก</Button>
+              <Button variant="contained" onClick={saveTuning} disabled={tuneSaving}
+                sx={{ borderRadius: 2, bgcolor: '#F59E0B', '&:hover': { bgcolor: '#D97706' } }}>
+                บันทึก
+              </Button>
+            </DialogActions>
+          </Dialog>
         </>
       )}
     </Drawer>

@@ -4,7 +4,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
 from .models.database import init_db
-from .routers import auth, dashboard, alerts, investigate, ioc, admin, compliance, assets, kpi, ws, soar, push, search, infra
+from .routers import auth, dashboard, alerts, investigate, ioc, admin, compliance, assets, kpi, ws, soar, push, search, infra, reports
 from .core.config import settings
 
 
@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for mod in [auth, dashboard, alerts, investigate, ioc, admin, compliance, assets, kpi, ws, soar, push, search, infra]:
+for mod in [auth, dashboard, alerts, investigate, ioc, admin, compliance, assets, kpi, ws, soar, push, search, infra, reports]:
     app.include_router(mod.router, prefix="/api")
 
 

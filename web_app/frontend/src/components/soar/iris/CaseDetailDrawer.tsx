@@ -32,6 +32,7 @@ import ShuffleActionsPanel from './ShuffleActionsPanel'
 import ActivityPanel from './ActivityPanel'
 import ReportPanel from './ReportPanel'
 import ClosurePanel from './ClosurePanel'
+import CaseStatusSelect from './CaseStatusSelect'
 
 const CASE_COLOR = '#6366F1'
 
@@ -100,7 +101,29 @@ export default function CaseDetailDrawer({
   const divider   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(123,91,164,0.1)'
 
   const caseId = caseData?.case_id
-  const isOpen = !caseData?.case_close_date
+  const { data: caseDetailResp } = useQuery({
+    queryKey: ['iris-case-detail', caseId],
+    queryFn: () => soarApi.getIrisCase(caseId!).then(r => r.data),
+    enabled: open && !!caseId,
+  })
+
+  const caseDetail = caseDetailResp?.data ?? null
+  const resolvedCase = caseDetail ? {
+    ...caseData,
+    case_id: caseDetail.case_id ?? caseData?.case_id ?? 0,
+    case_name: caseDetail.case_name ?? caseData?.case_name ?? '',
+    case_description: caseDetail.case_description ?? caseData?.case_description ?? '',
+    case_open_date: caseDetail.open_date ?? caseDetail.case_open_date ?? caseData?.case_open_date ?? '',
+    case_close_date: caseDetail.close_date ?? caseDetail.case_close_date ?? caseData?.case_close_date ?? null,
+    opened_by: caseDetail.opened_by ?? caseData?.opened_by ?? '',
+    owner: caseDetail.owner ?? caseData?.owner ?? '',
+    state_id: caseDetail.state_id ?? caseDetail.case_state_id ?? caseData?.state_id ?? null,
+    status_id: caseDetail.status_id ?? caseDetail.case_status_id ?? caseData?.status_id ?? null,
+    state_name: caseDetail.state_name ?? caseData?.state_name ?? null,
+    status_name: caseDetail.status_name ?? caseData?.status_name ?? null,
+    client_name: caseDetail.customer_name ?? caseDetail.client_name ?? caseData?.client_name ?? '',
+  } : caseData
+  const isOpen = !resolvedCase?.case_close_date
 
   // Tab counts from queries
   const { data: tasksData }  = useQuery({ queryKey: ['case-tasks', caseId],    queryFn: () => soarApi.getCaseTasks(caseId!).then(r => r.data),    enabled: open && !!caseId })
@@ -158,7 +181,7 @@ export default function CaseDetailDrawer({
             </Box>
             <Box>
               <Typography sx={{ fontSize: 14, fontWeight: 700, color: isDark ? '#EDE9FA' : '#1A1033', lineHeight: 1.2 }}>
-                {caseData?.case_name ?? '—'}
+                {resolvedCase?.case_name ?? '—'}
               </Typography>
               <Typography className="font-mono" sx={{ fontSize: 10, color: textMuted }}>
                 Case #{caseId}
@@ -189,20 +212,28 @@ export default function CaseDetailDrawer({
               border: isOpen ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(100,116,139,0.3)',
             }}
           />
-          {caseData?.owner && (
+          {caseId ? (
+            <CaseStatusSelect
+              caseId={caseId}
+              stateId={resolvedCase?.state_id}
+              stateName={resolvedCase?.state_name}
+              closeDate={resolvedCase?.case_close_date ?? null}
+            />
+          ) : null}
+          {resolvedCase?.owner && (
             <Typography sx={{ fontSize: 10, color: textMuted }}>
               ผู้รับผิดชอบ:{' '}
               <Box component="span" sx={{ color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(60,40,100,0.65)', fontWeight: 600 }}>
-                {caseData.owner}
+                {resolvedCase.owner}
               </Box>
             </Typography>
           )}
         </Box>
 
         <Box className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px]" sx={{ color: textMuted }}>
-          <span>เปิด: {caseData?.case_open_date ?? '—'}</span>
-          {caseData?.case_close_date && <span>· ปิด: {caseData.case_close_date}</span>}
-          {caseData?.client_name && <span>· ลูกค้า: {caseData.client_name}</span>}
+          <span>เปิด: {resolvedCase?.case_open_date ?? '—'}</span>
+          {resolvedCase?.case_close_date && <span>· ปิด: {resolvedCase.case_close_date}</span>}
+          {resolvedCase?.client_name && <span>· ลูกค้า: {resolvedCase.client_name}</span>}
         </Box>
 
         {/* Quick action buttons */}
@@ -215,7 +246,7 @@ export default function CaseDetailDrawer({
             </Button>
           )}
           <Button size="small" variant="text" startIcon={<TravelExploreRoundedIcon sx={{ fontSize: 11 }} />}
-            onClick={() => { onClose(); navigate(`/investigate?q=${encodeURIComponent(caseData?.case_name ?? '')}&range=30d`) }}
+            onClick={() => { onClose(); navigate(`/investigate?q=${encodeURIComponent(resolvedCase?.case_name ?? '')}&range=30d`) }}
             sx={{ borderRadius: 1.5, fontSize: 10, color: '#38BDF8', py: 0.5, '&:hover': { background: 'rgba(56,189,248,0.08)' } }}>
             Investigate
           </Button>
@@ -236,7 +267,7 @@ export default function CaseDetailDrawer({
       {/* ── Tab content ── */}
       <Box className="flex-1 overflow-y-auto p-4 scrollbar-thin">
         {/* Case description (always shown on notes tab) */}
-        {activeTab === 'notes' && caseData?.case_description && (
+        {activeTab === 'notes' && resolvedCase?.case_description && (
           <Box className="rounded-xl p-3 mb-3"
             sx={{
               background: isDark ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)',
@@ -246,7 +277,7 @@ export default function CaseDetailDrawer({
               รายละเอียดเคส
             </Typography>
             <Typography sx={{ fontSize: 11.5, color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,40,100,0.7)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {caseData.case_description}
+              {resolvedCase.case_description}
             </Typography>
           </Box>
         )}
@@ -265,11 +296,11 @@ export default function CaseDetailDrawer({
           />
         )}
         {activeTab === 'activity' && caseId && <ActivityPanel caseId={caseId} />}
-        {activeTab === 'report'   && caseId && <ReportPanel   caseId={caseId} caseData={caseData} />}
+        {activeTab === 'report'   && caseId && <ReportPanel   caseId={caseId} caseData={resolvedCase} />}
         {activeTab === 'closure'  && caseId && (
           <ClosurePanel
             caseId={caseId}
-            caseData={caseData}
+            caseData={resolvedCase}
             onClosed={() => { queryClient.invalidateQueries({ queryKey: ['iris-cases'] }); onClose() }}
           />
         )}

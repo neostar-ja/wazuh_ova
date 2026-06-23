@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box, Typography, Table, TableBody, TableCell, TableHead, TableRow,
@@ -22,12 +22,44 @@ import AlertDetailDrawer from './AlertDetailDrawer'
 
 interface Props {
   alerts: IrisAlert[]
+  total: number
   loading: boolean
   irisUrl?: string
   onCreateAlert?: () => void
+  page: number
+  rowsPerPage: number
+  searchInput: string
+  activeSearch: string
+  filterSev: string
+  filterStatus: string
+  onSearchInputChange: (value: string) => void
+  onSearchSubmit: () => void
+  onFilterSevChange: (value: string) => void
+  onFilterStatusChange: (value: string) => void
+  onPageChange: (page: number) => void
+  onRowsPerPageChange: (value: number) => void
+  onResetFilters: () => void
 }
 
-export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
+export default function AlertsTable({
+  alerts,
+  total,
+  loading,
+  irisUrl,
+  page,
+  rowsPerPage,
+  searchInput,
+  activeSearch,
+  filterSev,
+  filterStatus,
+  onSearchInputChange,
+  onSearchSubmit,
+  onFilterSevChange,
+  onFilterStatusChange,
+  onPageChange,
+  onRowsPerPageChange,
+  onResetFilters,
+}: Props) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
   const { enqueueSnackbar } = useSnackbar()
@@ -40,20 +72,22 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
   const rowAlt    = isDark ? 'rgba(255,255,255,0.015)' : 'rgba(123,91,164,0.015)'
   const divider   = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(123,91,164,0.07)'
 
-  const [page, setPage] = useState(0)
-  const [search, setSearch] = useState('')
-  const [filterSev, setFilterSev] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
   const [blockDialog, setBlockDialog] = useState<{ open: boolean; ip: string }>({ open: false, ip: '' })
   const [detailAlertId, setDetailAlertId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [alerts])
 
   const toggleSelect = (id: number) => setSelectedIds(prev => {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
   const toggleAll = () => {
-    if (selectedIds.size === paged.length) { setSelectedIds(new Set()) }
-    else { setSelectedIds(new Set(paged.map(a => a.alert_id))) }
+    const visibleIds = alerts.map(a => a.alert_id)
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
+    if (allVisibleSelected) { setSelectedIds(new Set()) }
+    else { setSelectedIds(new Set(visibleIds)) }
   }
 
   const exportSelected = () => {
@@ -90,16 +124,10 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
     onError: () => enqueueSnackbar('ไม่สามารถยกระดับได้', { variant: 'error' }),
   })
 
-  const rowsPerPage = 10
-
-  const filtered = alerts.filter(a => {
-    const matchSearch = !search || a.alert_title.toLowerCase().includes(search.toLowerCase()) || a.alert_source.toLowerCase().includes(search.toLowerCase())
-    const matchSev = !filterSev || String(a.alert_severity_id) === filterSev
-    const matchStatus = !filterStatus || String(a.alert_status_id) === filterStatus
-    return matchSearch && matchSev && matchStatus
-  })
-
-  const paged = filtered.slice(page * rowsPerPage, (page + 1) * rowsPerPage)
+  const hasFilters = !!activeSearch || !!filterSev || !!filterStatus
+  const visibleIds = alerts.map(a => a.alert_id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
+  const partiallySelected = visibleIds.some(id => selectedIds.has(id)) && !allVisibleSelected
 
   if (loading) return (
     <Stack spacing={1}>{[1,2,3,4,5].map(i => <Skeleton key={i} height={44} sx={{ borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.05)' }} />)}</Stack>
@@ -109,15 +137,21 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
     <Stack spacing={2}>
       {/* Filters row */}
       <Box className="flex flex-wrap gap-2 items-center">
-        <TextField size="small" placeholder="ค้นหาการแจ้งเตือน..." value={search}
-          onChange={e => { setSearch(e.target.value); setPage(0) }}
+        <TextField size="small" placeholder="ค้นหา title / IOC ใน IRIS..." value={searchInput}
+          onChange={e => onSearchInputChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onSearchSubmit() }}
           sx={{ flex: 1, minWidth: 200, '& .MuiOutlinedInput-root': { borderRadius: '10px', fontSize: 12,
             background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(248,246,255,0.9)' } }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchRoundedIcon sx={{ fontSize: 15, color: textMuted }} /></InputAdornment> }} />
 
+        <Button size="small" variant="outlined" onClick={onSearchSubmit}
+          sx={{ borderRadius: 2, fontSize: 11, minHeight: 38, borderColor: `rgba(${hexRgb(BRAND.purple)},0.35)`, color: BRAND.purple }}>
+          ค้นหา
+        </Button>
+
         <FormControl size="small" sx={{ minWidth: 130 }}>
           <InputLabel sx={{ fontSize: 12 }}>ความรุนแรง</InputLabel>
-          <Select value={filterSev} onChange={e => { setFilterSev(e.target.value); setPage(0) }} label="ความรุนแรง"
+          <Select value={filterSev} onChange={e => onFilterSevChange(e.target.value)} label="ความรุนแรง"
             sx={{ borderRadius: '10px', fontSize: 12, background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(248,246,255,0.9)' }}>
             <MenuItem value="" sx={{ fontSize: 12 }}>ทั้งหมด</MenuItem>
             {SEV_OPTIONS.map(s => <MenuItem key={s.id} value={String(s.id)} sx={{ fontSize: 12 }}>{s.label}</MenuItem>)}
@@ -126,15 +160,15 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
 
         <FormControl size="small" sx={{ minWidth: 140 }}>
           <InputLabel sx={{ fontSize: 12 }}>สถานะ</InputLabel>
-          <Select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(0) }} label="สถานะ"
+          <Select value={filterStatus} onChange={e => onFilterStatusChange(e.target.value)} label="สถานะ"
             sx={{ borderRadius: '10px', fontSize: 12, background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(248,246,255,0.9)' }}>
             <MenuItem value="" sx={{ fontSize: 12 }}>ทั้งหมด</MenuItem>
             {STATUS_OPTIONS.map(s => <MenuItem key={s.id} value={String(s.id)} sx={{ fontSize: 12 }}>{s.label}</MenuItem>)}
           </Select>
         </FormControl>
 
-        {(search || filterSev || filterStatus) && (
-          <Chip size="small" label={`${filtered.length} รายการ`} onDelete={() => { setSearch(''); setFilterSev(''); setFilterStatus(''); setPage(0) }}
+        {hasFilters && (
+          <Chip size="small" label={`${total.toLocaleString()} รายการจาก IRIS`} onDelete={onResetFilters}
             sx={{ fontSize: 10, background: `rgba(${hexRgb(BRAND.purple)},0.12)`, color: isDark ? '#C4B5FD' : BRAND.purpleDark }} />
         )}
         {selectedIds.size > 0 && (
@@ -156,7 +190,7 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
       </Box>
 
       {/* Table */}
-      {filtered.length === 0 ? (
+      {alerts.length === 0 ? (
         <Box className="py-16 flex flex-col items-center gap-3">
           <NotificationsActiveRoundedIcon sx={{ fontSize: 40, color: textMuted, opacity: 0.4 }} />
           <Typography sx={{ fontSize: 13, color: textMuted }}>ไม่พบการแจ้งเตือน</Typography>
@@ -168,8 +202,8 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
               <TableHead>
                 <TableRow sx={{ background: headBg }}>
                   <TableCell sx={{ py: 1, px: 1, borderBottom: `1px solid ${divider}`, width: 36 }}>
-                    <Checkbox size="small" checked={paged.length > 0 && selectedIds.size === paged.length}
-                      indeterminate={selectedIds.size > 0 && selectedIds.size < paged.length}
+                    <Checkbox size="small" checked={allVisibleSelected}
+                      indeterminate={partiallySelected}
                       onChange={toggleAll}
                       sx={{ padding: 0, color: textMuted, '&.Mui-checked': { color: BRAND.purple } }} />
                   </TableCell>
@@ -191,7 +225,7 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paged.map((a, i) => {
+                {alerts.map((a, i) => {
                   const sev  = getSev(a.alert_severity_id)
                   const stat = getStat(a.alert_status_id)
                   const tags = a.alert_tags ? a.alert_tags.split(',').map(t => t.trim()).filter(Boolean) : []
@@ -309,10 +343,13 @@ export default function AlertsTable({ alerts, loading, irisUrl }: Props) {
               </TableBody>
             </Table>
           </Box>
-          {filtered.length > rowsPerPage && (
+          {total > 0 && (
             <Box sx={{ borderTop: `1px solid ${divider}`, background: headBg }}>
-              <TablePagination component="div" count={filtered.length} page={page}
-                onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} rowsPerPageOptions={[rowsPerPage]}
+              <TablePagination component="div" count={total} page={page}
+                onPageChange={(_, p) => onPageChange(p)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={e => onRowsPerPageChange(Number(e.target.value))}
+                rowsPerPageOptions={[10, 20, 50, 100]}
                 labelDisplayedRows={({ from, to, count }) => `${from}–${to} จาก ${count}`}
                 sx={{ color: textMuted, fontSize: 11, minHeight: 44,
                   '.MuiTablePagination-displayedRows': { fontSize: 11 },

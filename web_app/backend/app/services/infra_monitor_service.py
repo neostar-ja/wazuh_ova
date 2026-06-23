@@ -84,6 +84,43 @@ def disk_info(path='/'):
     pct = round(used / total * 100, 1) if total else 0.0
     return total, used, free, pct
 
+_PSEUDO_FS = {{
+    'proc', 'sysfs', 'devtmpfs', 'tmpfs', 'overlay', 'squashfs', 'cgroup', 'cgroup2',
+    'pstore', 'bpf', 'mqueue', 'hugetlbfs', 'debugfs', 'tracefs', 'configfs',
+    'fusectl', 'securityfs', 'autofs', 'efivarfs', 'devpts', 'rpc_pipefs', 'nsfs',
+}}
+
+def list_disks():
+    disks = []
+    seen_devices = set()
+    try:
+        with open('/proc/mounts') as f:
+            lines = f.readlines()
+    except OSError:
+        return disks
+    for line in lines:
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        device, mount, fstype = parts[0], parts[1], parts[2]
+        if fstype in _PSEUDO_FS or not device.startswith('/dev/'):
+            continue
+        if device in seen_devices:
+            continue
+        try:
+            total, used, free, pct = disk_info(mount)
+        except OSError:
+            continue
+        if total < 5 * 1024 ** 3:  # skip tiny partitions (e.g. /boot, /boot/efi)
+            continue
+        seen_devices.add(device)
+        disks.append({{
+            'mount': mount, 'device': device, 'fstype': fstype,
+            'total': total, 'used': used, 'free': free, 'percent': pct,
+        }})
+    disks.sort(key=lambda d: (d['mount'] != '/', d['mount']))
+    return disks
+
 def service_status(name):
     try:
         r = subprocess.run(['systemctl', 'is-active', name], capture_output=True, text=True, timeout=5)
@@ -111,6 +148,7 @@ print(json.dumps({{
     'disk_used': disk_used,
     'disk_free': disk_free,
     'disk_percent': disk_pct,
+    'disks': list_disks(),
     'load1': round(load1, 2),
     'load5': round(load5, 2),
     'load15': round(load15, 2),

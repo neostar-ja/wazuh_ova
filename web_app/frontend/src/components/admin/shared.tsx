@@ -21,7 +21,7 @@ export const ROLE_COLOR: Record<UserRole, string> = {
 export const ACTION_COLOR: Record<string, 'primary' | 'default' | 'warning' | 'info' | 'secondary' | 'error' | 'success'> = {
   login: 'primary', logout: 'default',
   save_rule: 'warning', save_decoder: 'info', save_list: 'secondary', save_wazuh_config: 'warning',
-  deploy_restart: 'error',
+  deploy_restart: 'error', deploy_tuning_wazuh: 'warning',
   create_user: 'success', update_user: 'info', delete_tuning: 'error',
   add_tuning: 'warning', save_config: 'secondary',
   disable_log_source: 'error', enable_log_source: 'success',

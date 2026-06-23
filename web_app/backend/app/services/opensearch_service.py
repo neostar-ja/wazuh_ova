@@ -375,6 +375,66 @@ async def get_threat_aggs(time_range: str = "24h"):
         return {}
 
 
+async def get_attack_map_aggs(time_range: str = "24h"):
+    """Aggregations for the SOC Attack Map page (level >= 12 threats only).
+    Adds geo_centroid sub-aggregations on by_country/by_srcip so the frontend
+    can plot real lat/lon markers, plus cardinality counts for the number of
+    distinct attacking countries/IPs.
+    """
+    body = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {"bool": {"must": [
+            {"range": {"@timestamp": {"gte": f"now-{time_range}"}}},
+            {"range": {"rule.level": {"gte": 12}}},
+        ]}},
+        "aggs": {
+            "timeline": {
+                "date_histogram": {
+                    "field": "@timestamp",
+                    "fixed_interval": _pick_interval(time_range),
+                    "min_doc_count": 0,
+                    "extended_bounds": {"min": f"now-{time_range}", "max": "now"},
+                },
+                "aggs": {
+                    "by_severity": {
+                        "range": {
+                            "field": "rule.level",
+                            "ranges": [
+                                {"key": "critical", "from": 15},
+                                {"key": "high",     "from": 12, "to": 15},
+                            ],
+                        }
+                    }
+                },
+            },
+            "by_rule":  {"terms": {"field": "rule.id",          "size": 10}},
+            "by_mitre": {"terms": {"field": "rule.mitre.tactic", "size": 10}},
+            "by_country": {
+                "terms": {"field": "GeoLocation.country_name", "size": 20},
+                "aggs": {
+                    "centroid": {"geo_centroid": {"field": "GeoLocation.location"}},
+                },
+            },
+            "by_srcip": {
+                "terms": {"field": "data.srcip", "size": 20},
+                "aggs": {
+                    "top_country": {"terms": {"field": "GeoLocation.country_name", "size": 1}},
+                    "centroid":    {"geo_centroid": {"field": "GeoLocation.location"}},
+                },
+            },
+            "unique_countries": {"cardinality": {"field": "GeoLocation.country_name"}},
+            "unique_ips":        {"cardinality": {"field": "data.srcip"}},
+            "critical_count": {"filter": {"range": {"rule.level": {"gte": 15}}}},
+            "high_count":     {"filter": {"range": {"rule.level": {"gte": 12, "lt": 15}}}},
+        },
+    }
+    try:
+        return await _search(body)
+    except Exception:
+        return {}
+
+
 def _pick_interval(time_range: str) -> str:
     mapping = {"1h": "5m", "6h": "15m", "24h": "1h", "7d": "6h", "30d": "1d", "90d": "3d"}
     return mapping.get(time_range, "1h")
@@ -706,6 +766,74 @@ async def _search_entity_events(query: str, time_range: str = "30d", size: int =
     try:
         resp = client.search(index=settings.opensearch_index, body=body)
         return [hit["_source"] for hit in resp["hits"]["hits"]]
+    except Exception:
+        return []
+
+
+async def search_alert_context_candidates(
+    rule_id: str | None,
+    event_time: str | None,
+    ioc_value: str | None,
+    size: int = 8,
+) -> list[dict]:
+    must: list[dict] = []
+    should: list[dict] = []
+
+    parsed_time: datetime | None = None
+    if event_time:
+        normalized = str(event_time).strip().replace("Z", "+00:00")
+        if normalized and normalized[-5:-4] in {"+", "-"} and ":" not in normalized[-5:]:
+            normalized = f"{normalized[:-5]}{normalized[-5:-2]}:{normalized[-2:]}"
+        try:
+            parsed_time = datetime.fromisoformat(normalized)
+        except ValueError:
+            parsed_time = None
+        if parsed_time is not None:
+            if parsed_time.tzinfo is None:
+                parsed_time = parsed_time.replace(tzinfo=timezone.utc)
+            parsed_time = parsed_time.astimezone(timezone.utc)
+
+    if parsed_time is not None:
+        must.append({
+            "range": {
+                "@timestamp": {
+                    "gte": (parsed_time - timedelta(minutes=5)).isoformat(),
+                    "lte": (parsed_time + timedelta(minutes=5)).isoformat(),
+                }
+            }
+        })
+    else:
+        must.append({"range": {"@timestamp": {"gte": "now-24h"}}})
+
+    if rule_id:
+        should.append({"term": {"rule.id": rule_id}})
+
+    if ioc_value:
+        should.extend([
+            {"term": {"data.srcip.keyword": ioc_value}},
+            {"term": {"data.dstip.keyword": ioc_value}},
+            {"term": {"data.dhcp_ip.keyword": ioc_value}},
+            {"term": {"data.dhcp_hostname.keyword": ioc_value}},
+            {"match_phrase": {"full_log": ioc_value}},
+        ])
+
+    if should:
+        must.append({"bool": {"should": should, "minimum_should_match": 1}})
+
+    body = {
+        "size": size,
+        "sort": [{"@timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": must}},
+        "_source": [
+            "@timestamp", "agent.id", "agent.name", "agent.ip",
+            "rule.id", "rule.level", "rule.description", "rule.groups", "rule.mitre",
+            "data.srcip", "data.dstip", "data.srcport", "data.dstport", "data.protocol",
+            "decoder.name", "predecoder.program_name", "location", "full_log",
+        ],
+    }
+    try:
+        resp = await _search(body)
+        return [hit.get("_source", {}) for hit in resp.get("hits", {}).get("hits", [])]
     except Exception:
         return []
 

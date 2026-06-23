@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Drawer, Box, Typography, Stack, CircularProgress, Skeleton,
-  Button, IconButton, TextField, Chip, Tooltip, Divider, Select,
+  Button, IconButton, TextField, Chip, Tooltip, Select,
   MenuItem, FormControl, InputLabel,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
@@ -16,11 +16,27 @@ import SaveRoundedIcon from '@mui/icons-material/SaveRounded'
 import ScienceRoundedIcon from '@mui/icons-material/ScienceRounded'
 import { useSnackbar } from 'notistack'
 import { useNavigate } from 'react-router-dom'
-import { soarApi, IrisAlert, IOC_TYPES } from '../../../services/soarApi'
+import {
+  soarApi,
+  IrisAlert,
+  IrisAlertSourceContext,
+  IrisAlertStatusOption,
+  IrisAlertWazuhEvent,
+  IrisAlertWazuhContext,
+  IrisSeverityOption,
+} from '../../../services/soarApi'
 import { getSev, getStat, fmtTime, hexRgb, SEV_OPTIONS, STATUS_OPTIONS } from '../soarUtils'
 import { BRAND, SEV_COLOR } from '../../ui/tokens'
 
 const ALERT_COLOR = '#7B5BA4'
+
+const SOURCE_STATUS_META: Record<string, { label: string; color: string }> = {
+  matched: { label: 'เชื่อมโยงได้', color: '#22C55E' },
+  partial: { label: 'เชื่อมโยงบางส่วน', color: '#F59E0B' },
+  not_found: { label: 'ไม่พบ context', color: '#64748B' },
+  unsupported: { label: 'source ไม่รองรับ', color: '#A855F7' },
+  error: { label: 'ค้นหา context ไม่สำเร็จ', color: '#EF4444' },
+}
 
 interface Props {
   alertId: number | null
@@ -66,7 +82,21 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
     enabled: open && !!alertId,
   })
 
-  const alert: IrisAlert | null = resp?.data ?? null
+  const { data: statusResp } = useQuery({
+    queryKey: ['iris-alert-statuses'],
+    queryFn: () => soarApi.getIrisAlertStatuses().then(r => r.data),
+    enabled: open,
+  })
+
+  const { data: severityResp } = useQuery({
+    queryKey: ['iris-severities'],
+    queryFn: () => soarApi.getIrisSeverities().then(r => r.data),
+    enabled: open,
+  })
+
+  const alert: IrisAlert | null = resp?.data?.alert ?? null
+  const sourceContext: IrisAlertSourceContext | null = resp?.data?.source_context ?? null
+  const wazuhContext: IrisAlertWazuhContext | null = resp?.data?.wazuh_context ?? null
 
   const updateMut = useMutation({
     mutationFn: (payload: { alert_status_id?: number; alert_severity_id?: number; alert_note?: string }) =>
@@ -135,17 +165,38 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
   const stat = alert ? getStat(alert.alert_status_id) : null
   const iocs = alert?.iocs ?? []
   const tags = alert?.alert_tags?.split(',').map(t => t.trim()).filter(Boolean) ?? []
+  const severityOptions = (severityResp?.data?.length ? severityResp.data : SEV_OPTIONS.map(option => ({
+    severity_id: option.id,
+    severity_name: getSev(option.id).label,
+    severity_description: option.label,
+  } as IrisSeverityOption)))
+  const statusOptions = (statusResp?.data?.length ? statusResp.data : STATUS_OPTIONS.map(option => ({
+    status_id: option.id,
+    status_name: getStat(option.id).label,
+    status_description: option.label,
+  } as IrisAlertStatusOption)))
+  const sourceStatus = sourceContext?.status ? SOURCE_STATUS_META[sourceContext.status] ?? SOURCE_STATUS_META.not_found : null
+  const primaryEvent: IrisAlertWazuhEvent | null = wazuhContext?.primary_event ?? null
+  const relatedEvents = wazuhContext?.related_events ?? []
+  const eventRule = primaryEvent?.rule ?? {}
+  const eventData = primaryEvent?.data ?? {}
+  const eventAgent = primaryEvent?.agent ?? {}
+  const eventProgram = primaryEvent?.decoder?.name ?? primaryEvent?.predecoder?.program_name
+  const modificationEntries = Object.entries(alert?.modification_history ?? {}).sort(([a], [b]) => Number(b) - Number(a))
+  const mispAttrs = mispResults as Array<{ value?: string; type?: string; to_ids?: boolean }>
 
   return (
     <Drawer
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: { xs: '100vw', sm: 560 },
-          background: isDark ? '#16112A' : '#F8F6FF',
-          borderLeft: `1px solid ${divider}`,
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: '100vw', sm: 640 },
+            background: isDark ? '#16112A' : '#F8F6FF',
+            borderLeft: `1px solid ${divider}`,
+          },
         },
       }}
     >
@@ -250,11 +301,16 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
               <SectionLabel>รายละเอียด ALERT</SectionLabel>
               <Stack spacing={1}>
                 {[
-                  { label: 'Alert ID', value: String(alertId) },
+                  { label: 'Alert ID', value: String(alert.alert_id ?? alertId) },
+                  { label: 'Alert UUID', value: alert.alert_uuid ?? '' },
                   { label: 'แหล่งที่มา', value: alert.alert_source },
                   { label: 'Source Ref', value: alert.alert_source_ref },
+                  { label: 'Source Link', value: alert.alert_source_link ?? '' },
                   { label: 'วันเวลา Event', value: fmtTime(alert.alert_source_event_time) },
                   { label: 'วันเวลาสร้าง', value: fmtTime(alert.alert_creation_time) },
+                  { label: 'ลูกค้า', value: alert.customer?.customer_name ?? '' },
+                  { label: 'Classification', value: alert.classification?.name ?? '' },
+                  { label: 'Resolution', value: alert.resolution_status?.name ?? '' },
                 ].map(({ label, value }) => value ? (
                   <Box key={label} className="flex items-start gap-2">
                     <Typography sx={{ fontSize: 10, color: textMuted, minWidth: 90, pt: 0.1 }}>{label}:</Typography>
@@ -274,9 +330,124 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
               </Box>
             )}
 
+            {sourceContext && (
+              <Box className="rounded-xl p-3.5" sx={{ background: cardBg, border: `1px solid ${divider}` }}>
+                <SectionLabel>SOURCE CONTEXT</SectionLabel>
+                <Stack spacing={1}>
+                  <Box className="flex flex-wrap items-center gap-2">
+                    {sourceStatus && (
+                      <Chip
+                        size="small"
+                        label={sourceStatus.label}
+                        sx={{
+                          height: 22,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          bgcolor: `rgba(${hexRgb(sourceStatus.color)},0.12)`,
+                          color: sourceStatus.color,
+                          border: `1px solid rgba(${hexRgb(sourceStatus.color)},0.3)`,
+                        }}
+                      />
+                    )}
+                    {sourceContext.match_strategy && (
+                      <Typography className="font-mono" sx={{ fontSize: 10, color: textMuted }}>
+                        strategy: {sourceContext.match_strategy}
+                      </Typography>
+                    )}
+                  </Box>
+                  {[
+                    { label: 'Source Type', value: sourceContext.source_type ?? '' },
+                    { label: 'Source URL', value: sourceContext.source_url ?? '' },
+                    { label: 'Matched Event Time', value: fmtTime(sourceContext.event_time) },
+                  ].map(({ label, value }) => value ? (
+                    <Box key={label} className="flex items-start gap-2">
+                      <Typography sx={{ fontSize: 10, color: textMuted, minWidth: 120, pt: 0.1 }}>{label}:</Typography>
+                      <Typography className="font-mono text-[10px] break-all flex-1" sx={{ color: textSec }}>{value}</Typography>
+                    </Box>
+                  ) : null)}
+                  {(sourceContext.notes ?? []).length > 0 && (
+                    <Box className="rounded-lg p-2" sx={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(123,91,164,0.04)' }}>
+                      {(sourceContext.notes ?? []).map((note, idx) => (
+                        <Typography key={`${note}-${idx}`} sx={{ fontSize: 10.5, color: textSec, lineHeight: 1.6 }}>
+                          {note}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Stack>
+              </Box>
+            )}
+
+            <Box className="rounded-xl p-3.5" sx={{ background: cardBg, border: `1px solid ${divider}` }}>
+              <SectionLabel>WAZUH EVENT CONTEXT</SectionLabel>
+              {primaryEvent ? (
+                <Stack spacing={1.25}>
+                  {[
+                    { label: 'Rule ID', value: eventRule.id ? String(eventRule.id) : '' },
+                    { label: 'Rule', value: eventRule.description ?? '' },
+                    { label: 'Level', value: eventRule.level != null ? String(eventRule.level) : '' },
+                    { label: 'Agent', value: eventAgent.name ?? '' },
+                    { label: 'Program', value: eventProgram ?? '' },
+                    { label: 'เวลา Event', value: fmtTime(primaryEvent['@timestamp']) },
+                    { label: 'Source IP', value: eventData.srcip ?? '' },
+                    { label: 'Destination IP', value: eventData.dstip ?? '' },
+                  ].map(({ label, value }) => value ? (
+                    <Box key={label} className="flex items-start gap-2">
+                      <Typography sx={{ fontSize: 10, color: textMuted, minWidth: 100, pt: 0.1 }}>{label}:</Typography>
+                      <Typography className="font-mono text-[10px] break-all flex-1" sx={{ color: textSec }}>{value}</Typography>
+                    </Box>
+                  ) : null)}
+                  {(wazuhContext?.summary?.groups ?? []).length > 0 && (
+                    <Box className="flex flex-wrap gap-1 pt-1">
+                      {(wazuhContext?.summary?.groups ?? []).map(group => (
+                        <Box key={group} className="px-2 py-0.5 rounded text-[9px] font-semibold"
+                          sx={{ background: 'rgba(56,189,248,0.1)', color: '#38BDF8' }}>
+                          {group}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                  {primaryEvent.full_log && (
+                    <Box className="rounded-lg p-2" sx={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(123,91,164,0.04)' }}>
+                      <Typography sx={{ fontSize: 10, color: textMuted, mb: 0.5 }}>Full log</Typography>
+                      <Typography className="font-mono" sx={{ fontSize: 10.5, color: textSec, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {primaryEvent.full_log}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
+              ) : (
+                <Typography sx={{ fontSize: 11.5, color: textMuted }}>
+                  ยังไม่พบ Wazuh event context สำหรับ alert นี้
+                </Typography>
+              )}
+            </Box>
+
+            {relatedEvents.length > 0 && (
+              <Box className="rounded-xl p-3.5" sx={{ background: cardBg, border: `1px solid ${divider}` }}>
+                <SectionLabel>RELATED WAZUH EVENTS</SectionLabel>
+                <Stack spacing={1}>
+                  {relatedEvents.map((event, idx) => (
+                    <Box key={`${event['@timestamp'] ?? idx}-${idx}`} className="rounded-lg p-2"
+                      sx={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(123,91,164,0.04)' }}>
+                      <Typography sx={{ fontSize: 10.5, color: textSec, fontWeight: 700 }}>
+                        {event.rule?.description ?? 'Wazuh event'}
+                      </Typography>
+                      <Typography className="font-mono" sx={{ fontSize: 10, color: textMuted }}>
+                        {fmtTime(event['@timestamp'])} · rule {event.rule?.id ?? '—'} · {event.agent?.name ?? '—'}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
             {/* Update severity/status */}
             <Box className="rounded-xl p-3.5" sx={{ background: cardBg, border: `1px solid ${divider}` }}>
               <SectionLabel>อัปเดตสถานะ</SectionLabel>
+              <Typography sx={{ fontSize: 10, color: textMuted, mb: 1.5 }}>
+                ตัวเลือกในส่วนนี้ดึงจาก IRIS API โดยตรง: `/manage/severities/list` และ `/manage/alert-status/list`
+              </Typography>
               <Box className="grid grid-cols-2 gap-3">
                 <FormControl size="small">
                   <InputLabel sx={{ fontSize: 12 }}>ความรุนแรง</InputLabel>
@@ -286,7 +457,11 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
                     label="ความรุนแรง"
                     sx={{ borderRadius: '8px', fontSize: 12 }}
                   >
-                    {SEV_OPTIONS.map(s => <MenuItem key={s.id} value={s.id} sx={{ fontSize: 12 }}>{s.label}</MenuItem>)}
+                    {severityOptions.map(s => (
+                      <MenuItem key={s.severity_id} value={s.severity_id} sx={{ fontSize: 12 }}>
+                        {getSev(s.severity_id).labelTh} ({s.severity_name})
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
                 <FormControl size="small">
@@ -297,7 +472,11 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
                     label="สถานะ"
                     sx={{ borderRadius: '8px', fontSize: 12 }}
                   >
-                    {STATUS_OPTIONS.map(s => <MenuItem key={s.id} value={s.id} sx={{ fontSize: 12 }}>{s.label}</MenuItem>)}
+                    {statusOptions.map(s => (
+                      <MenuItem key={s.status_id} value={s.status_id} sx={{ fontSize: 12 }}>
+                        {getStat(s.status_id).labelTh} ({s.status_name})
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Box>
@@ -375,7 +554,7 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
                     <Typography sx={{ fontSize: 10, color: '#A855F7', fontWeight: 700, mb: 1 }}>
                       MISP: พบ {mispResults.length} รายการ
                     </Typography>
-                    {(mispResults as Record<string, unknown>[]).slice(0, 5).map((attr, i) => (
+                    {mispAttrs.slice(0, 5).map((attr, i) => (
                       <Box key={i} className="flex items-center gap-2 mb-1">
                         <Typography className="font-mono text-[10px]" sx={{ color: textSec }}>{String(attr.value)}</Typography>
                         <Typography sx={{ fontSize: 9, color: textMuted }}>{String(attr.type)}</Typography>
@@ -399,6 +578,24 @@ export default function AlertDetailDrawer({ alertId, irisUrl, open, onClose, onE
                     </Box>
                   ))}
                 </Box>
+              </Box>
+            )}
+
+            {modificationEntries.length > 0 && (
+              <Box className="rounded-xl p-3.5" sx={{ background: cardBg, border: `1px solid ${divider}` }}>
+                <SectionLabel>HISTORY</SectionLabel>
+                <Stack spacing={1}>
+                  {modificationEntries.slice(0, 8).map(([ts, entry]) => (
+                    <Box key={ts} className="rounded-lg p-2" sx={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(123,91,164,0.04)' }}>
+                      <Typography sx={{ fontSize: 10.5, color: textSec, fontWeight: 700 }}>
+                        {entry.action ?? 'Alert updated'}
+                      </Typography>
+                      <Typography className="font-mono" sx={{ fontSize: 10, color: textMuted }}>
+                        {entry.user ?? 'system'} · {fmtTime(new Date(Number(ts) * 1000).toISOString())}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
               </Box>
             )}
 

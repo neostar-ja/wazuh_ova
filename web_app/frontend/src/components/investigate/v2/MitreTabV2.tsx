@@ -113,7 +113,7 @@ export default function MitreTabV2({ loading, mitre, events }: Props) {
           <Typography className="text-[9px] font-bold tracking-widest mb-3" sx={{ color: textMuted }}>
             KILL CHAIN COVERAGE
           </Typography>
-          <Box className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide py-2">
+          <Box className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-2">
             {['initial-access','execution','persistence','privilege-escalation','defense-evasion',
               'credential-access','discovery','lateral-movement','collection','command-and-control',
               'exfiltration','impact'].map((stage, i) => {
@@ -129,8 +129,7 @@ export default function MitreTabV2({ loading, mitre, events }: Props) {
                     }}
                   >
                     <span className="text-base leading-none">{m.emoji}</span>
-                    <Typography className="text-[8px] font-bold text-center leading-tight" style={{ maxWidth: 52 }}
-                      sx={{ color: active ? m.color : textMuted }}>
+                    <Typography className="text-[9px] font-bold text-center" sx={{ color: active ? m.color : textMuted, whiteSpace: 'pre-line', maxWidth: 64 }}>
                       {stage.replace(/-/g, '\n').toUpperCase()}
                     </Typography>
                   </Box>

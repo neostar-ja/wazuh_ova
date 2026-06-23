@@ -25,6 +25,7 @@ import { DecodersTab } from './tabs/DecodersTab'
 import { ListsTab } from './tabs/ListsTab'
 import { WazuhConfigTab } from './tabs/WazuhConfigTab'
 import { TuningTab } from './tabs/TuningTab'
+import { TuningHistoryTab } from './tabs/TuningHistoryTab'
 import { LogSourcesTab } from './tabs/LogSourcesTab'
 import { ISMRetentionTab } from './tabs/ISMRetentionTab'
 import { NotifyTab } from './tabs/NotifyTab'
@@ -49,6 +50,7 @@ const NAV: NavGroup[] = [
     section: 'OPERATIONS',
     items: [
       { id: 'tuning',  label: 'Alert Tuning',  icon: <TuneRoundedIcon sx={{ fontSize: 17 }} />,                color: '#EAB308' },
+      { id: 'tuning-history', label: 'Tuning History', icon: <HistoryRoundedIcon sx={{ fontSize: 17 }} />,     color: '#F59E0B' },
       { id: 'logsources', label: 'แหล่งข้อมูล Log', icon: <ToggleOnRoundedIcon sx={{ fontSize: 17 }} />,       color: '#F43F5E' },
       { id: 'ism',     label: 'ISM Retention', icon: <StorageRoundedIcon sx={{ fontSize: 17 }} />,             color: '#14B8A6' },
       { id: 'notify',  label: 'การแจ้งเตือน', icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 17 }} />, color: '#229ED9' },
@@ -70,6 +72,7 @@ const CONTENT_MAP: Record<string, React.ReactNode> = {
   lists:    <ListsTab />,
   wazuhcfg: <WazuhConfigTab />,
   tuning:   <TuningTab />,
+  'tuning-history': <TuningHistoryTab />,
   logsources: <LogSourcesTab />,
   ism:      <ISMRetentionTab />,
   notify:   <NotifyTab />,

@@ -1,14 +1,19 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
 from ..routers.auth import get_current_user
-from ..models.database import get_db, User, AuditLog, AlertTuning, AlertConfig
+from ..models.database import get_db, User, AuditLog, AlertTuning, AlertTuningHistory, AlertConfig
 from ..core.security import get_password_hash
 from ..services import log_source_control_service, wazuh_service
+from ..services.alert_tuning_history_service import (
+    apply_tuning_history_filters,
+    record_tuning_history,
+    serialize_history_entry,
+)
 from ..services.opensearch_management_service import (
     apply_policy_to_indices,
     build_retention_policy,
@@ -19,6 +24,7 @@ from ..services.opensearch_management_service import (
     list_matching_indices,
     save_ism_policy,
 )
+from ..services.wazuh_rule_tuning_service import MANAGED_TUNING_RULE_FILE, deploy_tunings_to_wazuh
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -253,6 +259,38 @@ async def list_tuning(current_user=Depends(require_admin), db: Session = Depends
     ]
 
 
+@router.get("/tuning/history")
+async def list_tuning_history(
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+    scope: Optional[str] = None,
+    action: Optional[str] = None,
+    rule_id: Optional[str] = None,
+    alert_id: Optional[str] = None,
+    actor: Optional[str] = None,
+    original_level: Optional[int] = Query(None, ge=1, le=15),
+    tuned_level: Optional[int] = Query(None, ge=1, le=15),
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    limit: int = Query(200, ge=1, le=1000),
+):
+    query = db.query(AlertTuningHistory)
+    query = apply_tuning_history_filters(
+        query,
+        scope=scope or None,
+        action=action or None,
+        rule_id=rule_id or None,
+        alert_id=alert_id or None,
+        actor=actor or None,
+        original_level=original_level,
+        tuned_level=tuned_level,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    entries = query.order_by(AlertTuningHistory.created_at.desc()).limit(limit).all()
+    return [serialize_history_entry(entry) for entry in entries]
+
+
 @router.post("/tuning", status_code=201)
 async def add_tuning(
     tuning: TuningCreate,
@@ -270,9 +308,62 @@ async def add_tuning(
         review_date=tuning.review_date,
     )
     db.add(entry)
+    record_tuning_history(
+        db,
+        actor=current_user.username,
+        action="create",
+        scope="rule",
+        rule_id=tuning.rule_id,
+        original_level=tuning.original_level,
+        tuned_level=tuning.tuned_level,
+        reason=tuning.reason,
+        status="active",
+        commit=False,
+    )
     db.commit()
     db.refresh(entry)
     return {"id": entry.id, "rule_id": entry.rule_id}
+
+
+@router.post("/tuning/deploy-wazuh")
+async def deploy_tuning_to_wazuh(
+    request: Request,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    active_entries = db.query(AlertTuning).filter(AlertTuning.status == "active").all()
+    if not active_entries:
+        raise HTTPException(status_code=400, detail="No active alert tuning entries")
+    try:
+        result = await deploy_tunings_to_wazuh(active_entries)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    deployed_count = len(result.get("deployed", []))
+    record_tuning_history(
+        db,
+        actor=current_user.username,
+        action="deploy_wazuh",
+        scope="deploy",
+        reason=f"Deployed {deployed_count} active tuning rule(s) to Wazuh",
+        status="deployed",
+        deploy_snapshot={
+            "filename": result.get("filename"),
+            "rules": result.get("deployed", []),
+        },
+        commit=False,
+    )
+    _write_audit(
+        db,
+        current_user,
+        "deploy_tuning_wazuh",
+        MANAGED_TUNING_RULE_FILE,
+        f"active={len(active_entries)} deployed={deployed_count}",
+        request.client.host if request.client else None,
+    )
+    return result
 
 
 @router.patch("/tuning/{tuning_id}")
@@ -287,7 +378,21 @@ async def update_tuning_status(
         raise HTTPException(status_code=404, detail="Tuning entry not found")
     if body.status not in ("active", "expired", "reverted"):
         raise HTTPException(status_code=400, detail="Invalid status")
+    previous_status = entry.status
     entry.status = body.status
+    record_tuning_history(
+        db,
+        actor=current_user.username,
+        action="revert" if body.status == "reverted" else "status_change",
+        scope="rule",
+        rule_id=entry.rule_id,
+        original_level=entry.original_level,
+        tuned_level=entry.tuned_level,
+        previous_tuned_level=entry.tuned_level,
+        reason=f"Status changed from {previous_status} to {body.status}",
+        status=body.status,
+        commit=False,
+    )
     db.commit()
     return {"id": entry.id, "status": entry.status}
 
@@ -303,6 +408,18 @@ async def delete_tuning(
     if not entry:
         raise HTTPException(status_code=404, detail="Tuning entry not found")
     rule_id = entry.rule_id
+    record_tuning_history(
+        db,
+        actor=current_user.username,
+        action="delete",
+        scope="rule",
+        rule_id=entry.rule_id,
+        original_level=entry.original_level,
+        tuned_level=entry.tuned_level,
+        reason=entry.reason,
+        status=entry.status,
+        commit=False,
+    )
     db.delete(entry)
     _write_audit(db, current_user, "delete_tuning", rule_id,
                  ip=request.client.host if request.client else None)

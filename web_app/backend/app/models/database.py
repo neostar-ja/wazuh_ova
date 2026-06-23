@@ -6,10 +6,37 @@ import os
 
 from ..core.config import settings
 
-os.makedirs("/app/data", exist_ok=True)
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+def _ensure_sqlite_parent_dir(database_url: str) -> None:
+    if not database_url.startswith("sqlite:///") or database_url == "sqlite:///:memory:":
+        return
+    db_path = database_url.replace("sqlite:///", "", 1)
+    if not db_path or db_path == ":memory:":
+        return
+    parent = os.path.dirname(db_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+
+_ensure_sqlite_parent_dir(settings.database_url)
+
+
+def _build_engine():
+    kwargs = {"pool_pre_ping": True}
+    if settings.database_url.startswith("sqlite"):
+        kwargs["connect_args"] = {"check_same_thread": False}
+    try:
+        return create_engine(settings.database_url, **kwargs)
+    except ModuleNotFoundError as exc:
+        if exc.name == "_sqlite3":
+            return None
+        raise
+
+
+engine = _build_engine()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine) if engine is not None else None
 
 
 def _is_placeholder_secret(value: str) -> bool:
@@ -77,6 +104,36 @@ class AlertTuning(Base):
     added_at = Column(DateTime, default=datetime.utcnow)
     review_date = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")  # active|expired|reverted
+
+
+class AlertSeverityOverride(Base):
+    __tablename__ = "alert_severity_override"
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(String(300), nullable=False, unique=True, index=True)
+    rule_id = Column(String(20), nullable=True, index=True)
+    original_level = Column(Integer, nullable=False)
+    tuned_level = Column(Integer, nullable=False)
+    reason = Column(Text, nullable=False)
+    added_by = Column(String(50), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(20), default="active")  # active|reverted
+
+
+class AlertTuningHistory(Base):
+    __tablename__ = "alert_tuning_history"
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String(40), nullable=False, index=True)  # create|update|status_change|delete|deploy_wazuh
+    scope = Column(String(20), nullable=False, index=True)  # single|rule|deploy
+    alert_id = Column(String(300), nullable=True, index=True)
+    rule_id = Column(String(20), nullable=True, index=True)
+    original_level = Column(Integer, nullable=True)
+    tuned_level = Column(Integer, nullable=True)
+    previous_tuned_level = Column(Integer, nullable=True)
+    reason = Column(Text, nullable=True)
+    status = Column(String(20), nullable=True)
+    actor = Column(String(50), nullable=False, index=True)
+    deploy_snapshot = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class AlertConfig(Base):
@@ -184,6 +241,8 @@ class PushSubscription(Base):
 
 
 def get_db():
+    if SessionLocal is None:
+        raise RuntimeError("Database engine is unavailable. Python sqlite3 support is required for the configured database.")
     db = SessionLocal()
     try:
         yield db
@@ -192,6 +251,8 @@ def get_db():
 
 
 def init_db():
+    if engine is None:
+        raise RuntimeError("Database engine is unavailable. Python sqlite3 support is required for the configured database.")
     Base.metadata.create_all(bind=engine)
     from ..core.security import get_password_hash
     db = SessionLocal()

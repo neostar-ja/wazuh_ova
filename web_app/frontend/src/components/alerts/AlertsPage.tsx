@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Box, Typography, Chip, TextField, Select, MenuItem,
   FormControl, Button, IconButton,
@@ -82,13 +82,17 @@ export function normalizeWazuhAlert(raw: any): WazuhAlertItem {
   const decoder = raw.decoder || {};
 
   const level = Number(rule.level || 0);
+  const tuning = raw.soc_tuning;
+  const originalLevel = Number(rule.original_level || tuning?.original_level || level);
   const id = raw.id || raw._id || `${raw['@timestamp'] || ''}-${rule.id || ''}-${agent.id || ''}`;
 
   return {
     id,
+    socAlertId: raw.soc_alert_id || id,
     timestamp: raw['@timestamp'] || raw.timestamp || new Date().toISOString(),
     ruleId: rule.id,
     ruleLevel: level,
+    originalRuleLevel: originalLevel,
     severity: mapLevelToSeverity(level),
     description: rule.description || raw.full_log || 'No description available',
     agentId: agent.id,
@@ -113,6 +117,7 @@ export function normalizeWazuhAlert(raw: any): WazuhAlertItem {
     cis: rule.tsc || [],
     fullLog: raw.full_log,
     countryName: geo.country_name || geo.country_code || undefined,
+    socTuning: tuning,
     raw: raw,
   };
 }
@@ -252,6 +257,7 @@ const CHART_GROUPS = ['fortigate', 'mikrotik', 'huawei', 'infoblox_dns', 'compli
 // ── Main Alerts Page ──────────────────────────────────────────────────────────
 export default function AlertsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { enqueueSnackbar } = useSnackbar()
   const qc = useQueryClient()
   const theme = useTheme()
@@ -277,6 +283,20 @@ export default function AlertsPage() {
 
   // Group quick-filter
   const [groupFilter,      setGroupFilter]      = useState<string>('')
+
+  // Deep-link from Dashboard (Posture Banner, Recommended Actions, KPI cards, etc.)
+  // — apply URL query params to filters once on mount
+  useEffect(() => {
+    const lv = searchParams.get('level');   if (lv)  setLevel(Number(lv))
+    const rid = searchParams.get('rule_id'); if (rid) setRuleIdFilter(rid)
+    const cty = searchParams.get('country'); if (cty) setCountryFilter(cty)
+    const sip = searchParams.get('srcip');   if (sip) setSrcIpFilter(sip)
+    const grp = searchParams.get('group');   if (grp) setGroupFilter(grp)
+    const src = searchParams.get('source');  if (src) setSource(src)
+    const ag  = searchParams.get('agent');   if (ag)  setAgentFilter(ag)
+    const q   = searchParams.get('q');       if (q)  { setSearch(q); setSearchInput(q) }
+    const tr  = searchParams.get('time_range'); if (tr) setTimeRange(tr)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Alert detail
   const [selectedAlert,    setSelected]         = useState<WazuhAlertItem | null>(null)
@@ -315,6 +335,16 @@ export default function AlertsPage() {
   })
 
   const alerts = useMemo(() => (rawAlerts || []).map(normalizeWazuhAlert), [rawAlerts])
+
+  useEffect(() => {
+    const alertId = searchParams.get('alert_id')
+    if (!alertId || !alerts.length || selectedAlert?.socAlertId === alertId) return
+    const found = alerts.find(a => a.socAlertId === alertId || a.id === alertId)
+    if (found) {
+      setSelected(found)
+      setDrawer(true)
+    }
+  }, [alerts, searchParams, selectedAlert?.socAlertId])
 
   // Stats query
   const { data: rawStats, isLoading: loadingStats, isError: isErrorStats } = useQuery<any>({
@@ -1020,7 +1050,7 @@ export default function AlertsPage() {
       </Card>
 
       {/* Alert Drawer */}
-      <AlertDrawer alert={selectedAlert} open={drawerOpen} onClose={() => setDrawer(false)} />
+      <AlertDrawer alert={selectedAlert} open={drawerOpen} onClose={() => setDrawer(false)} onTuned={() => { refetch(); qc.invalidateQueries({ queryKey: ['alert-stats'] }) }} />
     </PageShell>
   )
 }

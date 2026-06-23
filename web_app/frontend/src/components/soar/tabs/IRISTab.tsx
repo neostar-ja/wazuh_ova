@@ -24,12 +24,24 @@ export default function IRISTab({ irisUrl }: Props) {
   const [view, setView] = useState<'alerts' | 'cases'>('alerts')
   const [createAlertOpen, setCreateAlertOpen] = useState(false)
   const [createCaseOpen, setCreateCaseOpen] = useState(false)
+  const [alertPage, setAlertPage] = useState(0)
+  const [alertRowsPerPage, setAlertRowsPerPage] = useState(10)
+  const [alertSearchInput, setAlertSearchInput] = useState('')
+  const [alertSearch, setAlertSearch] = useState('')
+  const [alertSeverityId, setAlertSeverityId] = useState('')
+  const [alertStatusId, setAlertStatusId] = useState('')
 
   const textMuted = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(60,40,100,0.45)'
 
   const { data: alertsResp, isLoading: alertsLoading } = useQuery({
-    queryKey: ['iris-alerts'],
-    queryFn: () => soarApi.getIrisAlerts({ per_page: 50 }).then(r => r.data),
+    queryKey: ['iris-alerts', alertPage, alertRowsPerPage, alertSearch, alertSeverityId, alertStatusId],
+    queryFn: () => soarApi.getIrisAlerts({
+      page: alertPage + 1,
+      per_page: alertRowsPerPage,
+      q: alertSearch || undefined,
+      severity_id: alertSeverityId ? Number(alertSeverityId) : undefined,
+      status_id: alertStatusId ? Number(alertStatusId) : undefined,
+    }).then(r => r.data),
     refetchInterval: 60000,
   })
 
@@ -40,10 +52,24 @@ export default function IRISTab({ irisUrl }: Props) {
   })
 
   const alerts: IrisAlert[] = alertsResp?.data?.alerts ?? []
+  const alertTotal = alertsResp?.data?.total ?? alerts.length
   const cases: IrisCase[]   = casesResp?.data ?? []
 
+  const submitAlertSearch = () => {
+    setAlertPage(0)
+    setAlertSearch(alertSearchInput.trim())
+  }
+
+  const resetAlertFilters = () => {
+    setAlertPage(0)
+    setAlertSearchInput('')
+    setAlertSearch('')
+    setAlertSeverityId('')
+    setAlertStatusId('')
+  }
+
   const tabs = [
-    { key: 'alerts', labelTh: 'การแจ้งเตือน', icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 13 }} />, count: alerts.length },
+    { key: 'alerts', labelTh: 'การแจ้งเตือน', icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 13 }} />, count: alertTotal },
     { key: 'cases',  labelTh: 'เคสสอบสวน',    icon: <FolderOpenRoundedIcon sx={{ fontSize: 13 }} />,         count: cases.length },
   ]
 
@@ -105,7 +131,25 @@ export default function IRISTab({ irisUrl }: Props) {
 
       {/* Content */}
       {view === 'alerts' && (
-        <AlertsTable alerts={alerts} loading={alertsLoading} irisUrl={irisUrl} />
+        <AlertsTable
+          alerts={alerts}
+          total={alertTotal}
+          loading={alertsLoading}
+          irisUrl={irisUrl}
+          page={alertPage}
+          rowsPerPage={alertRowsPerPage}
+          searchInput={alertSearchInput}
+          activeSearch={alertSearch}
+          filterSev={alertSeverityId}
+          filterStatus={alertStatusId}
+          onSearchInputChange={setAlertSearchInput}
+          onSearchSubmit={submitAlertSearch}
+          onFilterSevChange={(value) => { setAlertSeverityId(value); setAlertPage(0) }}
+          onFilterStatusChange={(value) => { setAlertStatusId(value); setAlertPage(0) }}
+          onPageChange={setAlertPage}
+          onRowsPerPageChange={(value) => { setAlertRowsPerPage(value); setAlertPage(0) }}
+          onResetFilters={resetAlertFilters}
+        />
       )}
       {view === 'cases' && (
         <CasesTable cases={cases} loading={casesLoading} irisUrl={irisUrl} />

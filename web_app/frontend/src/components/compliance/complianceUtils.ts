@@ -1,3 +1,5 @@
+import { BRAND, SEV_COLOR } from '../ui/tokens'
+
 export const FRAMEWORK_LABELS: Record<string, string> = {
   cis: 'CIS Benchmark',
   pci_dss: 'PCI-DSS',
@@ -10,23 +12,37 @@ export const FRAMEWORK_LABELS: Record<string, string> = {
 }
 
 export const FRAMEWORK_COLORS: Record<string, string> = {
-  cis: '#3b82f6',
+  cis: BRAND.primary,
   pci_dss: '#0ea5e9',
   gdpr: '#8b5cf6',
-  hipaa: '#10b981',
-  nist: '#f59e0b',
+  hipaa: SEV_COLOR.low,
+  nist: SEV_COLOR.medium,
   tsc: '#ec4899',
-  iso27001: '#22c55e',
-  mitre: '#f97316',
+  iso27001: '#A78BFA',
+  mitre: SEV_COLOR.high,
 }
 
 export const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#f59e0b',
-  low: '#3b82f6',
-  informational: '#94a3b8',
+  critical: SEV_COLOR.critical,
+  high: SEV_COLOR.high,
+  medium: SEV_COLOR.medium,
+  low: SEV_COLOR.low,
+  informational: SEV_COLOR.info,
   unknown: '#64748b',
+}
+
+// Connection-health status colors for DataSourceHealthPanel / ConnectionPill
+export const CONNECTION_STATUS_COLORS: Record<string, string> = {
+  connected: SEV_COLOR.low,
+  cached: BRAND.primaryLight,
+  degraded: SEV_COLOR.medium,
+  error: SEV_COLOR.critical,
+  unavailable: '#94a3b8',
+}
+
+export function connectionStatusColor(status?: string, isDark = false): string {
+  if (status && CONNECTION_STATUS_COLORS[status]) return CONNECTION_STATUS_COLORS[status]
+  return isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'
 }
 
 export function formatDateTime(value?: string | Date | null, fallback = '-'): string {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Box, Typography, Chip, Skeleton, Select, MenuItem, FormControl,
@@ -32,7 +32,7 @@ import {
 import { dashboardApi, alertsApi } from '../../services/api'
 import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
-import WorldMap, { countryFlag } from './WorldMap'
+import { countryFlag } from './WorldMap'
 import { useSnackbar } from 'notistack'
 import { SectionCard } from '../ui/SectionCard'
 import { PageShell, ContentGrid } from '../ui/layout'
@@ -41,6 +41,8 @@ import { DashboardStats, SeverityTrend, TimelinePoint } from '../../types/dashbo
 import { SeverityBreakdown } from './SeverityBreakdown'
 import { InsightCards } from './InsightCards'
 import { AlertFeed } from './AlertFeed'
+import { RecommendedActionsPanel } from './RecommendedActionsPanel'
+import { computePosture, computeRecommendedActions } from './dashboardUtils'
 
 const B = {
   purple: BRAND.purple, purpleL: BRAND.purpleLight, purpleD: BRAND.purpleDark,
@@ -957,7 +959,6 @@ export default function DashboardPage() {
     queryFn: () => alertsApi.list({ level: 12, limit: 30, time_range: '24h' }).then(r => r.data),
     refetchInterval, staleTime: 15_000,
   })
-
   useEffect(() => {
     if (paused) return
     setCountdown(30)
@@ -976,6 +977,16 @@ export default function DashboardPage() {
   const allTl = stats?.timeline || []
   const threatTl = threatStats?.timeline || []
   const eps = stats?.eps || 0
+
+  const trend = calcTrend(allTl)
+  const posture = useMemo(
+    () => computePosture(stats, threatStats, agentData, cluster, trend),
+    [stats, threatStats, agentData, cluster, trend],
+  )
+  const recommendedActions = useMemo(
+    () => computeRecommendedActions(posture, undefined),
+    [posture],
+  )
   const TIME_OPTS = [
     { v: '1h', l: '1 ชั่วโมง' }, { v: '6h', l: '6 ชั่วโมง' },
     { v: '24h', l: '24 ชั่วโมง' }, { v: '7d', l: '7 วัน' }, { v: '30d', l: '30 วัน' },
@@ -1166,7 +1177,7 @@ export default function DashboardPage() {
 
       {/* ══ ROW 5: Cluster + Agents + World Map + Recent Alerts ════════════ */}
       <ContentGrid variant="dashboard" gap="md">
-        <div className="col-span-12 lg:col-span-2 flex flex-col gap-4">
+        <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
           <Panel title="Wazuh Cluster" icon={<StorageRoundedIcon sx={{ fontSize: 16 }} />} accent={B.green}>
             <ClusterStatus cluster={cluster} />
           </Panel>
@@ -1175,27 +1186,9 @@ export default function DashboardPage() {
           </Panel>
         </div>
 
-        <div className="col-span-12 lg:col-span-4">
-          <Panel
-            title="แผนที่แหล่งโจมตี"
-            icon={<PublicRoundedIcon sx={{ fontSize: 16 }} />}
-            accent={B.red}
-            subtitle="Level 12+ · GeoIP"
-            action={
-              (threatStats?.by_country?.length || 0) > 0 && (
-                <Chip label={`${threatStats.by_country.length} ประเทศ`} size="small" color="primary"
-                  sx={{ height: 18, fontSize: 10, '& .MuiChip-label': { px: 0.7 } }} />
-              )
-            }
-            noPad
-          >
-            <Box sx={{ height: 240, overflow: 'hidden' }}>
-              <WorldMap countries={threatStats?.by_country || stats?.by_country || []} loading={isLoading || threatLoading} />
-            </Box>
-          </Panel>
-        </div>
+        {/* Attack map removed from dashboard (exists on Attack Map page). Space reflowed. */}
 
-        <div className="col-span-12 lg:col-span-6">
+        <div className="col-span-12 lg:col-span-9">
           <Panel
             title="การแจ้งเตือนล่าสุด (Critical / High)"
             icon={<ErrorRoundedIcon sx={{ fontSize: 16, color: B.red }} />}
@@ -1214,6 +1207,9 @@ export default function DashboardPage() {
           </Panel>
         </div>
       </ContentGrid>
+
+      {/* ══ Recommended Next Actions ════════════════════════════════════════ */}
+      <RecommendedActionsPanel actions={recommendedActions} />
 
     </PageShell>
   )

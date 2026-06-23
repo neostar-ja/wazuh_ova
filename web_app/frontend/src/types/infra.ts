@@ -8,6 +8,16 @@ export interface InfraNode {
   services: string[]
 }
 
+export interface DiskUsage {
+  mount: string
+  device?: string
+  fstype?: string
+  total: number
+  used: number
+  free: number
+  percent: number
+}
+
 export interface InfraNodeStatus extends InfraNode {
   status: InfraNodeStatusValue
   latency_ms?: number
@@ -22,6 +32,7 @@ export interface InfraNodeStatus extends InfraNode {
   disk_used?: number
   disk_free?: number
   disk_percent?: number
+  disks?: DiskUsage[]
   load1?: number
   load5?: number
   load15?: number
