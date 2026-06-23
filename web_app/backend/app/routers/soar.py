@@ -894,11 +894,14 @@ async def iris_update_alert(alert_id: int, body: UpdateAlertBody, _=Depends(get_
 
 @router.post("/iris/alerts/escalate")
 async def iris_escalate_alerts(body: EscalateAlertBody, _=Depends(get_current_user)):
-    return await escalate_iris_alerts(
+    res = await escalate_iris_alerts(
         alert_ids=body.alert_ids,
         case_title=body.case_title,
         note=body.note,
     )
+    if isinstance(res, dict) and "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 
 # ── IRIS Cases ─────────────────────────────────────────────────────────────────

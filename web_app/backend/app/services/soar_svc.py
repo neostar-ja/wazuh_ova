@@ -370,13 +370,31 @@ async def escalate_iris_alerts(
     note: str = "",
     customer_id: int = 1,
 ) -> dict:
-    return await _iris_post("/alerts/escalate", {
-        "alert_ids": alert_ids,
-        "iocs_import_mode": "as_event",
-        "assets_import_mode": "as_event",
-        "note": note,
+    if not alert_ids:
+        return {"error": "No alert IDs provided"}
+
+    # If only one alert, use the single escalate endpoint
+    if len(alert_ids) == 1:
+        alert_id = alert_ids[0]
+        return await _iris_post(f"/alerts/escalate/{alert_id}", {
+            "case_title": case_title,
+            "note": note,
+            "import_as_event": True,
+            "case_tags": "",
+            "iocs_import_list": [],
+            "assets_import_list": []
+        })
+
+    # For multiple alerts, use the batch escalate endpoint
+    alert_ids_str = ",".join(str(aid) for aid in alert_ids)
+    return await _iris_post("/alerts/batch/escalate", {
+        "alert_ids": alert_ids_str,
         "case_title": case_title,
-        "case_customer_id": customer_id,
+        "note": note,
+        "import_as_event": True,
+        "case_tags": "",
+        "iocs_import_list": [],
+        "assets_import_list": []
     })
 
 

@@ -149,6 +149,7 @@ export default function IRISTab({ irisUrl }: Props) {
           onPageChange={setAlertPage}
           onRowsPerPageChange={(value) => { setAlertRowsPerPage(value); setAlertPage(0) }}
           onResetFilters={resetAlertFilters}
+          onEscalated={() => setView('cases')}
         />
       )}
       {view === 'cases' && (

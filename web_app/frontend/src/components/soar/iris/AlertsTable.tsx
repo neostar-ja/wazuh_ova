@@ -39,6 +39,7 @@ interface Props {
   onPageChange: (page: number) => void
   onRowsPerPageChange: (value: number) => void
   onResetFilters: () => void
+  onEscalated?: () => void
 }
 
 export default function AlertsTable({
@@ -59,6 +60,7 @@ export default function AlertsTable({
   onPageChange,
   onRowsPerPageChange,
   onResetFilters,
+  onEscalated,
 }: Props) {
   const { palette } = useTheme()
   const isDark = palette.mode === 'dark'
@@ -109,6 +111,7 @@ export default function AlertsTable({
       setSelectedIds(new Set())
       queryClient.invalidateQueries({ queryKey: ['iris-cases'] })
       queryClient.invalidateQueries({ queryKey: ['iris-alerts'] })
+      onEscalated?.()
     },
     onError: () => enqueueSnackbar('Bulk escalate ล้มเหลว', { variant: 'error' }),
   })
@@ -120,6 +123,7 @@ export default function AlertsTable({
       enqueueSnackbar('ยกระดับเป็นเคสใหม่เรียบร้อยแล้ว', { variant: 'success' })
       queryClient.invalidateQueries({ queryKey: ['iris-cases'] })
       queryClient.invalidateQueries({ queryKey: ['iris-alerts'] })
+      onEscalated?.()
     },
     onError: () => enqueueSnackbar('ไม่สามารถยกระดับได้', { variant: 'error' }),
   })
@@ -370,7 +374,10 @@ export default function AlertsTable({
         irisUrl={irisUrl}
         open={!!detailAlertId}
         onClose={() => setDetailAlertId(null)}
-        onEscalated={() => setDetailAlertId(null)}
+        onEscalated={() => {
+          setDetailAlertId(null)
+          onEscalated?.()
+        }}
       />
     </Stack>
   )
